@@ -38,6 +38,7 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // Coliseu dos Recreios: drum under an authored metal dome
   // Palácio de São Bento: the untagged parts of the palace are white like the rest
   ...Object.fromEntries(['w1570029244', 'w1570029245', 'w1570029246', 'w1571587396'].map((id) => [id, { wall: '#eee9de', variant: 4 }])),
   // Mosteiro de São Vicente de Fora: white mannerist monastery, tiled hip roofs
@@ -1218,4 +1219,22 @@ export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9 }) {
     tri(S, foot, clew, head, n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
     tri(S, jibFoot, [jibClew[0], 1.2, -jibClew[1]], [top[0], H * 0.85, top[2]], n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
   }
+}
+
+// Shallow ribbed metal dome on a round drum (Coliseu dos Recreios), with a small glazed lantern.
+export function metalDome(S, { cx, cy, r, z0, rise, lin, srgb, seg = 28 }) {
+  const a = lin(srgb('#73787d')), b = lin(srgb('#5f6469')), ring = lin(srgb('#d9d2c2')), glass = lin(srgb('#3a4148'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], I0 = [0, 0, 0, 0];
+  const R = (r * r + rise * rise) / (2 * rise), zc = z0 + rise - R;                // sphere through the rim and the crown
+  const rings = 5, phi0 = Math.asin(Math.min(1, r / R));
+  const V = (i, k) => { const ph = phi0 * (1 - k / rings), th = (i / seg) * 2 * Math.PI, rr = R * Math.sin(ph); return [cx + rr * Math.cos(th), zc + R * Math.cos(ph), -(cy + rr * Math.sin(th))]; };
+  const N = (p) => { const v = [p[0] - cx, p[1] - zc, p[2] + cy], l = Math.hypot(...v); return v.map((q) => q / l); };
+  for (let i = 0; i < seg; i++) for (let k = 0; k < rings; k++) {
+    const p00 = V(i, k), p10 = V(i + 1, k), p01 = V(i, k + 1), p11 = V(i + 1, k + 1), n = N(V(i + 0.5, k + 0.5)), c = i % 2 ? a : b;
+    tri(S, p00, p10, p11, n, c, [0, 0], [1, 0], [1, 1], I0, PL);
+    if (k < rings - 1) tri(S, p00, p11, p01, n, c, [0, 0], [1, 1], [0, 1], I0, PL);
+  }
+  limb(S, [cx, z0 - 0.6, -cy], [cx, z0 + 0.25, -cy], r + 0.6, r + 0.6, seg, ring, PL, true);   // cornice ring under the rim
+  limb(S, [cx, z0 + rise - 0.3, -cy], [cx, z0 + rise + 2.2, -cy], 2.6, 2.6, 8, glass, PL, false);
+  limb(S, [cx, z0 + rise + 2.2, -cy], [cx, z0 + rise + 3.4, -cy], 2.9, 0.3, 8, a, PL, true);
 }

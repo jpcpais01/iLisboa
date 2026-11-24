@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -494,6 +494,11 @@ function addBuilding_(p) {
     const zTop = groundAt(m[0] - ox * 4, m[1] - oy * 4) + 1.5, zSq = groundAt(m[0] + ox * 24, m[1] + oy * 24);
     log(`São Bento: floor ${zTop.toFixed(1)}, Largo ${zSq.toFixed(1)}`);
     saoBentoFront(tileB(...m), { a, b, zTop, zSq: Math.min(zSq, zTop - 0.5), lin, srgb }); mark();
+  }
+  if (byId.get('w96390844')) {   // Coliseu dos Recreios: the big shallow metal dome over the auditorium drum
+    const c = byId.get('w96390844'), [x, y] = proj.fwd(38.716633, -9.140276);
+    const g = c.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / c.outer.length;
+    metalDome(tileB(x, y), { cx: x, cy: y, r: 31, z0: g + 17, rise: 10, lin, srgb }); mark();
   }
   const camara = byId.get('w95417254');
   if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }
