@@ -1003,6 +1003,8 @@ const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY |
 const treeScale = (t, h) => {
   const ht = parseMeters(t.height); if (ht && ht > 2 && ht < 40) return Math.max(0.6, Math.min(2.4, ht / 7.5));
   const g = `${t.genus || ''} ${t.species || ''}`;
+  if (/Chamaerops/i.test(g)) return 0.45 + h * 0.15;                               // dwarf fan palm
+  if (/Phoenix|Washingtonia/i.test(g)) return 1.3 + h * 0.5;                       // the tall Canary date palms of the squares
   if (/Platanus|Ulmus|Tipuana|Ficus|Populus/i.test(g)) return 1.45 + h * 0.45;
   if (/Celtis|Tilia|Jacaranda|Melia/i.test(g)) return 1.05 + h * 0.35;
   return 0.8 + h * 0.6;
