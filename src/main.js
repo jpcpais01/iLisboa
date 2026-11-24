@@ -158,9 +158,10 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
   const d = new Float32Array(buf), n = d.length / 4;
   const paint = (g, hex) => { const c = new THREE.Color(hex); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3)); return g; };
   // clumped crown: three overlapping low-poly lobes, lighter on top
-  const lobe = (r, x, y, z, shade) => paint(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z).toNonIndexed(), shade);
-  const trunk = new THREE.CylinderGeometry(0.2, 0.34, 4.2, 6).translate(0, 2.1, 0).toNonIndexed();
-  const geo = mergeGeometries([lobe(2.3, 0, 5.4, 0, 0xe6e6e6), lobe(1.7, 1.3, 6.4, 0.5, 0xffffff), lobe(1.6, -1.1, 6.1, -0.7, 0xf2f2f2), lobe(1.3, 0.2, 7.3, -0.2, 0xffffff), paint(trunk, 0x5e4636)]);
+  // ~110 triangles a tree (was ~340): icosahedron lobes at detail 0, rotated so the facets don't line up
+  const lobe = (r, x, y, z, shade, ry) => paint(new THREE.IcosahedronGeometry(r, 0).rotateY(ry).rotateX(ry * 0.7).translate(x, y, z).toNonIndexed(), shade);
+  const trunk = new THREE.CylinderGeometry(0.2, 0.34, 4.2, 5, 1, true).translate(0, 2.1, 0).toNonIndexed();
+  const geo = mergeGeometries([lobe(2.45, 0, 5.4, 0, 0xe6e6e6, 0), lobe(1.8, 1.35, 6.3, 0.55, 0xffffff, 0.7), lobe(1.7, -1.15, 6.1, -0.75, 0xf2f2f2, 1.3), lobe(1.6, -0.3, 5.9, 1.3, 0xeeeeee, 2.1), lobe(1.4, 0.2, 7.3, -0.2, 0xffffff, 2.9), paint(trunk, 0x5e4636)]);
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
   const mesh = new THREE.InstancedMesh(geo, mat, n);

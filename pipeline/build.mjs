@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho, domedTower } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -29,8 +29,8 @@ const [S, W, N, E] = areaLine.trim().split(/\s+/).slice(1).map(Number);
 const OUT = path.join(ROOT, 'public/tiles', AREA);
 fs.mkdirSync(OUT, { recursive: true });
 
-const TILE = 1000;            // tile size (m)
-const TEX_PX = 1024;          // ground texture per tile
+const TILE = 500;             // tile size (m): small enough that the camera and shadow frusta cull most of the city up close
+const TEX_PX = 1024;          // ground texture px per km
 const GRID = 8;               // terrain mesh spacing (m)
 const SS = 0.5;               // ground map supersample (m/px)
 const WATER_Y = 0;            // river surface
@@ -104,6 +104,7 @@ const isBuilding = (t) => (t.building && t.building !== 'no') || (t['building:pa
 const underground = (t) => t.location === 'underground' || (t.layer && +t.layer < 0) || t.tunnel === 'yes' || t.tunnel === 'building_passage';
 const polysB = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t));
 const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism));
+for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
 const roads = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
 const rails = extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !underground(t));
 const coast = extractLines(els, proj, (t) => t.natural === 'coastline');
@@ -810,7 +811,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   // ground texture crop
   const px0 = Math.round(((x0 - minX) / (maxX - minX)) * GW), px1 = Math.round(((x1 - minX) / (maxX - minX)) * GW);
   const py0 = Math.round(((maxY - y1) / (maxY - minY)) * GH), py1 = Math.round(((maxY - y0) / (maxY - minY)) * GH);
-  const tw = Math.max(16, Math.round((TEX_PX * (x1 - x0)) / TILE)), th = Math.max(16, Math.round((TEX_PX * (y1 - y0)) / TILE));
+  const tw = Math.max(16, Math.round((TEX_PX * (x1 - x0)) / 1000)), th = Math.max(16, Math.round((TEX_PX * (y1 - y0)) / 1000));   // TEX_PX per km
   const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } })
     .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th).webp({ quality: 82, effort: 6 }).toBuffer();
   doc.createExtension(EXTTextureWebP).setRequired(true);

@@ -77,6 +77,12 @@ export const CHURCHES = {
   w96359446: { towers: 1 },                         // Loreto (Chiado)
   w96758906: { towers: 1 },                         // Santa Cruz do Castelo
 };
+// Areas OSM leaves blank that are plainly something on the ground: [id, tags, ring as lat/lon].
+export const AREAS = [
+  // the castle's south slope below the Castelejo: pines, olives and dirt paths, unmapped in OSM
+  ['castle-slope', { natural: 'wood' }, [[38.71356, -9.13435], [38.71356, -9.13372], [38.71332, -9.13350], [38.71266, -9.13370], [38.71231, -9.13305],
+    [38.71192, -9.13330], [38.71176, -9.13370], [38.71176, -9.13415], [38.71223, -9.13445], [38.71282, -9.13453], [38.71332, -9.13443]]],
+];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630']);   // + Carmo church, Santa Justa lift (tower and its base)
