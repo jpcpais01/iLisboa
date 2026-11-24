@@ -348,7 +348,7 @@ window.__scene = scene; window.__view = (arr) => { camera.position.fromArray(arr
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
-let frames = 0, acc = 0, last = performance.now(), slow = 0;
+let frames = 0, acc = 0, last = performance.now(), slow = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 renderer.setAnimationLoop((now) => {
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
   if (introT < 1 && done >= total) {
@@ -361,9 +361,9 @@ renderer.setAnimationLoop((now) => {
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
-  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 900;
-  for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 850;
-  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760; t.near.visible = nearby; t.lo.visible = !nearby; }
+  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 900 * lodK;
+  for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 850 * lodK;
+  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
   if (lampPoints) { lampPoints.visible = cityUniforms.uNight.value > 0.01; lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   renderer.render(scene, camera);
@@ -374,10 +374,11 @@ renderer.setAnimationLoop((now) => {
     const fps = frames / acc;
     if (done >= total && introT >= 1) {
       if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
+      else if (fps < 45 && lodK > 0.55) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
     }
     if (SHOW_STATS) statsEl.textContent = `${fps.toFixed(0)} fps · dpr ${pixelRatio}\n${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris`;
-    window.__perf = { fps, dpr: pixelRatio, calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
+    window.__perf = { fps, dpr: pixelRatio, lod: lodK, calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
     frames = 0; acc = 0;
   }
 });
