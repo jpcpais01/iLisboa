@@ -77,7 +77,7 @@ document.getElementById('attrib').textContent = manifest.attribution;
 const matBuildings = buildingMaterial();
 const maxAniso = renderer.capabilities.getMaxAnisotropy();
 let done = 0;
-const total = manifest.tiles.length + 4;
+const total = manifest.tiles.length + 5;
 const tick = () => { progressEl.style.width = `${(++done / total) * 100}%`; };
 
 function adopt(gltf) {
@@ -189,6 +189,28 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
   tick();
 }));
 
+// street lamps: one additive point sprite each, warm core and soft halo; only drawn after dusk
+const lampUniforms = { uNight: cityUniforms.uNight, uScale: { value: 1 } };
+let lampPoints = null;
+jobs.push(fetch(url('lamps.bin')).then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0))).then((buf) => {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(buf), 3));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: lampUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `uniform float uScale; varying float vCore;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mv;
+        float px = 9. * uScale / -mv.z; gl_PointSize = clamp(px, 3., 64.);
+        vCore = mix(.75, .22, smoothstep(3., 16., px)); }`,   // far away the sprite is mostly core, so it still reads as a light
+    fragmentShader: `uniform float uNight; varying float vCore;
+      void main() { float r = length(gl_PointCoord - .5) * 2.; if (r > 1.) discard;
+        float core = smoothstep(vCore, 0., r), halo = pow(1. - r, 2.2) * .35;
+        gl_FragColor = vec4(vec3(1., .74, .42) * (core * 1.3 + halo) * uNight, 1.); }`,
+  });
+  lampPoints = new THREE.Points(geo, mat); lampPoints.frustumCulled = false; lampPoints.renderOrder = 2;
+  scene.add(lampPoints);
+  tick();
+}));
+
 // ─── sun / time of day ──────────────────────────────────────────────────
 const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
 const sunDir = new THREE.Vector3();
@@ -284,6 +306,7 @@ renderer.setAnimationLoop((now) => {
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 480;
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 520; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
+  if (lampPoints) { lampPoints.visible = cityUniforms.uNight.value > 0.01; lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones

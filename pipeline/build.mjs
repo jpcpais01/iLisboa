@@ -823,9 +823,36 @@ async function writeDoc(doc, file) {
 }
 
 const ni = Math.ceil((maxX - minX) / TILE), nj = Math.ceil((maxY - minY) / TILE);
+// street lamps: wall brackets every ~28 m along streets, alternating sides; one point each (night glow sprites)
+const lamps = [];
+{
+  // open squares (Praça do Comércio, Rossio…) are lit from their edges, not along the paths that cross them
+  const squares = polysArea.filter((p) => p.tags.place === 'square' || p.tags.highway === 'pedestrian' || p.tags['area:highway'] === 'pedestrian')
+    .map((p) => { const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]); return { ring: p.outer, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; });
+  const inSquare = (x, y) => squares.some((q) => x > q.x0 && x < q.x1 && y > q.y0 && y < q.y1 && pointInRing(x, y, q.ring));
+  const seen = new Set(), SP = { primary: 30, secondary: 30, tertiary: 28, trunk: 32, motorway: 40, residential: 26, unclassified: 26, living_street: 24, service: 34, pedestrian: 24, steps: 18 };   // footways (plaza diagonals, park paths) stay dark
+  for (const r of sorted) {
+    const k = roadKind(r.tags), sp = SP[k]; if (!sp) continue;
+    const w = parseMeters(r.tags.width) ?? ROAD_W[k];
+    let carry = sp * 0.5, side = 1;
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const [ax, ay] = r.pts[i], [bx, by] = r.pts[i + 1], L = Math.hypot(bx - ax, by - ay); if (L < 1e-3) continue;
+      const nx = -(by - ay) / L, ny = (bx - ax) / L;
+      for (let t = carry; t < L; t += sp) {
+        const off = pedestrianish(k) && k !== 'pedestrian' ? 0 : w / 2 + 0.6;
+        const x = ax + ((bx - ax) * t) / L + nx * off * side, y = ay + ((by - ay) * t) / L + ny * off * side; side = -side;
+        if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y) || (k === 'pedestrian' && inSquare(x, y))) continue;
+        const key = Math.round(x / 9) + ',' + Math.round(y / 9); if (seen.has(key)) continue; seen.add(key);
+        lamps.push(x, groundAt(x, y) + 4.6, -y);
+      }
+      carry = carry >= L ? carry - L : sp - ((L - carry) % sp);
+    }
+  }
+  log(`street lamps ${lamps.length / 3}`);
+}
 const manifest = {
   area: AREA, origin: { lat: lat0, lon: lon0 }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
-  tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged },
+  tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3 },
   attribution: '© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus',
   built: new Date().toISOString(),
 };
@@ -931,7 +958,8 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   for (let i = 0; i < m.length; i++) m[i] = water[i] === 2 ? 255 : 0;
   await sharp(m, { raw: { width: wr.w, height: wr.h, channels: 1 } }).blur(0.7).png({ compressionLevel: 9, palette: false }).toFile(path.join(OUT, 'water.png'));
   fs.writeFileSync(path.join(OUT, 'trees.bin'), Buffer.from(Float32Array.from(trees).buffer));
-  totalBytes += fs.statSync(path.join(OUT, 'water.png')).size + trees.length * 4;
+  fs.writeFileSync(path.join(OUT, 'lamps.bin'), Buffer.from(Float32Array.from(lamps).buffer));
+  totalBytes += fs.statSync(path.join(OUT, 'water.png')).size + trees.length * 4 + lamps.length * 4;
 }
 manifest.stats.bytes = totalBytes;
 manifest.stats.triangles = totalTris;

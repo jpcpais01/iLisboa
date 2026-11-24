@@ -589,9 +589,10 @@
   "waterSource": "osm-coastline",
   "trees": 5170,
   "treesMapped": 3428,
-  "bytes": 22857821,
+  "lamps": 6196,
+  "bytes": 22932173,
   "triangles": 1149088
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-24T18:53:25.393Z"
+ "built": "2026-11-24T19:09:49.358Z"
 }
