@@ -998,8 +998,16 @@ const groundPx = (x, y) => { const c = Math.floor(((x - minX) / (maxX - minX)) *
 // tree kind rides in the scale's tens digit: 0 broadleaf, 1 palm, 2 stone pine / conifer
 const PALMS = /^(phoenix|chamaerops|howea|jubaea|washingtonia|cocos|trachycarpus|syagrus|livistona|butia|archontophoenix)/i, CONIFERS = /^(pinus|cupressus|cedrus|araucaria|taxus|juniperus|abies|picea)/i;
 const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
-const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, groundAt(x, y), -y, sc + 10 * kind); };
-for (const t of treeNodes) if (t.id !== 'n3761456264') addTree(t.p[0], t.p[1], 0.8 + hash(t.id) * 0.6, treeKind(t.tags));   // the Príncipe Real cedar is authored
+const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
+// size by species where the city's tree survey tagged it: the Avenida's planes and elms are big, the lódãos medium
+const treeScale = (t, h) => {
+  const ht = parseMeters(t.height); if (ht && ht > 2 && ht < 40) return Math.max(0.6, Math.min(2.4, ht / 7.5));
+  const g = `${t.genus || ''} ${t.species || ''}`;
+  if (/Platanus|Ulmus|Tipuana|Ficus|Populus/i.test(g)) return 1.45 + h * 0.45;
+  if (/Celtis|Tilia|Jacaranda|Melia/i.test(g)) return 1.05 + h * 0.35;
+  return 0.8 + h * 0.6;
+};
+for (const t of treeNodes) if (t.id !== 'n3761456264') addTree(t.p[0], t.p[1], treeScale(t.tags, hash(t.id)), treeKind(t.tags));   // the Príncipe Real cedar is authored
 for (const r of treeRows) for (let i = 0; i + 1 < r.pts.length; i++) {
   const [x1, y1] = r.pts[i], [x2, y2] = r.pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
   for (let s = 0; s < L; s += 8) addTree(x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L, 0.8 + hash(r.id + s) * 0.5, treeKind(r.tags));
@@ -1078,7 +1086,7 @@ const lamps = [];
         const x = ax + ((bx - ax) * t) / L + nx * off * side, y = ay + ((by - ay) * t) / L + ny * off * side; side = -side;
         if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y) || (k === 'pedestrian' && inSquare(x, y))) continue;
         const key = Math.round(x / 9) + ',' + Math.round(y / 9); if (seen.has(key)) continue; seen.add(key);
-        lamps.push(x, groundAt(x, y) + 4.6, -y);
+        lamps.push(x, meshAt(x, y) + 4.6, -y);
       }
       carry = carry >= L ? carry - L : sp - ((L - carry) % sp);
     }
@@ -1116,7 +1124,7 @@ const cars = [];
         const x = ax + ux * t + nx * off, y = ay + uy * t + ny * off;
         if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) continue;
         const key = Math.round(x / 4) + ',' + Math.round(y / 4); if (taken.has(key)) continue; taken.add(key);
-        const z0 = groundAt(x - ux * 2, y - uy * 2), z1 = groundAt(x + ux * 2, y + uy * 2);
+        const z0 = meshAt(x - ux * 2, y - uy * 2), z1 = meshAt(x + ux * 2, y + uy * 2);
         const head = Math.atan2(uy, ux) + dir;
         cars.push(x, (z0 + z1) / 2, -y, head, Math.atan2(z1 - z0, 4) * (dir ? -1 : 1), h);
       }
