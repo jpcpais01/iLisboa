@@ -284,7 +284,9 @@ const stats = { authored: 0, buildings: 0, height: 0, levels: 0, estimated: 0, p
 
 const LEVEL_H = 3.2;
 const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8, garage: 3, garages: 3, shed: 3, kiosk: 3.2, hut: 3, roof: 3.5, school: 13, hospital: 18, train_station: 12, ruins: 5, castle: 14, tower: 25, bunker: 3, carport: 3, pillar: 5, service: 3.5, construction: 6 };
-const MODERN = new Set(['office', 'commercial', 'hotel', 'hospital', 'university', 'school', 'industrial', 'warehouse', 'government', 'transportation', 'train_station', 'public', 'civic', 'parking']);
+// institutions (hospital, school, university, government, public, civic) in the old centre are mostly convents and palaces
+// under tiled roofs; only built-for-purpose types default to flat-roofed modern boxes
+const MODERN = new Set(['office', 'commercial', 'hotel', 'industrial', 'warehouse', 'transportation', 'train_station', 'parking']);
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
 // Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
