@@ -992,3 +992,64 @@ export function tramCar(S, { x0, y0, z0, x1, y1, z1, lin, srgb, funicular = fals
   cub(-h * 0.5, h * 0.5, -hw * 0.55, hw * 0.55, 3.0, 3.2, cream);
   if (!funicular) limb(S, Q(-h * 0.2, 0, 3.2), Q(-h * 0.2 - 3.2, 0, 4.9), 0.05, 0.04, 4, skirt, PL, false);
 }
+
+// Cacilheiro: the double-ended Tagus ferry. Orange hull with a white rubbing band, white main-deck
+// saloon with a dark window band, upper deck with the wheelhouse and a short funnel. Centre (x,y),
+// heading (dx,dy), afloat on the river surface (y = 0).
+export function cacilheiro(S, { x, y, dx, dy, lin, srgb, seed = 0 }) {
+  const orange = lin(srgb('#d9662c')), white = lin(srgb('#f2f0ea')), glass = lin(srgb('#2f363d')), deck = lin(srgb('#8d8a84')), black = lin(srgb('#2a2a2a'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
+  const P = (u, v) => [x + dx * u - dy * v, y + dy * u + dx * v];
+  const hull = (L, B, z0, z1, col, top) => {               // double-ended hull plan: chamfered both ends
+    const r = [[-L, 0], [-L + 4, -B], [L - 4, -B], [L, 0], [L - 4, B], [-L + 4, B]].map(([u, v]) => P(u, v));
+    for (let i = 0; i < r.length; i++) wallQuad(S, r[i], r[(i + 1) % r.length], z0, z0, z1, z1, col, 0, 1, z0, I0, PL);
+    if (top) for (let i = 1; i + 1 < r.length; i++) triUp(S, [r[0][0], z1, -r[0][1]], [r[i][0], z1, -r[i][1]], [r[i + 1][0], z1, -r[i + 1][1]], top, [0, 0], [0, 0], [0, 0], I0, PL);
+  };
+  hull(16, 4.4, -1.2, 1.0, orange, null);
+  hull(16.1, 4.5, 1.0, 1.45, white, deck);
+  const [cx, cy] = P(0, 0);
+  box(S, cx, cy, dx, dy, 11, 3.7, 1.45, 2.3, white, I0, PL);
+  box(S, cx, cy, dx, dy, 11.05, 3.75, 2.3, 3.4, glass, I0, PL);
+  box(S, cx, cy, dx, dy, 11, 3.7, 3.4, 3.9, white, I0, PL);
+  box(S, cx, cy, dx, dy, 11.6, 4.1, 3.9, 4.05, deck, I0, PL);
+  box(S, cx, cy, dx, dy, 3.2, 2.6, 4.05, 5.0, white, I0, PL);
+  box(S, cx, cy, dx, dy, 3.25, 2.65, 5.0, 5.9, glass, I0, PL);
+  box(S, cx, cy, dx, dy, 3.4, 2.8, 5.9, 6.15, white, I0, PL);
+  const [fx, fy] = P(4.6, 0);
+  limb(S, [fx, 4.05, -fy], [fx, 7.0, -fy], 0.55, 0.5, 8, orange, PL);
+  limb(S, [fx, 7.0, -fy], [fx, 7.5, -fy], 0.52, 0.5, 8, black, PL);
+}
+
+// Miradouro: white balustrade along the edges that drop away (checked against the terrain), and for
+// Santa Luzia the pergola of white columns under bougainvillea along the river side.
+export function miradouro(S, { ring, groundAt, lin, srgb, pergola = false, seed = 0 }) {
+  const white = lin(srgb('#efeadf')), stone = lin(srgb('#d9d1bf')), leaf = lin(srgb('#5b7f3c')), leaf2 = lin(srgb('#6f9147')), bloom = lin(srgb('#b4447e'));
+  const ST = [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
+  const inside = (x, y) => pip(x, y, ring);
+  let best = null, bestL = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 2) continue;
+    const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const s = inside(mx - uy * 1.5, my + ux * 1.5) ? -1 : 1, nx = -uy * s, ny = ux * s;     // outward normal
+    if (inside(mx + nx * 1.5, my + ny * 1.5)) continue;
+    if (groundAt(mx + nx * 6, my + ny * 6) > groundAt(mx - nx * 1.5, my - ny * 1.5) - 1.2) continue;   // not a drop
+    const n = Math.max(1, Math.round(L / 4));
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n * L, x = a[0] + ux * t - nx * 0.15, y = a[1] + uy * t - ny * 0.15, g = groundAt(x - nx, y - ny);
+      box(S, x, y, ux, uy, L / n / 2, 0.15, g - 0.4, g + 0.95, white, I0, PL);
+      box(S, x, y, ux, uy, L / n / 2 + 0.02, 0.22, g + 0.95, g + 1.1, stone, I0, ST);
+    }
+    if (L > bestL) { bestL = L; best = { a, ux, uy, nx, ny, L }; }
+  }
+  if (pergola && best) {
+    const { a, ux, uy, nx, ny, L } = best, P = (t, d) => [a[0] + ux * t - nx * d, a[1] + uy * t - ny * d];
+    const g0 = (t) => { const [x, y] = P(t, 1.6); return groundAt(x, y); };
+    for (const d of [0.7, 3.4]) for (let t = 1.2; t <= L - 1.2; t += 2.8) { const [x, y] = P(t, d), g = groundAt(x, y); limb(S, [x, g, -y], [x, g + 3.0, -y], 0.19, 0.17, 8, white, PL); }
+    for (let t = 0.8; t < L - 0.8; t += 4) {
+      const L2 = Math.min(4, L - 0.8 - t), [x, y] = P(t + L2 / 2, 2.05), g = g0(t + L2 / 2);
+      box(S, x, y, ux, uy, L2 / 2, 1.6, g + 3.0, g + 3.2, stone, I0, ST);
+      box(S, x, y, ux, uy, L2 / 2, 1.85, g + 3.2, g + 3.55, (t * 7.3 + seed * 10) % 3 < 1 ? leaf2 : leaf, I0, PL);
+      for (let j = 0; j < 2; j++) { const tt = t + L2 * (0.25 + 0.5 * j), [bx, by] = P(tt, 0.4 + ((tt * 3.7) % 3)); box(S, bx, by, ux, uy, 0.7, 0.55, g + 3.4, g + 3.65, bloom, I0, PL); }
+    }
+  }
+}

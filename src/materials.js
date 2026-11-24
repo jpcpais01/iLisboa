@@ -159,8 +159,10 @@ if (kind < .5) {                                  // plain trims, chimneys
   float shade = (.78 + .22 * smoothstep(0., .8, fv)) * (.86 + .14 * sin(fuu * 3.1416)) * (.9 + .2 * h21(vec2(ci, row) + seed));
   shade = mix(shade, .93, far);
   float lich = smoothstep(.55, .9, vnoise(vWP.xz * .9 + seed * 10.));
-  col = base * shade * (1. - .18 * lich) + vec3(.03, .03, .01) * lich;
-  col *= .9 + .12 * vnoise(vWP.xz * .25);
+  float soot = smoothstep(.5, .85, vnoise(vWP.xz * .21 + seed * 3.7)) * (1. - far * .4);
+  col = base * shade * (1. - .2 * lich) + vec3(.03, .03, .01) * lich;
+  col = mix(col, col * vec3(.62, .6, .6), soot * .55);                    // weathered, sooty patches
+  col *= (.86 + .14 * fract(seed * 13.7)) * (.9 + .12 * vnoise(vWP.xz * .25));
   rough = .75;
   if (kind > 4.5) {                                          // mansard: dormer / attic windows
     float bx = t.x / bw, fu = fract(bx) - .5, ux = fu * bw;
@@ -189,7 +191,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v4';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v5';
   return m;
 }
 

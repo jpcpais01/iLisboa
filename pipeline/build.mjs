@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -206,7 +206,7 @@ const POMBALINE = pal([['#f1ece2', 24], ['#ece0c2', 14], ['#e9c97f', 22], ['#e8b
 const VERNACULAR = pal([['#f5f2eb', 34], ['#f0e3c4', 11], ['#efcc7e', 12], ['#ecb79e', 10], ['#bcd3e3', 8], ['#d3dfb8', 5], ['#e8ac84', 5], ['#e2bccb', 5], ['#c86a53', 3], ['#b8cbbb', 3], ['#f3d899', 5]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
-const ROOFS = pal([['#a85e47', 5], ['#b0694f', 4], ['#9a5746', 3], ['#b97c60', 3], ['#8d5242', 2], ['#a3654f', 3]]);
+const ROOFS = pal([['#a05c46', 5], ['#a9664f', 4], ['#925444', 3], ['#ad735b', 3], ['#844e41', 2], ['#9b604d', 3]]);   // weathered terracotta
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
 
@@ -488,6 +488,34 @@ function addBuilding_(p) {
   log(`trams ${n}, e.g. at ${firstTram.map((v) => v.toFixed(5))}`);
 }
 
+// ─── cacilheiros: one moored at each terminal pier, one under way on each crossing ──
+{
+  let n = 0;
+  const put = (x, y, dx, dy, k) => { if (x < minX + 20 || x > maxX - 20 || y < minY + 20 || y > maxY - 20 || !isDeepWater(x, y)) return; cacilheiro(tileB0(x, y), { x, y, dx, dy, lin, srgb, seed: k }); n++; };
+  for (const [a, b] of [[[38.7048156, -9.1458602], [38.7043741, -9.1458431]], [[38.7065673, -9.1335673], [38.7062885, -9.1334308]]]) {   // pier root → head
+    const [ax, ay] = proj.fwd(...a), [bx, by] = proj.fwd(...b), L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L;
+    put(bx + ux * 18 + uy * 6.5, by + uy * 18 - ux * 6.5, ux, uy, 0.2);          // bow to the pontoon, lying alongside its end
+  }
+  const routes = extractLines(els, proj, (t) => t.route === 'ferry');
+  for (const r of routes) {
+    const [x0, y0] = r.pts[0], far = r.pts[r.pts.length - 1], L = Math.hypot(far[0] - x0, far[1] - y0), ux = (far[0] - x0) / L, uy = (far[1] - y0) / L;
+    const s = 95 + hash(r.id) * 90; put(x0 + ux * s, y0 + uy * s, ux, uy, hash(r.id + 'f'));
+  }
+  stats.ferries = n; log(`ferries ${n}`);
+}
+
+// ─── miradouros: balustrades where the terrace drops away; Santa Luzia's pergola ──
+{
+  const ids = ['w169007610', 'w565894105', 'r19112367_0', 'w526129020', 'r9060636_0', 'w573667052', 'w1450837674'];
+  const views = extractPolygons(els, proj, (t) => t.tourism === 'viewpoint' || t.leisure || t.highway || t.place);
+  let n = 0;
+  for (const id of ids) {
+    const v = views.find((p) => p.id === id); if (!v) continue;
+    miradouro(tileB0(...v.c), { ring: v.outer, groundAt, lin, srgb, pergola: id === 'w169007610', seed: hash(id) }); n++;
+  }
+  stats.miradouros = n; log(`miradouros ${n}`);
+}
+
 // ─── statues, columns & historic walls ──────────────────────────────────
 const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
 {
@@ -568,9 +596,9 @@ if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); p
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
-  ground: srgb('#ddd6c8'), calcada: srgb('#efe9dc'), asphalt: srgb('#8f8c88'), road_edge: srgb('#c9c2b5'),
+  ground: srgb('#d0c8b9'), calcada: srgb('#e2dbcd'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#5d5650'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#ebe4d4'),
+  parking: srgb('#b7b2aa'), rail: srgb('#5d5650'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 for (let i = 0; i < gm.w * gm.h; i++) paint(C.ground)(i);
@@ -671,6 +699,15 @@ gm.data = null;
   }
 }
 log('AO baked');
+{ // wear: two octaves of value noise so pavements and yards are not flat colour
+  const vn = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, h = (a, b) => { let n = (a * 374761393 + b * 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); return (h(xi, yi) * (1 - sx) + h(xi + 1, yi) * sx) * (1 - sy) + (h(xi, yi + 1) * (1 - sx) + h(xi + 1, yi + 1) * sx) * sy; };
+  const mpp = (maxX - minX) / GW;
+  for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) {
+    const x = c * mpp, y = r * mpp, k = 0.93 + 0.09 * vn(x / 23, y / 23) + 0.05 * vn(x / 4.1, y / 4.1), i = (r * GW + c) * 3;
+    ground1[i] *= k; ground1[i + 1] *= k; ground1[i + 2] *= k;
+  }
+}
 
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
