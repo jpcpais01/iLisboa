@@ -32,7 +32,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const TILE = 500;             // tile size (m): small enough that the camera and shadow frusta cull most of the city up close
 const TEX_PX = 2048;          // ground texture px per km
 const GRID = 8;               // terrain mesh spacing (m)
-const SS = 0.5;               // ground map supersample (m/px)
+const SS = 0.32;               // ground map supersample (m/px)
 const WATER_Y = 0;            // river surface
 const BASE_Y = -28;           // diorama base bottom
 const t0 = Date.now();
@@ -942,8 +942,8 @@ for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
 log(`ground map painted ${gm.w}×${gm.h}`);
 
 // downsample to 1 m and bake contact AO around buildings
-const GW = gm.w, GH = gm.h;   // keep the full 0.5 m/px paint: roads and kerbs stay crisp
-let ground1 = Buffer.from(gm.data.buffer);
+const GW = Math.round((maxX - minX) / 0.5), GH = Math.round((maxY - minY) / 0.5);   // painted at 0.32 m, filtered down to 0.5 m: crisp kerbs without stair-steps
+let ground1 = await sharp(Buffer.from(gm.data.buffer), { raw: { width: gm.w, height: gm.h, channels: 3 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'lanczos3' }).raw().toBuffer();
 gm.data = null;
 {
   const bm = new Raster(minX, minY, maxX, maxY, (maxX - minX) / GW);
