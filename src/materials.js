@@ -232,8 +232,8 @@ export const waterUniformTime = { value: 0 };
 
 // River: mask-clipped plane, sky reflections, animated multi-octave ripples.
 export function waterMaterial(mask) {
-  const m = new THREE.MeshStandardMaterial({ color: 0x2f6b80, roughness: 0.06, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });
-  m.envMapIntensity = 1.4;
+  const m = new THREE.MeshStandardMaterial({ color: 0x2c5d6b, roughness: 0.12, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });   // Tagus: deep slate teal
+  m.envMapIntensity = 1.15;
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = waterUniformTime;
     s.vertexShader = s.vertexShader
@@ -246,19 +246,21 @@ export function waterMaterial(mask) {
   vec2 p = vWPos.xz;
   float t = uTime;
   vec2 g = vec2(0.0);
-  vec2 dirs[4] = vec2[4](vec2(0.8, 0.6), vec2(-0.5, 0.86), vec2(0.97, -0.24), vec2(-0.2, -0.98));
-  float fr[4] = float[4](0.035, 0.06, 0.11, 0.19);
-  for (int i = 0; i < 4; i++) {
-    float ph = dot(dirs[i], p) * fr[i] + t * (0.6 + float(i) * 0.35);
-    g += dirs[i] * cos(ph) * (0.16 / (1.0 + float(i)));
+  // six short, irregular wave trains with a slow domain warp: chop, not stripes
+  vec2 w = p + 7.0 * vec2(sin(p.y * 0.013 + t * 0.07), sin(p.x * 0.011 - t * 0.05));
+  vec2 dirs[6] = vec2[6](vec2(0.8, 0.6), vec2(-0.5, 0.86), vec2(0.97, -0.24), vec2(-0.2, -0.98), vec2(0.42, 0.91), vec2(-0.93, 0.37));
+  float fr[6] = float[6](0.085, 0.13, 0.21, 0.34, 0.55, 0.9);
+  for (int i = 0; i < 6; i++) {
+    float ph = dot(dirs[i], w) * fr[i] + t * (0.7 + float(i) * 0.33) + float(i) * 1.7;
+    g += dirs[i] * cos(ph) * (0.11 / (1.0 + float(i) * 0.55));
   }
   float dist = length(cameraPosition - vWPos);
-  g *= 1.0 - smoothstep(800.0, 4000.0, dist) * 0.7;
+  g *= 1.0 - smoothstep(150.0, 1400.0, dist) * 0.93;   // fade the chop out before it aliases into a checkerboard
   vec3 nW = normalize(vec3(-g.x, 1.0, -g.y));
   normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
 }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-water-v1';
+  m.customProgramCacheKey = () => 'ilisboa-water-v2';
   return m;
 }
 
