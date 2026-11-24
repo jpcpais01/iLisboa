@@ -361,7 +361,7 @@
     -391.694138263734,
     584.6225301354741
    ],
-   "bytes": 841088,
+   "bytes": 845748,
    "balconies": "bal_2_3.bin"
   },
   {
@@ -660,19 +660,19 @@
   "fireWalls": 597,
   "blocks": 62,
   "blockMembers": 433,
-  "landmarks": 20,
+  "landmarks": 21,
   "trams": 50,
   "ferries": 4,
   "sailboats": 7,
   "miradouros": 10,
   "waterSource": "osm-coastline",
-  "trees": 6178,
-  "treesMapped": 3850,
+  "trees": 6175,
+  "treesMapped": 3849,
   "lamps": 7846,
   "cars": 12599,
-  "bytes": 28366918,
-  "triangles": 1396334
+  "bytes": 28371530,
+  "triangles": 1396650
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-24T20:01:57.754Z"
+ "built": "2026-11-24T20:12:22.767Z"
 }

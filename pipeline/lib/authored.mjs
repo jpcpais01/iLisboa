@@ -1280,3 +1280,17 @@ export function marquesColumn(S, { cx, cy, ground, lin, srgb }) {
   box(S, cx + 0.9, cy - 0.3, 0.6, 0.8, 1.2, 0.45, ground + 36.3, ground + 37.6, bronze, I0, PL);
   box(S, cx + 1.6, cy + 0.4, 0.6, 0.8, 0.4, 0.38, ground + 37.2, ground + 38.1, bronze, I0, PL);
 }
+
+// Príncipe Real's Cupressus lusitanica: trained flat over an iron trellis into a ~25 m green parasol.
+export function trellisCedar(S, { cx, cy, ground, lin, srgb }) {
+  const leaf = lin(srgb('#3f5a35')), leafTop = lin(srgb('#4c6a3d')), bark = lin(srgb('#5b4636')), iron = lin(srgb('#2e3130'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.5, 1], P = (z) => [cx, ground + z, -cy];
+  limb(S, P(0), P(3.4), 0.65, 0.5, 8, bark, PL, false);
+  for (let k = 0; k < 14; k++) {                                                   // ring of iron posts carrying the canopy
+    const a = (k / 14) * 2 * Math.PI, x = cx + Math.cos(a) * 11.2, y = cy + Math.sin(a) * 11.2;
+    limb(S, [x, ground, -y], [x, ground + 3.1, -y], 0.07, 0.07, 4, iron, PL, false);
+  }
+  limb(S, P(2.9), P(3.6), 13.2, 13.4, 20, leaf, PL, true);                          // the flat parasol
+  limb(S, P(3.6), P(4.3), 12.4, 7.5, 20, leafTop, PL, true);
+  limb(S, P(4.3), P(6.5), 3.2, 0.6, 10, leafTop, PL, true);                         // leader rising out of the middle
+}
