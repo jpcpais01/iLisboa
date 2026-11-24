@@ -233,9 +233,10 @@ let introT = 0;
 const fromHash = location.hash.slice(1).split(',').map(Number);
 // ?cam=lat,lon,range,heading,tilt — same convention as Google Earth URLs, for side-by-side checks
 const cam = (new URLSearchParams(location.search).get('cam') || '').split(',').map(Number);
-if (cam.length === 5 && cam.every(isFinite)) {
+const camOnGround = cam.length === 5 && cam.every(isFinite);
+if (camOnGround) {
   const [lat, lon, d, h, t] = cam, hr = (h * Math.PI) / 180, tr = (t * Math.PI) / 180;
-  const tgt = ll(lat, lon).setY(6);
+  const tgt = ll(lat, lon).setY(0);
   camera.fov = 35; camera.updateProjectionMatrix();
   controls.target.copy(tgt);
   camera.position.copy(tgt).add(new THREE.Vector3(-Math.sin(hr) * Math.sin(tr) * d, Math.cos(tr) * d, Math.cos(hr) * Math.sin(tr) * d));
@@ -294,6 +295,11 @@ camera.updateProjectionMatrix();
 
 try {
   await Promise.all(jobs);
+  if (camOnGround) {   // ?cam ranges are measured from the ground, as in Google Earth: lift the view onto the terrain
+    const terrain = []; scene.traverse((o) => { if (o.isMesh && o.name.startsWith('terrain')) terrain.push(o); });
+    const hit = new THREE.Raycaster(controls.target.clone().setY(2000), new THREE.Vector3(0, -1, 0)).intersectObjects(terrain)[0];
+    if (hit) { const dy = hit.point.y - controls.target.y; controls.target.y += dy; camera.position.y += dy; }
+  }
   document.getElementById('loading').classList.add('done');
 } catch (err) {
   console.error(err);

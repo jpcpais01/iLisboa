@@ -44,11 +44,32 @@ export const OVERRIDES = {
   'r19072300_0': { castle: true, stone: true, wall: '#cdbd9f', shape: 'flat', h: 12, floorH: 0, parapet: 0, crenel: true, variant: 5 },
   ...Object.fromEntries(['r19072289_0', 'r19072290_0', 'r19072291_0', 'r19072292_0', 'r19072293_0', 'r19072294_0', 'r19072296_0', 'r19072297_0', 'r19072298_0', 'r19072299_0']
     .map((id, k) => [id, { castle: true, stone: true, wall: '#c9b898', shape: 'flat', h: id === 'r19072289_0' ? 22 : 16 + (k % 3), floorH: 0, parapet: 0, crenel: true, variant: 5 }])),
+  // Casa dos Bicos (1523): façade of diamond-pointed stones (shader variant 7), four storeys since the 1983 rebuild
+  w96628628: { variant: 7, wall: '#e4ddcc', roofCol: '#a5604b', stone: false, shape: 'hipped', pitch: 24, h: 14.5, roofH: 3, floorH: 3.3, groundH: 4.4, bayW: 3.4, balconyFloors: [], parapet: 0 },
+  // Santa Apolónia station: long pale neoclassical front (OSM paints it sky blue), tiled hip roof
+  w9254766: { variant: 4, wall: '#eee6d3', roofCol: '#a7654f', stone: false, h: 15, roofH: 3.5, floorH: 4.8, groundH: 5.6, bayW: 3.6, balconyFloors: [1], balconyChance: 0.25, parapet: 0 },
+  // Conceição Velha: Manueline church front in white lioz
+  w96319788: { wall: '#e6e0d0' },
   // Teatro Nacional D. Maria II: neoclassical, pale stone, low roof; portico modelled separately
   w77473968: { variant: 4, wall: '#ece5d4', stone: false, shape: 'hipped', pitch: 20, h: 21, roofH: 3.4, floorH: 5.2, groundH: 6, bayW: 4.2, balconyFloors: [], parapet: 0 },
 };
+// Churches built by parishChurch(): known tower counts, façade ends (+1 = the OBB's +u end) and caps.
+// Everything not listed is inferred from the footprint (size → towers, open side → façade).
+export const CHURCHES = {
+  w96758905: { towers: 2, cap: 'cupola' },          // São Miguel (Alfama): twin towers
+  w142915549: { towers: 1, cap: 'cupola' },         // Santo Estêvão
+  w96758903: { towers: 0 },                         // Santa Luzia, by the miradouro
+  w97476164: { towers: 2 },                         // São Nicolau (Baixa)
+  w246085829: { towers: 1, cap: 'spire' },          // Graça: single tall tower beside the church
+  w95408993: { towers: 0 },                         // São Domingos: pedimented front, no front towers
+  w1350027072: { towers: 0 },                       // São Roque: plain mannerist front
+  w96359440: { towers: 2 },                         // Santa Catarina (Paulistas)
+  w96359446: { towers: 1 },                         // Loreto (Chiado)
+  w96758906: { towers: 1 },                         // Santa Cruz do Castelo
+};
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735']);
+export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
+  'w96301719', 'w115238861', 'w1387011981']);   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
 // Pombaline façade palette, read off the reference by eye: mostly pale, a few warm ochres and pinks.
@@ -566,49 +587,80 @@ export function portico(S, { a, b, ground, depth = 6, colH = 11, lin, srgb, stat
   if (statue) { const p = at(0, depth - 0.3); limb(S, [p[0], zP + ph, -p[1]], [p[0], zP + ph + 2.4, -p[1]], 0.4, 0.3, 8, stone, ST); limb(S, [p[0], zP + ph + 2.4, -p[1]], [p[0], zP + ph + 2.9, -p[1]], 0.18, 0.16, 6, stone, ST); }
 }
 
-// Sé de Lisboa (12th c., Romanesque with a Gothic chevet). West front with two crenellated towers,
-// rose window and deep portal; three-aisled nave; transept with a crenellated lantern; apse and ambulatory.
-// Frame from the OBB of the mapped cathedral parts: u runs west→east along the nave.
-export function seCathedral(S, { cx, cy, ux, uy, hl, ground, gmin, lin, srgb }) {
-  const stone = lin(srgb('#d8ccb2')), stone2 = lin(srgb('#cbbd9f')), dark = lin(srgb('#3b3a37')), roof = lin(srgb('#a8604a'));
-  const ST = [KIND.STONE / 8, 5 / 8, 0.53, 0.9], I0 = [0, 0, 0, 0], TL = [KIND.TILES / 8, 5 / 8, 0.53, 1];
+// Local-frame kit for hand-built churches: u along the axis, v to its left, z up from `ground`.
+function kit(S, { cx, cy, ux, uy, ground, zb, wall, roof, ST, TL }) {
+  const I0 = [0, 0, 0, 0];
   const P2 = (u, v) => [cx + ux * u - uy * v, cy + uy * u + ux * v];
   const W3 = (u, v, z) => { const [x, y] = P2(u, v); return [x, ground + z, -y]; };
-  const zb = gmin - ground - 1.5;
-  const block = (u0, u1, v0, v1, z1, col = stone) => {            // walls of an axis-aligned block (local), flat top
+  const blk = (u0, u1, v0, v1, z0, z1, col = wall, st = ST) => { const [x, y] = P2((u0 + u1) / 2, (v0 + v1) / 2); box(S, x, y, ux, uy, Math.abs(u1 - u0) / 2, Math.abs(v1 - v0) / 2, ground + z0, ground + z1, col, I0, st); };
+  const block = (u0, u1, v0, v1, z1, col = wall) => {            // walls of an axis-aligned block (local), flat top
     const c = [P2(u0, v0), P2(u1, v0), P2(u1, v1), P2(u0, v1)];
     for (let i = 0; i < 4; i++) wallQuad(S, c[i], c[(i + 1) % 4], ground + zb, ground + zb, ground + z1, ground + z1, col, 0, 1, ground, I0, ST);
     triUp(S, W3(u0, v0, z1), W3(u1, v0, z1), W3(u1, v1, z1), col, [0, 0], [0, 0], [0, 0], I0, ST);
     triUp(S, W3(u0, v0, z1), W3(u1, v1, z1), W3(u0, v1, z1), col, [0, 0], [0, 0], [0, 0], I0, ST);
   };
-  const crenel = (u0, u1, v0, v1, z, step = 1.7) => {             // merlons round a rectangle's rim
+  const crenel = (u0, u1, v0, v1, z, step = 1.7, col = wall) => {  // merlons round a rectangle's rim
     const sides = [[u0, v0, u1, v0], [u1, v0, u1, v1], [u1, v1, u0, v1], [u0, v1, u0, v0]];
     for (const [a0, b0, a1, b1] of sides) {
       const L = Math.hypot(a1 - a0, b1 - b0), n = Math.max(1, Math.floor(L / step));
       for (let k = 0; k < n; k++) {
         const t = (k + 0.5) / n, u = a0 + (a1 - a0) * t, v = b0 + (b1 - b0) * t, [x, y] = P2(u, v);
-        box(S, x, y, ux, uy, 0.45, 0.45, ground + z, ground + z + 1.2, stone, I0, ST);
+        box(S, x, y, ux, uy, 0.45, 0.45, ground + z, ground + z + 1.2, col, I0, ST);
       }
     }
   };
-  const gable = (u0, u1, v0, v1, zE, zR, alongU = true) => {        // gabled roof over a block (ridge along u or v)
-    const tri3 = (a, b, c, n) => tri(S, a, b, c, n, roof, [0, 0], [1, 0], [0, 1], I0, TL);
+  const gable = (u0, u1, v0, v1, zE, zR, alongU = true, endCol = wall) => {  // gabled roof over a block (ridge along u or v)
     if (alongU) {
       const vm = (v0 + v1) / 2;
-      for (const [va, sgn] of [[v0, -1], [v1, 1]]) {
+      for (const va of [v0, v1]) {
         const A = W3(u0, va, zE), B = W3(u1, va, zE), C = W3(u1, vm, zR), D = W3(u0, vm, zR);
         triUp(S, A, B, C, roof, [0, 0], [u1 - u0, 0], [u1 - u0, 6], I0, TL); triUp(S, A, C, D, roof, [0, 0], [u1 - u0, 6], [0, 6], I0, TL);
       }
-      for (const u of [u0, u1]) { const n = W3(u > u0 ? 1 : -1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]); tri(S, W3(u, v0, zE), W3(u, v1, zE), W3(u, vm, zR), n, stone, [0, 0], [1, 0], [0, 1], I0, ST); }
+      for (const u of [u0, u1]) { const n = W3(u > u0 ? 1 : -1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]); tri(S, W3(u, v0, zE), W3(u, v1, zE), W3(u, vm, zR), n, endCol, [0, 0], [1, 0], [0, 1], I0, ST); }
     } else {
       const um = (u0 + u1) / 2;
       for (const ua of [u0, u1]) {
         const A = W3(ua, v0, zE), B = W3(ua, v1, zE), C = W3(um, v1, zR), D = W3(um, v0, zR);
         triUp(S, A, B, C, roof, [0, 0], [v1 - v0, 0], [v1 - v0, 6], I0, TL); triUp(S, A, C, D, roof, [0, 0], [v1 - v0, 6], [0, 6], I0, TL);
       }
-      for (const v of [v0, v1]) { const n = W3(0, v > v0 ? 1 : -1, 0).map((x, i) => x - W3(0, 0, 0)[i]); tri(S, W3(u0, v, zE), W3(u1, v, zE), W3(um, v, zR), n, stone, [0, 0], [1, 0], [0, 1], I0, ST); }
+      for (const v of [v0, v1]) { const n = W3(0, v > v0 ? 1 : -1, 0).map((x, i) => x - W3(0, 0, 0)[i]); tri(S, W3(u0, v, zE), W3(u1, v, zE), W3(um, v, zR), n, endCol, [0, 0], [1, 0], [0, 1], I0, ST); }
     }
   };
+  // pointed (Gothic) arch between springings (u0,v0)→(u1,v1) at height zs: k = radius/span, w thick across, d deep radially
+  const arch = (u0, v0, u1, v1, zs, { w = 0.8, d = 0.7, k = 1, n = 5, col = wall, st = ST } = {}) => {
+    const A = P2(u0, v0), B = P2(u1, v1), span = Math.hypot(B[0] - A[0], B[1] - A[1]), dx = (B[0] - A[0]) / span, dy = (B[1] - A[1]) / span, px = -dy, py = dx;
+    const r = span * k, half = (R) => { const m = Math.acos(Math.min(1, (r - span / 2) / R)); return Array.from({ length: n + 1 }, (_, i) => { const f = (i / n) * m; return [r - R * Math.cos(f), R * Math.sin(f)]; }); };
+    const prof = (R) => { const h = half(R); return [...h, ...h.slice(0, -1).reverse().map(([s, z]) => [span - s, z])]; };
+    const In = prof(r), Out = prof(r + d);
+    const at = ([s, z], t) => [A[0] + dx * s + px * t, ground + zs + z, -(A[1] + dy * s + py * t)];
+    const N = [px, 0, -py];
+    for (let i = 0; i + 1 < In.length; i++) {
+      const a = In[i], b = In[i + 1], c = Out[i + 1], e = Out[i];
+      const rad = [(c[0] + e[0] - a[0] - b[0]) / 2, (c[1] + e[1] - a[1] - b[1]) / 2], rl = Math.hypot(...rad) || 1;
+      const nOut = [dx * rad[0] / rl, rad[1] / rl, -dy * rad[0] / rl], nIn = nOut.map((x) => -x);
+      for (const [p0, p1, nn] of [[e, c, nOut], [a, b, nIn]]) {
+        tri(S, at(p0, -w / 2), at(p1, -w / 2), at(p1, w / 2), nn, col, [0, 0], [1, 0], [1, 1], I0, st);
+        tri(S, at(p0, -w / 2), at(p1, w / 2), at(p0, w / 2), nn, col, [0, 0], [1, 1], [0, 1], I0, st);
+      }
+      for (const t of [-w / 2, w / 2]) {
+        const nn = t > 0 ? N : N.map((x) => -x);
+        tri(S, at(a, t), at(b, t), at(c, t), nn, col, [0, 0], [1, 0], [1, 1], I0, st);
+        tri(S, at(a, t), at(c, t), at(e, t), nn, col, [0, 0], [1, 1], [0, 1], I0, st);
+      }
+    }
+    return span * k * Math.sin(Math.acos(Math.min(1, 1 - 1 / (2 * k))));   // apex rise
+  };
+  return { P2, W3, blk, block, crenel, gable, arch };
+}
+
+// Sé de Lisboa (12th c., Romanesque with a Gothic chevet). West front with two crenellated towers,
+// rose window and deep portal; three-aisled nave; transept with a crenellated lantern; apse and ambulatory.
+// Frame from the OBB of the mapped cathedral parts: u runs west→east along the nave.
+export function seCathedral(S, { cx, cy, ux, uy, hl, ground, gmin, lin, srgb }) {
+  const stone = lin(srgb('#d8ccb2')), stone2 = lin(srgb('#cbbd9f')), dark = lin(srgb('#3b3a37')), roof = lin(srgb('#a8604a'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.53, 0.9], I0 = [0, 0, 0, 0], TL = [KIND.TILES / 8, 5 / 8, 0.53, 1];
+  const zb = gmin - ground - 1.5;
+  const { P2, W3, block, crenel, gable } = kit(S, { cx, cy, ux, uy, ground, zb, wall: stone, roof, ST, TL });
   const W = -hl;                                     // west front
   // towers
   for (const s of [-1, 1]) {
@@ -696,4 +748,247 @@ export function panteao(S, { cx, cy, ux, uy, ground, gmin, lin, srgb }) {
   limb(S, at(62), at(64.5), 1.9, 0.2, 12, domeC, ST);
   limb(S, at(64.5), at(66.5), 0.12, 0.12, 4, dark, ST);
   void c;
+}
+
+// box with an underside too (decks and bridges are seen from the street)
+function slab(S, x, y, ux, uy, hu, hv, z0, z1, col, st) {
+  const I0 = [0, 0, 0, 0];
+  box(S, x, y, ux, uy, hu, hv, z0, z1, col, I0, st);
+  const c = [[-hu, -hv], [hu, -hv], [hu, hv], [-hu, hv]].map(([a, b]) => [x + ux * a - uy * b, z0, -(y + uy * a + ux * b)]);
+  tri(S, c[0], c[2], c[1], [0, -1, 0], col, [0, 0], [1, 1], [1, 0], I0, st);
+  tri(S, c[0], c[3], c[2], [0, -1, 0], col, [0, 0], [0, 1], [1, 1], I0, st);
+}
+
+// Convento do Carmo (1389; roofless since the 1755 earthquake). Local frame from the mapped church:
+// u from the west front (u=-39) to the apse (u≈39), v across (nave walls at ±12). The nave is open to
+// the sky: clustered piers, tall pointed transverse arches and arcades; the chancel and apse chapels
+// are roofed (the archaeological museum). Floor at zf (above the sampled terrain).
+export function carmoRuins(S, { cx, cy, ux, uy, ground, gmin, zf, lin, srgb }) {
+  const stone = lin(srgb('#d5cab0')), stone2 = lin(srgb('#c3b697')), dark = lin(srgb('#34332f')), roof = lin(srgb('#a45f4b')), floor = lin(srgb('#b0a687')), grass = lin(srgb('#8f9466'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.41, 0.9], TL = [KIND.TILES / 8, 5 / 8, 0.41, 1], PL = [KIND.PLAIN / 8, 5 / 8, 0.41, 1], I0 = [0, 0, 0, 0];
+  const zb = gmin - ground - 1.5;
+  const K = kit(S, { cx, cy, ux, uy, ground, zb, wall: stone, roof, ST, TL });
+  const { W3, blk, block, gable, arch } = K;
+  const quad = (u0, u1, v0, v1, z, col) => { triUp(S, W3(u0, v0, z), W3(u1, v0, z), W3(u1, v1, z), col, [0, 0], [1, 0], [1, 1], I0, PL); triUp(S, W3(u0, v0, z), W3(u1, v1, z), W3(u0, v1, z), col, [0, 0], [1, 1], [0, 1], I0, PL); };
+  // nave floor: gravel with a lawn down the middle
+  quad(-37.8, 9, -11.1, 11.3, zf, floor);
+  quad(-36, 7, -4.4, 4.4, zf + 0.04, grass);
+  // side walls, buttresses, lancets
+  blk(-39, 9, -12.3, -11.1, zb, 17); blk(-39, 9, 11.3, 12.5, zb, 17);
+  for (const u of [-28.1, -18.85, -9.6]) { blk(u - 0.7, u + 0.7, -13.8, -12.3, zb, 13.5); blk(u - 0.55, u + 0.55, -13.2, -12.3, 13.5, 15.2); }
+  for (const u of [-33.4, -23.5, -14.2, -5]) for (const [v0, v1] of [[-12.36, -12.3], [-11.1, -11.04], [11.24, 11.3]]) blk(u - 0.8, u + 0.8, v0, v1, zf + 6.5, zf + 13.5, dark);
+  // west front: porch with archivolts, rose window opening
+  blk(-39, -37.8, -12.3, 12.5, zb, 20.5); blk(-39, -37.8, -5.5, 6.5, 20.5, 23);
+  blk(-40.2, -39, -4.7, 6.9, zb, zf + 13.5);
+  blk(-40.32, -40.2, -0.7, 2.9, zf, zf + 6.6, dark);
+  for (let k = 0; k < 3; k++) arch(-40.35 - k * 0.05, -1.1 - k * 0.6, -40.35 - k * 0.05, 3.3 + k * 0.6, zf + 6.3, { w: 0.3, d: 0.35, k: 1, n: 4, col: k % 2 ? stone : stone2 });
+  limb(S, W3(-39.17, 1, 17.2), W3(-39.0, 1, 17.2), 3.1, 3.1, 16, stone2, ST);
+  limb(S, W3(-39.27, 1, 17.2), W3(-39.15, 1, 17.2), 2.5, 2.5, 16, dark, ST);
+  // piers and arches: the nave skeleton
+  const piers = [-28.1, -18.85, -9.6, -0.35], line = [-37.3, ...piers, 8.5];
+  for (const u of line) for (const v of [-5.4, 5.4]) {
+    limb(S, W3(u, v, zf), W3(u, v, 11), 0.85, 0.85, 8, stone, ST);
+    limb(S, W3(u, v, 11), W3(u, v, 11.6), 1.05, 1.05, 8, stone2, ST);
+  }
+  for (const v of [-5.4, 5.4]) for (let i = 0; i + 1 < line.length; i++) arch(line[i], v, line[i + 1], v, 11.6, { w: 0.9, d: 0.8 });
+  for (const u of piers) {
+    arch(u, -5.4, u, 5.4, 11.6, { w: 0.8, d: 0.75 });
+    arch(u, -11.1, u, -5.4, 8.2, { w: 0.6, d: 0.5, k: 0.8, n: 4 });
+    arch(u, 5.4, u, 11.3, 8.2, { w: 0.6, d: 0.5, k: 0.8, n: 4 });
+  }
+  // roofed chancel (museum) with chancel arch towards the nave
+  block(9, 30.6, -9.4, 11, 20); gable(8.7, 30.6, -9.8, 11.4, 20, 25.5);
+  for (const u of [13.5, 19, 24.5]) for (const [v0, v1] of [[-9.46, -9.4], [11, 11.06]]) blk(u - 0.7, u + 0.7, v0, v1, 9, 16.5, dark);
+  blk(9, 30.6, -9.55, 11.15, 18.6, 19.1, stone2);
+  blk(8.85, 9.0, -3.4, 4.6, zf, zf + 13, dark);
+  arch(8.82, -3.8, 8.82, 5.0, zf + 12.4, { w: 0.35, d: 0.6, k: 1, n: 4, col: stone2 });
+  // polygonal apse with buttresses
+  const ac = [30.6, 0.8], ar = 8.6, np = 5;
+  const pts = Array.from({ length: np + 1 }, (_, k) => { const a = -Math.PI / 2 + (k / np) * Math.PI; return [ac[0] + Math.cos(a) * ar, ac[1] + Math.sin(a) * ar]; });
+  for (let k = 0; k < np; k++) {
+    wallQuad(S, K.P2(...pts[k]), K.P2(...pts[k + 1]), ground + zb, ground + zb, ground + 20, ground + 20, stone, 0, 1, ground, I0, ST);
+    triUp(S, W3(...pts[k], 20), W3(...pts[k + 1], 20), W3(ac[0], ac[1], 24.5), roof, [0, 0], [1, 0], [0, 1], I0, TL);
+    const m = [(pts[k][0] + pts[k + 1][0]) / 2 - ac[0], (pts[k][1] + pts[k + 1][1]) / 2 - ac[1]], ml = Math.hypot(...m);
+    const wpt = K.P2(ac[0] + m[0] / ml * (ar * Math.cos(Math.PI / 10) + 0.06), ac[1] + m[1] / ml * (ar * Math.cos(Math.PI / 10) + 0.06));
+    const dU = [(ux * m[0] - uy * m[1]) / ml, (uy * m[0] + ux * m[1]) / ml];
+    box(S, wpt[0], wpt[1], -dU[1], dU[0], 0.45, 0.08, ground + zf + 5, ground + zf + 12, dark, I0, ST);
+  }
+  for (let k = 1; k < np; k++) { const a = -Math.PI / 2 + (k / np) * Math.PI, d = [Math.cos(a), Math.sin(a)], [x, y] = K.P2(ac[0] + d[0] * (ar + 0.5), ac[1] + d[1] * (ar + 0.5)); box(S, x, y, ux * d[0] - uy * d[1], uy * d[0] + ux * d[1], 0.9, 0.5, ground + zb, ground + 17, stone2, I0, ST); }
+  // side ranges: south chapels, north sacristy range and annex, terrace to the lift walkway
+  block(0.4, 20.3, -17.3, -12.3, 12); gable(0.1, 20.6, -17.6, -12.0, 12, 14.6);
+  block(9, 20.3, -12.3, -9.4, 13);
+  block(9, 30.9, 11, 21.9, 15); gable(8.7, 31.2, 10.7, 22.2, 15, 19.2);
+  block(18, 28, 21.9, 27.3, 12); gable(17.7, 28.3, 21.9, 27.6, 12, 14.4);
+  blk(18.9, 20.4, -29.4, -17.3, zb, zf, stone2);
+}
+
+// Elevador de Santa Justa (Raoul Mesnier du Ponsard, 1902): neo-Gothic iron tower, 45 m. Shaft of
+// pointed-arch panels over two cabins, a deck where the walkway leaves for Largo do Carmo, an upper
+// gallery, and the top viewing platform with its kiosk and spiral stair turret.
+export function santaJustaLift(S, { cx, cy, ux, uy, hu, hv, ground, zWalk, bridge, lin, srgb }) {
+  const zDeck = zWalk - 0.5;
+  const iron = lin(srgb('#74777a')), ironD = lin(srgb('#5a5d60')), core = lin(srgb('#3b3f43')), plinth = lin(srgb('#cfc6b3'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.29, 0.9], I0 = [0, 0, 0, 0];
+  const K = kit(S, { cx, cy, ux, uy, ground, zb: -1.5, wall: iron, roof: iron, ST, TL: ST });
+  const { P2, W3, blk, arch } = K;
+  blk(-hu - 0.4, hu + 0.4, -hv - 0.4, hv + 0.4, -1.5, 1.2, plinth);
+  // the openwork shell: dark core, corner posts, bays of pointed arches, bands
+  const shell = (z0, z1, a, b, bu, bv, lvl) => {
+    blk(-a + 0.35, a - 0.35, -b + 0.35, b - 0.35, z0, z1, core);
+    for (const su of [-1, 1]) for (const sv of [-1, 1]) blk(su * a - 0.3, su * a + 0.3, sv * b - 0.3, sv * b + 0.3, z0, z1 + 0.3, iron);
+    const n = Math.max(1, Math.round((z1 - z0) / lvl)), lh = (z1 - z0) / n;
+    for (let l = 0; l <= n; l++) blk(-a - 0.08, a + 0.08, -b - 0.08, b + 0.08, z0 + l * lh - 0.18, z0 + l * lh + 0.18, iron);
+    for (let l = 0; l < n; l++) {
+      const zs = z0 + l * lh + lh * 0.38;
+      for (const sv of [-1, 1]) for (let k = 0; k < bu; k++) {
+        const u0 = -a + (2 * a) * k / bu, u1 = -a + (2 * a) * (k + 1) / bu;
+        if (k) blk(u0 - 0.07, u0 + 0.07, sv * b - 0.1, sv * b + 0.1, z0 + l * lh, z0 + (l + 1) * lh, ironD);
+        arch(u0 + 0.12, sv * (b + 0.02), u1 - 0.12, sv * (b + 0.02), zs, { w: 0.14, d: 0.16, n: 3, col: iron });
+      }
+      for (const su of [-1, 1]) for (let k = 0; k < bv; k++) {
+        const v0 = -b + (2 * b) * k / bv, v1 = -b + (2 * b) * (k + 1) / bv;
+        if (k) blk(su * a - 0.1, su * a + 0.1, v0 - 0.07, v0 + 0.07, z0 + l * lh, z0 + (l + 1) * lh, ironD);
+        arch(su * (a + 0.02), v0 + 0.12, su * (a + 0.02), v1 - 0.12, zs, { w: 0.14, d: 0.16, n: 3, col: iron });
+      }
+    }
+  };
+  shell(1.2, zDeck, hu, hv, 3, 2, 4.4);
+  // deck where the walkway leaves, with railing
+  const rail = (z, a, b) => { for (const s of [-1, 1]) { blk(-a, a, s * b - 0.05, s * b + 0.05, z, z + 1.1, ironD); blk(s * a - 0.05, s * a + 0.05, -b, b, z, z + 1.1, ironD); } };
+  { const [x, y] = P2(0, 0); slab(S, x, y, ux, uy, hu + 0.9, hv + 0.9, ground + zDeck, ground + zDeck + 0.5, ironD, ST); }
+  rail(zDeck + 0.5, hu + 0.85, hv + 0.85);
+  // upper gallery and top platform
+  shell(zDeck + 0.5, zDeck + 6, hu - 0.3, hv - 0.3, 2, 2, 5.5);
+  { const [x, y] = P2(0, 0); slab(S, x, y, ux, uy, hu + 0.2, hv + 0.2, ground + zDeck + 6, ground + zDeck + 6.45, ironD, ST); }
+  rail(zDeck + 6.45, hu + 0.15, hv + 0.15);
+  blk(-1.9, 1.9, -1.5, 1.5, zDeck + 6.45, zDeck + 9.6, core);
+  for (const su of [-1, 1]) for (const sv of [-1, 1]) blk(su * 1.9 - 0.15, su * 1.9 + 0.15, sv * 1.5 - 0.15, sv * 1.5 + 0.15, zDeck + 6.45, zDeck + 9.7, iron);
+  limb(S, W3(0, 0, zDeck + 9.6), W3(0, 0, zDeck + 11.6), 2.7, 0.25, 4, iron, ST);
+  limb(S, W3(-hu + 1.3, 0, zDeck + 6.45), W3(-hu + 1.3, 0, zDeck + 10.2), 0.95, 0.95, 10, iron, ST);
+  limb(S, W3(-hu + 1.3, 0, zDeck + 10.2), W3(-hu + 1.3, 0, zDeck + 11.4), 1.05, 0.15, 10, ironD, ST);
+  // walkway to Largo do Carmo: lattice girders either side of a deck
+  if (bridge) {
+    const s = Math.sign((bridge[0] - cx) * ux + (bridge[1] - cy) * uy) || -1;
+    const [ax, ay] = P2(s * (hu + 0.9), 0), L = Math.hypot(bridge[0] - ax, bridge[1] - ay), bx = (bridge[0] - ax) / L, by = (bridge[1] - ay) / L;
+    const mx = (ax + bridge[0]) / 2, my = (ay + bridge[1]) / 2, g = ground + zWalk;
+    slab(S, mx, my, bx, by, L / 2, 1.4, g - 0.4, g, ironD, ST);
+    for (const sv of [-1, 1]) {
+      const [x, y] = [mx - by * sv * 1.35, my + bx * sv * 1.35];
+      slab(S, x, y, bx, by, L / 2, 0.12, g - 2.2, g + 1.5, core, ST);
+      box(S, x, y, bx, by, L / 2, 0.18, g + 1.4, g + 1.65, iron, I0, ST);
+      slab(S, x, y, bx, by, L / 2, 0.18, g - 2.4, g - 2.1, iron, ST);
+      const n = Math.max(2, Math.round(L / 2.2));
+      for (let k = 0; k <= n; k++) { const t = -L / 2 + (L * k) / n; box(S, x + bx * t, y + by * t, bx, by, 0.09, 0.2, g - 2.2, g + 1.4, iron, I0, ST); }
+    }
+  }
+}
+
+// Cais das Colunas: marble steps into the Tagus from Praça do Comércio, guarded by two columns.
+// a = river end of the steps, b = the square end.
+export function caisColunas(S, { a, b, ground, lin, srgb }) {
+  const marble = lin(srgb('#e9e3d4')), wet = lin(srgb('#9d998c')), ST = [KIND.STONE / 8, 5 / 8, 0.77, 0.9], I0 = [0, 0, 0, 0];
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+  const P = (u, v) => [a[0] + ux * u - uy * v, a[1] + uy * u + ux * v];
+  const n = 9, run = 0.75, top = ground;             // the flight: from the quay down past the waterline
+  for (let k = 0; k < n; k++) {
+    const z1 = top - (k + 1) * (top + 0.9) / n, [x, y] = P(n * run - (k + 0.5) * run, 0);
+    box(S, x, y, ux, uy, run / 2, 7.5, -3, z1 + 0.18, z1 < 0.2 ? wet : marble, I0, ST);
+  }
+  for (const v of [-5.2, 5.2]) {
+    const [x, y] = P(n * run + 1.2, v);
+    box(S, x, y, ux, uy, 0.85, 0.85, -1, top + 1.3, marble, I0, ST);
+    limb(S, [x, top + 1.3, -y], [x, top + 1.6, -y], 0.62, 0.55, 12, marble, ST);
+    limb(S, [x, top + 1.6, -y], [x, top + 6.4, -y], 0.45, 0.4, 12, marble, ST);
+    box(S, x, y, ux, uy, 0.62, 0.62, top + 6.4, top + 6.9, marble, I0, ST);
+    limb(S, [x, top + 6.9, -y], [x, top + 7.6, -y], 0.35, 0.12, 8, marble, ST);
+  }
+}
+
+// Lisbon parish church, built from its mapped footprint's OBB: whitewashed nave under a tiled gable,
+// lioz pilasters and cornice, a pedimented front with portal and choir window, bell towers at the
+// front corners (0, 1 or 2) with stone cupolas or tiled spires, a lower chancel and sacristies behind.
+// The façade is at u = -hl (callers flip the axis so it faces the open street or square).
+export function parishChurch(S, { cx, cy, ux, uy, hl, hw, ground, gmin, H, towers = 0, towerSide = 1, cap = 'cupola', wall, roofHex, lin, srgb, seed = 0.5 }) {
+  const white = lin(srgb(wall || '#f1ede4')), stone = lin(srgb('#d6cdb9')), dark = lin(srgb('#36373a')), roof = lin(srgb(roofHex || '#a85e47'));
+  const ST = [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], TL = [KIND.TILES / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
+  const zb = gmin - ground - 1.5;
+  const K = kit(S, { cx, cy, ux, uy, ground, zb, wall: white, roof, ST: PL, TL });
+  const { W3, blk, block, gable } = K;
+  const F = -hl, tw = Math.min(3.6, Math.max(2.2, hw * 0.42)), Tt = Math.min(11, Math.max(6, tw * 2.8));
+  const chL = Math.min(hl * 0.32, hw * 1.1), hc = hw * 0.68, back = hl - chL;
+  // nave
+  block(F, back, -hw, hw, H); gable(F, back, -hw - 0.3, hw + 0.3, H, H + hw * 0.55);
+  blk(F - 0.12, back + 0.12, -hw - 0.15, hw + 0.15, H - 0.55, H, stone, ST);
+  for (const sv of [-1, 1]) {
+    for (let u = F + 0.4; u <= back - 0.3; u += Math.max(4, (back - F - 0.8) / Math.max(1, Math.round((back - F) / 6)))) blk(u - 0.3, u + 0.3, sv * hw - 0.12, sv * hw + 0.12, zb, H - 0.55, stone, ST);
+    for (let u = F + 5; u < back - 2; u += 5.5) blk(u - 0.55, u + 0.55, sv * (hw + 0.04) - 0.02, sv * (hw + 0.04) + 0.02, H * 0.5, H * 0.5 + Math.min(3.2, H * 0.28), dark, ST);
+  }
+  // chancel and sacristies
+  block(back, hl, -hc, hc, H * 0.86); gable(back - 0.3, hl, -hc - 0.3, hc + 0.3, H * 0.86, H * 0.86 + hc * 0.55);
+  for (const sv of [-1, 1]) { block(back, hl, sv > 0 ? hc : -hw, sv > 0 ? hw : -hc, H * 0.5); gable(back, hl + 0.2, sv > 0 ? hc : -hw - 0.2, sv > 0 ? hw + 0.2 : -hc, H * 0.5, H * 0.5 + (hw - hc) * 0.5); }
+  // front: pediment, portal, choir window
+  const fw = towers === 2 ? hw - 2 * tw + 0.2 : hw, fc = towers === 1 ? -towerSide * tw : 0;
+  const pedH = H + Math.max(hw * 0.55, 2) + 1.0;
+  tri(S, W3(F - 0.06, fc - fw, H - 0.6), W3(F - 0.06, fc + fw, H - 0.6), W3(F - 0.06, fc, pedH + 0.35), W3(-1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]), stone, [0, 0], [1, 0], [0, 1], I0, ST);
+  tri(S, W3(F - 0.12, fc - fw + 0.7, H - 0.1), W3(F - 0.12, fc + fw - 0.7, H - 0.1), W3(F - 0.12, fc, pedH - 0.45), W3(-1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]), white, [0, 0], [1, 0], [0, 1], I0, PL);
+  blk(F - 0.1, F, fc - fw, fc + fw, H - 0.6, H - 0.1, stone, ST);
+  const dw = Math.min(1.3, hw * 0.2), dh = Math.min(5, H * 0.38);
+  blk(F - 0.12, F, fc - dw - 0.45, fc + dw + 0.45, 0, dh + 0.7, stone, ST);
+  blk(F - 0.18, F - 0.1, fc - dw, fc + dw, 0, dh, dark, ST);
+  if (H > 10) { blk(F - 0.1, F, fc - 0.95, fc + 0.95, dh + 2.0, dh + 4.6, stone, ST); blk(F - 0.16, F - 0.08, fc - 0.65, fc + 0.65, dh + 2.3, dh + 4.3, dark, ST); }
+  // bell towers
+  const tv = towers === 2 ? [-1, 1] : towers === 1 ? [towerSide] : [];
+  for (const sv of tv) {
+    const vc = sv * (hw - tw), u0 = F, u1 = F + 2 * tw, top = H + Tt;
+    blk(u0, u1, vc - tw, vc + tw, zb, top, white);
+    for (const [a, b] of [[u0, vc - tw], [u1, vc - tw], [u0, vc + tw], [u1, vc + tw]]) blk(a - 0.25, a + 0.25, b - 0.25, b + 0.25, zb, top, stone, ST);
+    for (const z of [H - 0.55, top - 0.5]) blk(u0 - 0.2, u1 + 0.2, vc - tw - 0.2, vc + tw + 0.2, z, z + 0.55, stone, ST);
+    const bz0 = top - 4.2, bz1 = top - 1.0, bo = Math.min(0.7, tw * 0.3);
+    blk(u0 - 0.06, u0 - 0.02, vc - bo, vc + bo, bz0, bz1, dark, ST); blk(u1 + 0.02, u1 + 0.06, vc - bo, vc + bo, bz0, bz1, dark, ST);
+    blk((u0 + u1) / 2 - bo, (u0 + u1) / 2 + bo, vc - tw - 0.06, vc - tw - 0.02, bz0, bz1, dark, ST); blk((u0 + u1) / 2 - bo, (u0 + u1) / 2 + bo, vc + tw + 0.02, vc + tw + 0.06, bz0, bz1, dark, ST);
+    const c = W3((u0 + u1) / 2, vc, 0), at = (z) => [c[0], ground + z, c[2]];
+    if (cap === 'spire') limb(S, at(top), at(top + tw * 2.2), tw * 1.25, 0.08, 4, roof, TL);
+    else {
+      limb(S, at(top), at(top + 0.7), tw * 0.95, tw * 0.95, 8, stone, ST);
+      limb(S, at(top + 0.7), at(top + 0.7 + tw * 0.8), tw * 0.95, tw * 0.45, 8, white, PL);
+      limb(S, at(top + 0.7 + tw * 0.8), at(top + 0.7 + tw * 1.4), tw * 0.45, 0.1, 8, stone, ST);
+    }
+    limb(S, at(top + (cap === 'spire' ? tw * 2.2 : 0.7 + tw * 1.4)), at(top + (cap === 'spire' ? tw * 2.2 : 0.7 + tw * 1.4) + 1.2), 0.06, 0.06, 4, dark, ST);
+  }
+  if (!tv.length) {   // bell gable over the pediment
+    blk(F - 0.05, F + 0.5, fc - 0.9, fc + 0.9, pedH - 0.6, pedH + 2.0, white);
+    blk(F - 0.1, F, fc - 0.45, fc + 0.45, pedH + 0.3, pedH + 1.6, dark, ST);
+  }
+}
+
+// Lisbon's yellow trams (Remodelado, line 28) and funicular cars: a body laid along the track from
+// back (x0,y0,z0) to front (x1,y1,z1), following its slope. Yellow skirt and roof band, dark window
+// band with pillars, white roof, trolley pole.
+export function tramCar(S, { x0, y0, z0, x1, y1, z1, lin, srgb, funicular = false, seed = 0 }) {
+  const L = Math.hypot(x1 - x0, y1 - y0) || 1, dx = (x1 - x0) / L, dy = (y1 - y0) / L, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const yellow = lin(srgb('#f1bf1c')), cream = lin(srgb('#efe8d6')), glass = lin(srgb('#2d3238')), skirt = lin(srgb('#3a3b3d')), roofC = lin(srgb('#d9d6cf'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0], hw = funicular ? 1.25 : 1.15;
+  const Q = (u, v, z) => [mx + dx * u - dy * v, (z0 + z1) / 2 + (z1 - z0) * (u / L) + z, -(my + dy * u + dx * v)];
+  const cub = (u0, u1, v0, v1, za, zb, col) => {
+    const c = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], sl = (z1 - z0) / L;
+    for (let i = 0; i < 4; i++) {
+      const [ua, va] = c[i], [ub, vb] = c[(i + 1) % 4], n = [(vb - va) * dx + (ua - ub) * -dy, 0, -((vb - va) * dy + (ua - ub) * dx)], l = Math.hypot(...n) || 1;
+      const nn = n.map((x) => x / l);
+      tri(S, Q(ua, va, za), Q(ub, vb, za), Q(ub, vb, zb), nn, col, [0, 0], [1, 0], [1, 1], I0, PL);
+      tri(S, Q(ua, va, za), Q(ub, vb, zb), Q(ua, va, zb), nn, col, [0, 0], [1, 1], [0, 1], I0, PL);
+    }
+    const up = [-dx * sl, 1, dy * sl], ul = Math.hypot(...up), nu = up.map((x) => x / ul);
+    tri(S, Q(u0, v0, zb), Q(u1, v0, zb), Q(u1, v1, zb), nu, col, [0, 0], [1, 0], [1, 1], I0, PL);
+    tri(S, Q(u0, v0, zb), Q(u1, v1, zb), Q(u0, v1, zb), nu, col, [0, 0], [1, 1], [0, 1], I0, PL);
+  };
+  const h = L / 2;
+  cub(-h + 0.6, h - 0.6, -hw + 0.15, hw - 0.15, 0.15, 0.45, skirt);
+  cub(-h, h, -hw, hw, 0.45, 1.35, yellow);
+  cub(-h + 0.05, h - 0.05, -hw + 0.04, hw - 0.04, 1.35, 2.35, glass);
+  const nP = Math.max(3, Math.round(L / 1.3));
+  for (let k = 0; k <= nP; k++) { const u = -h + 0.2 + (L - 0.4) * k / nP; for (const s of [-1, 1]) cub(u - 0.12, u + 0.12, s * hw - 0.03 * s - 0.05, s * hw - 0.03 * s + 0.05, 1.35, 2.35, yellow); }
+  cub(-h, h, -hw, hw, 2.35, 2.75, yellow);
+  cub(-h + 0.15, h - 0.15, -hw + 0.1, hw - 0.1, 2.75, 3.0, roofC);
+  cub(-h * 0.5, h * 0.5, -hw * 0.55, hw * 0.55, 3.0, 3.2, cream);
+  if (!funicular) limb(S, Q(-h * 0.2, 0, 3.2), Q(-h * 0.2 - 3.2, 0, 4.9), 0.05, 0.04, 4, skirt, PL, false);
 }

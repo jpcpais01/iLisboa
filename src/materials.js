@@ -66,6 +66,15 @@ if (kind < .5) {                                  // plain trims, chimneys
       wallC = mix(glaze, mix(base, glaze, .5), far);
       rough = .35;
     }
+    // Casa dos Bicos: diamond-point ashlar, every stone a little pyramid catching the light
+    if (variant > 6.5 && y > .5) {
+      vec2 dp = vec2(bx * bw / .62, y / .4); dp.x += mod(floor(dp.y), 2.) * .5;
+      vec2 f = fract(dp) - .5; float side = step(abs(f.y), abs(f.x));
+      float shade = mix(f.y > 0. ? .13 : -.16, f.x > 0. ? -.05 : .06, side) * (1. - far);
+      float joint = 1. - .12 * (1. - far) * (1. - box1(-.46, .46, f.x, aa * 2.) * box1(-.45, .45, f.y, aa * 2.));
+      wallC = base * (1. + shade) * joint * (.96 + .05 * grime);
+      rough = .8;
+    }
     col = wallC;
     // stone plinth, string course, cornice band, corner pilasters (Pombaline / palatial)
     float formal = step(variant, .5) + step(3.5, variant);
@@ -124,7 +133,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     col = mix(col, winC, inWin);
     glassAmt = inGlass * (1. - shutters);
     glow = glassAmt * step(h21(vec2(bi * 1.7, fi) + seed * 5.), .42) * (1. - shop * .3);
-    if (variant > 5.5 && isG > .5) {                           // Praça do Comércio: arcade of round arches on square piers
+    if (variant > 5.5 && variant < 6.5 && isG > .5) {                           // Praça do Comércio: arcade of round arches on square piers
       float hwA = bw * .5 - .9, spring = gh - .8 - hwA;
       float sd = y < spring ? abs(ux) - hwA : length(vec2(ux, y - spring)) - hwA;
       float inA = 1. - smoothstep(-aa, aa, sd);
@@ -180,7 +189,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v3';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v4';
   return m;
 }
 

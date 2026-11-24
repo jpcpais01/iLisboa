@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -267,6 +267,7 @@ function buildingSpec(p) {
 }
 
 const BAD = []; // guard: any building vertex far outside the diorama fails the build
+const tileB0 = (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; };
 function addBuilding(p) {
   const S0 = (() => { const [ti, tj] = tileOf(p.c[0], p.c[1]); return getTile(ti, tj).b; })(), n0 = S0.pos.length;
   addBuilding_(p);
@@ -343,12 +344,15 @@ function addBuilding_(p) {
 
 {
   // Simple-3D-Buildings rule: if an outline contains building:parts, draw the parts instead.
+  const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && (['church', 'chapel', 'basilica'].includes(p.tags.building) || p.tags.amenity === 'place_of_worship');
   const parts = polysB.filter((p) => p.tags['building:part']);
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
     o.skip = parts.some((pt) => pt.area > 4 && pointInRing(pt.c[0], pt.c[1], o.outer) && Math.abs(pt.c[0] - o.c[0]) < 400);
+    if (o.skip && churchy(o) && !['r19372558_0', 'w9253917'].includes(o.id)) { o.skip = false; o.ownParts = true; }   // churches: the outline is modelled whole
     if (o.skip) stats.skippedOutlines++;
   }
+  const churchParts = new Set(parts.filter((pt) => outlines.some((o) => o.ownParts && Math.abs(pt.c[0] - o.c[0]) < 120 && pointInRing(pt.c[0], pt.c[1], o.outer))));
   stats.parts = parts.length;
   // hand-authored pilot: the Praça's arcade pillars live in the façade shader; the Arco and D. José are modelled below
   const [pxa, pya] = proj.fwd(38.7062, -9.1400), [pxb, pyb] = proj.fwd(38.7092, -9.1330);
@@ -360,7 +364,7 @@ function addBuilding_(p) {
   const ptOutline = polysB.find((p) => p.id === 'w9253917');
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
-  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
   const inZone = (x, y) => zones.some((z) => pointInRing(x, y, z));
@@ -368,7 +372,24 @@ function addBuilding_(p) {
   const baixaSet = new Set(baixa);
   todo = todo.filter((p) => !baixaSet.has(p) && !(p.tags['building:part'] && inZone(p.c[0], p.c[1])));
   markPartyWalls(todo.filter((p) => !p.tags['building:part']));
-  for (const p of todo) addBuilding(p);
+  // parish churches: whitewashed naves with towers and pedimented fronts, built from the footprint's OBB
+  const inBuilding = (x, y, self) => polysB.some((q) => q !== self && !q.tags['building:part'] && Math.abs(q.c[0] - x) < 80 && Math.abs(q.c[1] - y) < 80 && pointInRing(x, y, q.outer));
+  for (const p of todo) {
+    const ob = churchy(p) && obb(p.outer), info = CHURCHES[p.id] || {};
+    if (!ob || info.skip || p.holes.length || Math.abs(p.area) / (4 * ob.hl * ob.hw) < 0.7 || ob.hw < 2.8 || ob.hl < 4.5 || ob.hl / ob.hw > 4.5) { addBuilding(p); continue; }
+    let { ux, uy } = ob;
+    const blocked = (s) => [-0.7, -0.35, 0, 0.35, 0.7].filter((f) => inBuilding(ob.cx + ux * s * (ob.hl + 3) - uy * f * ob.hw, ob.cy + uy * s * (ob.hl + 3) + ux * f * ob.hw, p)).length;
+    const bm = blocked(-1), bp = blocked(1);
+    if (info.front ? info.front > 0 : bp < bm || (bp === bm && ux * 0.8 + uy * 0.6 < 0)) { ux = -ux; uy = -uy; }   // façade at u = -hl; ties face west/south
+    let gmin = Infinity; for (const [x, y] of p.outer) gmin = Math.min(gmin, groundAt(x, y));
+    const chapel = p.tags.building === 'chapel' || Math.abs(p.area) < 160, th = parseMeters(p.tags.height);
+    const H = th ? Math.min(20, Math.max(6, th * 0.8)) : chapel ? Math.min(10, Math.max(6, ob.hw * 1.3 + 3)) : Math.min(17, Math.max(8, ob.hw * 1.45 + 3));
+    const towers = info.towers ?? (chapel ? 0 : ob.hw >= 7.5 && ob.hl >= 14 ? 2 : ob.hw >= 4.2 ? 1 : 0);
+    const u = (k) => hash(p.id + k);
+    parishChurch(tileB0(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, hw: ob.hw, ground: groundAt(ob.cx, ob.cy), gmin, H, towers, towerSide: u('ts') < 0.5 ? -1 : 1,
+      cap: info.cap || (u('cap') < 0.6 ? 'cupola' : 'spire'), wall: info.wall || (u('w') < 0.75 ? '#f1ede4' : '#efe4cc'), roofHex: info.roof, lin, srgb, seed: u('s') });
+    stats.buildings++; stats.authored++; stats.churches = (stats.churches || 0) + 1;
+  }
   pombalineBlocks(baixa, {
     SkeletonBuilder, groundAt, lin, srgb, jitter, pick, pal, hash, stats,
     getSink: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; },
@@ -413,11 +434,58 @@ function addBuilding_(p) {
     let gmin = Infinity; for (const [x, y] of ptOutline.outer) gmin = Math.min(gmin, groundAt(x, y));
     panteao(tileB(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, ground: groundAt(ob.cx, ob.cy), gmin, lin, srgb }); mark();
   }
+  // Convento do Carmo: frame read off the mapped church (west front → apse, 26.2° north of east).
+  // The nave floor sits at Largo do Carmo level; the chevet stands on its substructure above Rua do Carmo.
+  let carmoFloor = null;
+  if (byId.get('w96301719')) {
+    const [cx, cy] = proj.fwd(38.7121428, -9.1402322), a = 26.2 * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a);
+    const P = (u, v) => [cx + ux * u - uy * v, cy + uy * u + ux * v];
+    let gmin = Infinity, gmax = -Infinity;
+    for (const [x, y] of byId.get('w96301719').outer) gmin = Math.min(gmin, groundAt(x, y));
+    for (let u = -37; u <= 8; u += 3) for (let v = -11; v <= 11; v += 2.75) gmax = Math.max(gmax, groundAt(...P(u, v)));
+    carmoFloor = gmax + 0.15;
+    carmoRuins(tileB(cx, cy), { cx, cy, ux, uy, ground: carmoFloor, gmin, zf: 0, lin, srgb }); mark();
+  }
+  // Elevador de Santa Justa: tower on the mapped footprint; walkway (way 446066424 and the terrace beyond) to Carmo
+  const lift = byId.get('w115238861');
+  if (lift) {
+    const ob = obb(lift.outer), bridge = proj.fwd(38.7119825, -9.1398817), g = groundAt(ob.cx, ob.cy);
+    const zDeck = (carmoFloor ?? g + 28) - g;
+    log(`Santa Justa: ground ${g.toFixed(1)}, deck +${zDeck.toFixed(1)}`);
+    santaJustaLift(tileB(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, hu: 5, hv: 3.6, ground: g, zWalk: zDeck, bridge, lin, srgb }); mark();
+  }
+  {  // Cais das Colunas, on the line of the mapped steps (way 243096331, river end first)
+    const a = proj.fwd(38.70638, -9.13601), b = proj.fwd(38.70665, -9.13612), d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const r = [a[0] + (b[0] - a[0]) * 3.5 / d, a[1] + (b[1] - a[1]) * 3.5 / d];
+    log(`Cais das Colunas: ground ${groundAt(...b).toFixed(1)} … ${groundAt(...a).toFixed(1)}`);
+    caisColunas(tileB(...r), { a: r, b, ground: Math.max(1.6, groundAt(...b)), lin, srgb }); mark();
+  }
   const jose = byId.get('w663318739');
   if (jose) {
     const g = groundAt(jose.c[0], jose.c[1]), [ti, tj] = tileOf(jose.c[0], jose.c[1]);
     equestrianJose(getTile(ti, tj).b, { cx: jose.c[0], cy: jose.c[1], ground: g, heading: Math.atan2(vx, vy), lin, srgb }); stats.landmarks++;
   }
+}
+
+// ─── trams and funiculars ───────────────────────────────────────────────
+{
+  const at = (pts, cum, s) => { let i = 1; while (i < cum.length - 1 && cum[i] < s) i++; const t = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1); return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; };
+  let n = 0, firstTram = [0, 0];
+  for (const r of rails) {
+    const fun = r.tags.railway === 'funicular'; if (r.tags.railway !== 'tram' && !fun) continue;
+    const cum = [0]; for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1]));
+    const len = cum[cum.length - 1], L = fun ? 11 : 8.6;
+    if (len < L + 4) continue;
+    const spots = fun ? [len * 0.5] : []; if (!fun) for (let s = 40 + hash(r.id + "tr") * 500; s < len - L - 5; s += 560 + hash(r.id + s) * 300) spots.push(s);
+    for (const s of spots) {
+      const [x0, y0] = at(r.pts, cum, s - L / 2), [x1, y1] = at(r.pts, cum, s + L / 2);
+      if (x0 < minX || x0 > maxX || y0 < minY || y0 > maxY) continue;
+      tramCar(tileB0(x0, y0), { x0, y0, z0: groundAt(x0, y0) + 0.05, x1, y1, z1: groundAt(x1, y1) + 0.05, lin, srgb, funicular: fun, seed: hash(r.id + s) }); n++;
+      if (!fun && n > 5 && !firstTram[0]) firstTram = proj.inv(x0, y0);
+    }
+  }
+  stats.trams = n;
+  log(`trams ${n}, e.g. at ${firstTram.map((v) => v.toFixed(5))}`);
 }
 
 // ─── statues, columns & historic walls ──────────────────────────────────
