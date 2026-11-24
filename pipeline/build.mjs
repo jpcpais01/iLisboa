@@ -333,7 +333,7 @@ function buildingSpec(p) {
     if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument) shape = 'flat';
     else if (church) shape = 'gabled';
     else if (roofLevels >= 1) shape = 'mansard';
-    else if (p.area > 3000 || h > 34) shape = 'flat';
+    else if ((p.area > 3000 && (levels >= 6 || h > 22)) || h > 34) shape = 'flat';   // big low blocks in the old city are convents and palaces under hip roofs
     else if (utility && p.area < 40) shape = 'flat';
     else if ((variant === 1 || variant === 2) && p.area < 350) { const r = u('rs'); shape = r < 0.1 ? 'flat' : r < 0.3 ? 'gabled' : 'hipped'; }   // old-town mix: terraces (açoteias), gables, hips
     else shape = 'hipped';
