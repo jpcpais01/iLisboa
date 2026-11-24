@@ -6,7 +6,6 @@ globalThis.window ??= globalThis;
 
 import fs from 'node:fs';
 import path from 'node:path';
-import earcut from 'earcut';
 import sharp from 'sharp';
 import { fromFile } from 'geotiff';
 import { Document, NodeIO, Logger } from '@gltf-transform/core';
@@ -15,6 +14,7 @@ import { weld, meshopt } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
+import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -172,11 +172,11 @@ const NAMED = { white: '#f3f0ea', black: '#3a3a3a', grey: '#b8b4ad', gray: '#b8b
 const parseColour = (v) => { if (!v) return null; v = v.toLowerCase().trim(); if (/^#[0-9a-f]{6}$/.test(v)) return srgb(v); if (/^#[0-9a-f]{3}$/.test(v)) return srgb('#' + [...v.slice(1)].map((c) => c + c).join('')); return NAMED[v] ? srgb(NAMED[v]) : null; };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, u) => { const tot = list.reduce((s, x) => s + x[1], 0); let a = u * tot; for (const [c, w] of list) { if ((a -= w) <= 0) return c; } return list[0][0]; };
-// Lisbon façades: white & cream lime, Pombaline ochre, salmon, sky-blue, pale green azulejo tones.
-const FACADES = [['#f2eee6', 34], ['#efe2c6', 14], ['#e9c77c', 14], ['#e8b7a0', 11], ['#bccbd6', 7], ['#c8d2b8', 4], ['#cf7f63', 4], ['#dcd5c8', 8], ['#f0d3a8', 4]].map(([c, w]) => [srgb(c), w]);
-const STONE = srgb('#ddd0b6');
-const ROOFS = [['#b45a3a', 4], ['#c06a45', 3], ['#a64f35', 2], ['#c47b55', 1]].map(([c, w]) => [srgb(c), w]);
-const FLAT_ROOF = srgb('#cfc8bc');
+const triNormal = (a, b, c) => {
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+  const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx], l = Math.hypot(...n) || 1;
+  return n.map((v) => v / l);
+};
 const jitter = (c, u, amt = 10) => c.map((v) => Math.max(0, Math.min(255, v + (u - 0.5) * 2 * amt)));
 
 // ─── building geometry ──────────────────────────────────────────────────
@@ -184,128 +184,136 @@ const tiles = new Map();
 const tileOf = (x, y) => [Math.floor((x - minX) / TILE), Math.floor((y - minY) / TILE)];
 const getTile = (i, j) => {
   const k = `${i}_${j}`;
-  if (!tiles.has(k)) tiles.set(k, { i, j, b: { pos: [], nrm: [], col: [], uv: [], uv1: [] } });
+  if (!tiles.has(k)) tiles.set(k, { i, j, b: makeSink(), balconies: [] });
   return tiles.get(k);
 };
-const stats = { buildings: 0, height: 0, levels: 0, estimated: 0, hipped: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0 };
-
-function pushTri(B, a, b, c, n, col, uvs, uv1) {
-  B.pos.push(...a, ...b, ...c); B.nrm.push(...n, ...n, ...n);
-  B.col.push(...col, ...col, ...col);
-  B.uv.push(...(uvs ? uvs : [0, 0, 0, 0, 0, 0]));
-  B.uv1.push(...uv1, ...uv1, ...uv1);
-}
-const triNormal = (a, b, c) => {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-  const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx], l = Math.hypot(...n) || 1;
-  return n.map((v) => v / l);
-};
+const stats = { buildings: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
 
 const LEVEL_H = 3.2;
-const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8, garage: 3, garages: 3, shed: 3, kiosk: 3, hut: 3, roof: 3.5, school: 13, hospital: 18, train_station: 12, ruins: 5, castle: 14, tower: 25, bunker: 3, carport: 3 };
-const NO_WINDOWS = new Set(['church', 'cathedral', 'chapel', 'castle', 'ruins', 'roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'tower', 'wall', 'kiosk']);
+const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8, garage: 3, garages: 3, shed: 3, kiosk: 3.2, hut: 3, roof: 3.5, school: 13, hospital: 18, train_station: 12, ruins: 5, castle: 14, tower: 25, bunker: 3, carport: 3, pillar: 5, service: 3.5, construction: 6 };
+const MODERN = new Set(['office', 'commercial', 'hotel', 'hospital', 'university', 'school', 'industrial', 'warehouse', 'government', 'transportation', 'train_station', 'public', 'civic', 'parking']);
+const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
+const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
+// Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
+const POMBALINE = pal([['#f1ece2', 24], ['#ece0c2', 14], ['#e9c97f', 22], ['#e8b9a0', 12], ['#e2c3c4', 6], ['#c9d7e0', 7], ['#d6dcb9', 5], ['#c27a62', 3], ['#f0dcaa', 8]]);
+const VERNACULAR = pal([['#f5f2eb', 34], ['#f0e3c4', 11], ['#efcc7e', 12], ['#ecb79e', 10], ['#bcd3e3', 8], ['#d3dfb8', 5], ['#e8ac84', 5], ['#e2bccb', 5], ['#c86a53', 3], ['#b8cbbb', 3], ['#f3d899', 5]]);
+const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
+const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
+const ROOFS = pal([['#ad5d43', 5], ['#b86b4d', 4], ['#9d5643', 3], ['#c07d5c', 3], ['#8f4f3e', 2], ['#a8664f', 3]]);
+const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
+const TRIM = srgb('#f3efe6');
 
 function buildingSpec(p) {
-  const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] || 'yes';
+  const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] && t['building:part'] !== 'yes' ? t['building:part'] : t.building || 'yes';
+  const u = (k) => hash(p.id + k);
   let h = parseMeters(t.height) ?? parseMeters(t['building:height']);
   const levels = parseFloat(t['building:levels']);
-  let minH = parseMeters(t.min_height) ?? (isFinite(parseFloat(t['building:min_level'])) ? parseFloat(t['building:min_level']) * LEVEL_H : 0);
-  let src = 'height';
   const roofLevels = parseFloat(t['roof:levels']) || 0;
-  if (h == null && isFinite(levels)) { h = (levels + roofLevels) * LEVEL_H + 1; src = 'levels'; }
+  let minH = parseMeters(t.min_height) ?? (isFinite(parseFloat(t['building:min_level'])) ? parseFloat(t['building:min_level']) * LEVEL_H : 0);
+  const pillar = kind === 'pillar' || t.man_made === 'pillar';
+  const castleType = t.castle_type || '';
+  const palace = kind === 'palace' || ['palace', 'stately', 'manor'].includes(castleType);
+  const castle = !palace && (kind === 'castle' || t.historic === 'castle' || castleType === 'defensive' || castleType === 'castle');
+  const church = ['church', 'cathedral', 'chapel', 'basilica'].includes(kind) || (t.amenity === 'place_of_worship' && !t['building:part']);
+  const monument = t.historic === 'monument' || t.historic === 'memorial' || t.man_made === 'tower';
+  const modern = !palace && !church && (MODERN.has(kind) && (p.area > 700 || levels >= 7)) || levels >= 9 || (t['building:material'] || '').match(/glass|concrete/);
+  let src = 'height';
+  if (h == null && isFinite(levels)) { h = levels * LEVEL_H + 1.2 + (roofLevels ? 2.8 : 0); src = 'levels'; }
   if (h == null) {
     src = 'estimated';
-    h = DEFAULT_H[kind] ?? (p.area < 40 ? 4 : p.area < 120 ? 10 : 14);
-    if (DEFAULT_H[kind] == null) h += (hash(p.id + 'h') - 0.5) * 3.2; // ±½ floor so unknown blocks don't read as one slab
+    h = DEFAULT_H[kind] ?? (p.area < 30 ? 3.5 : p.area < 90 ? 9 + u('h') * 4 : 12.5 + u('h') * 5);
   }
-  if (kind === 'roof' && !minH) minH = Math.max(0, h - 1);
-  const historic = t.historic === 'castle' || kind === 'castle' || t.castle_type;
-  let shape = (t['roof:shape'] || '').toLowerCase();
-  if (!shape) shape = t['building:part'] ? 'flat' : historic || kind === 'roof' ? 'flat' : p.area < 1800 && h < 40 ? 'hipped' : 'flat';
-  const floorH = NO_WINDOWS.has(kind) || historic || t.amenity === 'place_of_worship' ? 0 : isFinite(levels) && levels > 0 ? Math.max(2.6, (h - minH) / (levels + roofLevels + 0.3)) : LEVEL_H;
-  const wall = parseColour(t['building:colour']) || (historic || ['church', 'cathedral', 'chapel'].includes(kind) || t.amenity === 'place_of_worship' ? STONE : pick(FACADES, hash(p.id)));
-  const roofCol = parseColour(t['roof:colour']) || (shape === 'flat' ? FLAT_ROOF : pick(ROOFS, hash(p.id + 'r')));
-  return { h, minH, src, shape, floorH, wall, roofCol, roofH: parseMeters(t['roof:height']) };
-}
-
-function skeletonRoof(outer, holes) {
-  const close = (r) => [...r, r[0]];
-  try {
-    const sk = SkeletonBuilder.buildFromPolygon([close(outer), ...holes.map(close)]);
-    if (!sk || !sk.polygons.length) return null;
-    return sk;
-  } catch { return null; }
+  if (kind === 'roof' && !minH) minH = Math.max(0, h - 0.8);
+  const party = (p.party || []).filter(Boolean).length;
+  let variant = modern ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
+  if ((variant === 0 || variant === 1) && u('azu') < (variant === 1 ? 0.16 : 0.1)) variant = 2; // azulejo-clad
+  const stone = castle || pillar || (church && !t['building:colour']) || (monument && !UTILITY.has(kind));
+  const utility = UTILITY.has(kind) || p.area < 25;
+  // roof shape
+  let shape = (t['roof:shape'] || '').toLowerCase().replace('half-hipped', 'hipped').replace('side_hipped', 'hipped');
+  if (!shape) {
+    if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument) shape = 'flat';
+    else if (church) shape = 'gabled';
+    else if (roofLevels >= 1) shape = 'mansard';
+    else if (p.area > 3000 || h > 34) shape = 'flat';
+    else if (utility && p.area < 40) shape = 'flat';
+    else shape = 'hipped';
+  }
+  if (['round', 'saltbox', 'double_saltbox', 'quadruple_saltbox', 'crosspitched'].includes(shape)) shape = 'hipped';
+  const floorH = utility || stone || castle ? 0
+    : isFinite(levels) && levels > 0 ? Math.min(4.6, Math.max(2.7, (h - minH - (roofLevels ? 2.8 : 0)) / (levels + 0.3)))
+    : variant === 0 ? 3.4 : variant === 3 ? 3.3 : variant === 4 ? 4.4 : 3.0;
+  const groundH = variant === 0 ? Math.max(floorH, 3.9) : variant === 3 ? Math.max(floorH, 4.2) : variant === 4 ? floorH * 1.1 : Math.max(floorH, 2.9);
+  const bayW = variant === 3 ? 1.6 + u('bw') * 0.6 : variant === 4 ? 3.6 + u('bw') * 0.8 : variant === 5 ? 5.5 : variant === 0 ? 2.7 + u('bw') * 0.5 : 2.5 + u('bw') * 1.1;
+  const balconyFloors = variant === 0 || (variant === 2 && u('p') < 0.5) ? [1, ...(u('b2') < 0.55 ? [2] : []), ...(u('b3') < 0.3 ? [3] : [])] : variant === 1 || variant === 2 ? [1, 2, 3, 4] : variant === 4 ? [1] : [];
+  const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
+  const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
+  const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
+  const roofCol = parseColour(t['roof:colour']) || pick(ROOFS, u('r'));
+  const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(FLAT_ROOF, u('f'));
+  const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
+  return { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
+    roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
 }
 
 function addBuilding(p) {
   const s = buildingSpec(p);
   stats.buildings++; stats[s.src]++;
+  const seed = hash(p.id + 'seed');
+  const rng = (k) => hash(p.id + k);
   const rings = [p.outer, ...p.holes];
   let tmin = Infinity, tsum = 0, n = 0;
   for (const r of rings) for (const [x, y] of r) { const g = groundAt(x, y); tmin = Math.min(tmin, g); tsum += g; n++; }
-  const tavg = tsum / n;
-  const ground = tavg;
+  const ground = tsum / n;
   const bottom = s.minH > 0 ? ground + s.minH : tmin - 1.5;
   const top = ground + s.h;
-  let roofH = 0, sk = null;
-  if (s.shape !== 'flat' && s.shape !== 'skillion' && p.outer.length <= 160) {
-    sk = skeletonRoof(p.outer, p.holes);
-    if (sk) {
-      const zmax = Math.max(...sk.vertices.map((v) => v[2]));
-      const pitch = s.shape === 'pyramidal' ? 0.9 : s.shape === 'dome' || s.shape === 'onion' ? 1.6 : 0.55;
-      roofH = s.roofH ?? Math.min(zmax * pitch, s.shape === 'dome' || s.shape === 'onion' || s.shape === 'pyramidal' ? 30 : 4.5);
-      roofH = Math.min(roofH, Math.max(0, s.h - s.minH - 2.5));
-      if (roofH < 0.5 || zmax <= 0) sk = null;
-      else { sk.zmax = zmax; stats.hipped++; }
-    } else stats.skeletonFail++;
-  }
-  const wallTop = top - (sk ? roofH : 0);
-  if (wallTop - bottom < 0.5) return;
   const [ti, tj] = tileOf(p.c[0], p.c[1]);
-  const B = getTile(ti, tj).b;
-  const wallCol = lin(jitter(s.wall, hash(p.id + 'j'), 6));
-  const uv1 = [wallTop - ground, s.floorH];
-  // walls
-  for (const r of rings) {
-    let u = hash(p.id + 'u') * 7;
-    for (let i = 0; i < r.length; i++) {
-      const [x1, y1] = r[i], [x2, y2] = r[(i + 1) % r.length];
-      const L = Math.hypot(x2 - x1, y2 - y1); if (L < 1e-3) continue;
-      const nrm = [(y2 - y1) / L, 0, (x2 - x1) / L];
-      const a0 = [x1, bottom, -y1], b0 = [x2, bottom, -y2], b1 = [x2, wallTop, -y2], a1 = [x1, wallTop, -y1];
-      const vb = bottom - ground, vt = wallTop - ground;
-      pushTri(B, a0, b0, b1, nrm, wallCol, [u, vb, u + L, vb, u + L, vt], uv1);
-      pushTri(B, a0, b1, a1, nrm, wallCol, [u, vb, u + L, vt, u, vt], uv1);
-      u += L;
+  const T = getTile(ti, tj), S = T.b;
+  const colWall = lin(jitter(s.wall, rng('j'), 7)), colRoof = lin(jitter(s.roofCol, rng('k'), 10)), colFlat = lin(jitter(s.flatCol, rng('fl'), 6));
+  const colTrim = lin(s.stone ? jitter(s.wall, 0.6, 4) : TRIM);
+  const party = p.party || p.outer.map(() => false);
+  stats.partyEdges += party.filter(Boolean).length;
+
+  if (s.pillar) { // arcade pillars / columns → octagonal stone shafts
+    stats.pillars++;
+    const r = Math.max(0.25, Math.sqrt(Math.abs(p.area) / Math.PI));
+    const ring = Array.from({ length: 8 }, (_, k) => [p.c[0] + r * Math.cos((k * Math.PI) / 4), p.c[1] + r * Math.sin((k * Math.PI) / 4)]);
+    for (let k = 0; k < 8; k++) wallQuad(S, ring[k], ring[(k + 1) % 8], bottom, bottom, top, top, colWall, 0, 1, ground, [0, 0, 0, 0], [KIND.STONE / 8, 5 / 8, seed, 0.9]);
+    return;
+  }
+
+  // roof strategy
+  const ob = obb(p.outer);
+  const fill = ob ? Math.abs(p.area) / (4 * ob.hl * ob.hw) : 0;
+  const pitched = s.shape !== 'flat' && s.shape !== 'skillion' || (s.shape === 'skillion');
+  const planarOK = ob && !p.holes.length && fill > 0.72 && p.outer.length <= 40 && !['dome', 'onion', 'cone'].includes(s.shape);
+  let wallTop = top, sk = null, mode = 'flat';
+  const sl = Math.tan((s.pitch * Math.PI) / 180);
+  if (pitched && s.shape !== 'flat') {
+    if (planarOK) {
+      mode = 'planar';
+      const est = s.roofH ?? (s.shape === 'mansard' || s.shape === 'gambrel' ? 4.6 : Math.min(5.5, Math.max(2.2, ob.hw * sl)));
+      wallTop = top - Math.min(est, Math.max(0, s.h - s.minH - 2.5));
+    } else if (p.outer.length <= 200) {
+      try { sk = SkeletonBuilder.buildFromPolygon([[...p.outer, p.outer[0]], ...p.holes.map((h) => [...h, h[0]])]); } catch { sk = null; }
+      if (sk && sk.polygons.length) {
+        mode = 'skeleton';
+        const zmax = Math.max(...sk.vertices.map((v) => v[2]));
+        const dome = ['dome', 'onion', 'cone'].includes(s.shape);
+        const rh = s.roofH ?? (dome ? Math.min(zmax * 1.6, 30) : Math.min(zmax * sl, 5.5));
+        wallTop = top - Math.min(rh, Math.max(0, s.h - s.minH - 2.5));
+      } else { stats.skeletonFail++; sk = null; }
     }
   }
-  // roof
-  const roofCol = lin(jitter(s.roofCol, hash(p.id + 'k'), 8));
-  const noWin = [0, 0];
-  if (sk) {
-    const dome = s.shape === 'dome' || s.shape === 'onion';
-    const zf = (z) => { const t = z / sk.zmax; return wallTop + roofH * (dome ? Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)) : t); };
-    for (const poly of sk.polygons) {
-      const V = poly.map((k) => sk.vertices[k]);
-      const flat = V.flatMap((v) => [v[0], v[1]]);
-      const tri = earcut(flat);
-      for (let k = 0; k < tri.length; k += 3) {
-        let [a, b, c] = [V[tri[k]], V[tri[k + 1]], V[tri[k + 2]]].map((v) => [v[0], zf(v[2]), -v[1]]);
-        let nn = triNormal(a, b, c);
-        if (nn[1] < 0) { [b, c] = [c, b]; nn = nn.map((v) => -v); }
-        pushTri(B, a, b, c, nn, roofCol, null, noWin);
-      }
-    }
-  } else {
-    const flat = [], holesIdx = [];
-    rings.forEach((r, ri) => { if (ri) holesIdx.push(flat.length / 2); r.forEach(([x, y]) => flat.push(x, y)); });
-    const tri = earcut(flat, holesIdx);
-    for (let k = 0; k < tri.length; k += 3) {
-      let [a, b, c] = [tri[k], tri[k + 1], tri[k + 2]].map((q) => [flat[q * 2], wallTop, -flat[q * 2 + 1]]);
-      if (triNormal(a, b, c)[1] < 0) [b, c] = [c, b];
-      pushTri(B, a, b, c, [0, 1, 0], roofCol, null, noWin);
-    }
-  }
+  if (wallTop - bottom < 0.5) return;
+  stats[mode]++;
+  const spec = { ...s, shape: mode === 'planar' ? s.shape : mode === 'skeleton' ? 'skeleton-done' : 'flat' };
+  const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1] };
+  const res = buildRoofAndWalls(S, ctx);
+  if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
+  if (!s.stone && s.h > 5) { roofExtras(S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  for (const b of res.balconies) T.balconies.push(...b);
+  stats.balconies += res.balconies.length;
 }
 
 {
@@ -317,13 +325,84 @@ function addBuilding(p) {
     if (o.skip) stats.skippedOutlines++;
   }
   stats.parts = parts.length;
-  for (const p of [...outlines.filter((o) => !o.skip), ...parts]) {
-    if (p.c[0] < minX || p.c[0] > maxX || p.c[1] < minY || p.c[1] > maxY) continue;
-    if (Math.abs(p.area) < 6) continue;
-    addBuilding(p);
+  const todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2);
+  markPartyWalls(todo.filter((p) => !p.tags['building:part']));
+  for (const p of todo) addBuilding(p);
+}
+
+// ─── statues, columns & historic walls ──────────────────────────────────
+{
+  const bronze = lin(srgb('#55614f')), stoneC = lin(LIOZ), wallC = lin(srgb('#d3c6aa')), whiteC = lin(srgb('#ece6da'));
+  const SI = [0, 0, 0, 0], ST = (seed) => [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = (seed) => [KIND.PLAIN / 8, 5 / 8, seed, 1];
+  const prism = (S, cx, cy, r, z0, z1, col, sides, st) => {
+    const ring = Array.from({ length: sides }, (_, k) => [cx + r * Math.cos((k * 2 * Math.PI) / sides), cy + r * Math.sin((k * 2 * Math.PI) / sides)]);
+    for (let k = 0; k < sides; k++) wallQuad(S, ring[k], ring[(k + 1) % sides], z0, z0, z1, z1, col, 0, 1, z0, SI, st);
+    for (let k = 1; k + 1 < sides; k++) triUp(S, [ring[0][0], z1, -ring[0][1]], [ring[k][0], z1, -ring[k][1]], [ring[k + 1][0], z1, -ring[k + 1][1]], col, [0, 0], [0, 0], [0, 0], SI, st);
+  };
+  const figure = (S, x, y, z, sc, seed) => { // stylised standing figure in bronze
+    prism(S, x, y, 0.28 * sc, z, z + 0.9 * sc, bronze, 6, PL(seed));
+    prism(S, x, y, 0.34 * sc, z + 0.9 * sc, z + 1.55 * sc, bronze, 6, PL(seed));
+    prism(S, x, y, 0.14 * sc, z + 1.55 * sc, z + 1.92 * sc, bronze, 6, PL(seed));
+  };
+  const mem = els.filter((e) => e.type === 'node' && e.tags && (e.tags.historic === 'memorial' || e.tags.historic === 'monument' || e.tags.tourism === 'artwork'));
+  for (const e of mem) {
+    const t = e.tags, typ = (t.memorial || t.artwork_type || '').toLowerCase();
+    if (/mural|azulejo|tile|plaque|graffiti|stolperstein|street_art|painting|blue_plaque/.test(typ) || t.material === 'tile') continue;
+    const [x, y] = proj.fwd(e.lat, e.lon);
+    if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) continue;
+    const g = groundAt(x, y), [ti, tj] = tileOf(x, y), S = getTile(ti, tj).b, seed = hash('m' + e.id);
+    const name = (t.name || '').toLowerCase();
+    if (typ === 'column' || /coluna|column/.test(name)) {
+      box(S, x, y, 1, 0, 2.6, 2.6, g - 0.5, g + 5, stoneC, SI, ST(seed));
+      prism(S, x, y, 0.85, g + 5, g + 23, stoneC, 12, ST(seed));
+      box(S, x, y, 1, 0, 1.1, 1.1, g + 23, g + 24, stoneC, SI, ST(seed));
+      figure(S, x, y, g + 24, 2.2, seed);
+    } else if (typ === 'bust') {
+      box(S, x, y, 1, 0, 0.45, 0.45, g - 0.3, g + 1.8, stoneC, SI, ST(seed));
+      prism(S, x, y, 0.3, g + 1.8, g + 2.5, bronze, 6, PL(seed));
+    } else if (/cross|cruzeiro/.test(typ + name)) {
+      prism(S, x, y, 0.25, g - 0.3, g + 4, stoneC, 6, ST(seed));
+      box(S, x, y, 1, 0, 0.7, 0.12, g + 3.1, g + 3.35, stoneC, SI, ST(seed));
+    } else {
+      const big = t.historic === 'monument' || /equestre|equestrian|d\. josé|marquês/.test(name + typ);
+      const ps = big ? 2.4 : 0.85, ph = big ? 5.5 : 2.4;
+      box(S, x, y, 1, 0, ps + 0.4, ps + 0.4, g - 0.4, g + 0.5, stoneC, SI, ST(seed));
+      box(S, x, y, 1, 0, ps, ps, g + 0.5, g + ph, stoneC, SI, ST(seed));
+      figure(S, x, y, g + ph, big ? 2.6 : 1.15, seed);
+    }
+    stats.statues++;
+  }
+  // historic city / castle walls with merlons; ordinary walls low and whitewashed
+  const wallLines = extractLines(els, proj, (t) => t.barrier === 'city_wall' || t.historic === 'citywalls' || t.historic === 'city_wall' || (t.barrier === 'wall' && !['fountain', 'arch', 'retaining_wall'].includes(t.historic || t.wall || '')));
+  for (const w of wallLines) {
+    const city = w.tags.barrier === 'city_wall' || /citywall|city_wall/.test(w.tags.historic || '');
+    const H = parseMeters(w.tags.height) ?? (city ? 9 : 1.6), th = city ? 2.4 : 0.35, col = city ? wallC : whiteC;
+    for (let i = 0; i + 1 < w.pts.length; i++) {
+      const a = w.pts[i], b = w.pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue;
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      if (mx < minX || mx > maxX || my < minY || my > maxY) continue;
+      const [ti, tj] = tileOf(mx, my), S = getTile(ti, tj).b, seed = hash(w.id + i);
+      const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, nx = -dy * th / 2, ny = dx * th / 2;
+      const ga = groundAt(a[0], a[1]), gb = groundAt(b[0], b[1]);
+      const A = [a[0] - dx * th / 2, a[1] - dy * th / 2], B = [b[0] + dx * th / 2, b[1] + dy * th / 2];
+      const q = [[A[0] + nx, A[1] + ny], [B[0] + nx, B[1] + ny], [B[0] - nx, B[1] - ny], [A[0] - nx, A[1] - ny]];
+      const zb = [ga, gb, gb, ga], zt = zb.map((z) => z + H);
+      const st = city ? ST(seed) : PL(seed);
+      wallQuad(S, q[3], q[2], zb[3] - 1, zb[2] - 1, zt[3], zt[2], col, 0, L, zb[3], SI, st);
+      wallQuad(S, q[1], q[0], zb[1] - 1, zb[0] - 1, zt[1], zt[0], col, 0, L, zb[1], SI, st);
+      wallQuad(S, q[0], q[3], zb[0] - 1, zb[3] - 1, zt[0], zt[3], col, 0, th, zb[0], SI, st);
+      wallQuad(S, q[2], q[1], zb[2] - 1, zb[1] - 1, zt[2], zt[1], col, 0, th, zb[2], SI, st);
+      triUp(S, [q[0][0], zt[0], -q[0][1]], [q[1][0], zt[1], -q[1][1]], [q[2][0], zt[2], -q[2][1]], col, [0, 0], [0, 0], [0, 0], SI, st);
+      triUp(S, [q[0][0], zt[0], -q[0][1]], [q[2][0], zt[2], -q[2][1]], [q[3][0], zt[3], -q[3][1]], col, [0, 0], [0, 0], [0, 0], SI, st);
+      if (city) for (let s2 = 1.2; s2 < L - 0.6; s2 += 2.6) {
+        const x = a[0] + dx * s2, y = a[1] + dy * s2, z = ga + (gb - ga) * (s2 / L) + H;
+        box(S, x, y, dx, dy, 0.6, th / 2, z - 0.05, z + 1.1, col, SI, st);
+      }
+      stats.wallsM += L;
+    }
   }
 }
-log(`buildings built`, stats);
+log(`buildings built`, JSON.stringify(stats));
 
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
@@ -455,7 +534,7 @@ function addMesh(doc, scene, name, attrs, material) {
   scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
 }
 async function writeDoc(doc, file) {
-  await doc.transform(weld(), meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizePosition: 16, quantizeNormal: 10, quantizeTexcoord: 12, quantizeColor: 8 }));
+  await doc.transform(weld(), meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizePosition: 16, quantizeNormal: 10, quantizeTexcoord: 16, quantizeColor: 8 }));
   await io.write(file, doc);
   return fs.statSync(file).size;
 }
@@ -506,20 +585,22 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   totalTris += idx.length / 3;
   // buildings
   const T = tiles.get(`${i}_${j}`);
+  let balFile = null;
   if (T && T.b.pos.length) {
     const B = T.b;
     const bmat = doc.createMaterial('buildings').setRoughnessFactor(0.9).setMetallicFactor(0);
     const col = Uint8Array.from(B.col, (v) => Math.round(Math.min(1, v) * 255));
     addMesh(doc, scene, 'buildings', {
       POSITION: [Float32Array.from(B.pos), 'VEC3'], NORMAL: [Float32Array.from(B.nrm), 'VEC3'], COLOR_0: [col, 'VEC3', true],
-      TEXCOORD_0: [Float32Array.from(B.uv), 'VEC2'], TEXCOORD_1: [Float32Array.from(B.uv1), 'VEC2'],
+      TEXCOORD_0: [Float32Array.from(B.surf, (v) => Math.min(1, Math.max(0, v / 512 + 0.5))), 'VEC2'], _INFO: [Float32Array.from(B.info), 'VEC4'], _STYLE: [Float32Array.from(B.style), 'VEC4'],
     }, bmat);
     totalTris += B.pos.length / 9;
+    if (T.balconies.length) { balFile = `bal_${i}_${j}.bin`; fs.writeFileSync(path.join(OUT, balFile), Buffer.from(Float32Array.from(T.balconies).buffer)); totalBytes += T.balconies.length * 4; }
   }
   const file = `t_${i}_${j}.glb`;
   const bytes = await writeDoc(doc, path.join(OUT, file));
   totalBytes += bytes;
-  manifest.tiles.push({ file, i, j, bounds: [x0, y0, x1, y1], bytes });
+  manifest.tiles.push({ file, i, j, bounds: [x0, y0, x1, y1], bytes, balconies: balFile });
   log(`tile ${i},${j}: ${(bytes / 1024).toFixed(0)} KB`);
 }
 

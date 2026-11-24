@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime } from './materials.js';
+import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 
 const AREA = new URLSearchParams(location.search).get('area') || 'baixa-alfama';
@@ -74,7 +74,7 @@ document.getElementById('attrib').textContent = manifest.attribution;
 const matBuildings = buildingMaterial();
 const maxAniso = renderer.capabilities.getMaxAnisotropy();
 let done = 0;
-const total = manifest.tiles.length + 3;
+const total = manifest.tiles.length + 4;
 const tick = () => { progressEl.style.width = `${(++done / total) * 100}%`; };
 
 function adopt(gltf) {
@@ -82,8 +82,9 @@ function adopt(gltf) {
     if (!o.isMesh) return;
     if (o.name.startsWith('buildings')) {
       const g = o.geometry;
-      g.setAttribute('wall', g.attributes.uv); g.setAttribute('wallInfo', g.attributes.uv1);
-      g.deleteAttribute('uv'); g.deleteAttribute('uv1');
+      g.setAttribute('surf', g.attributes.uv); g.deleteAttribute('uv');
+      g.setAttribute('aInfo', g.attributes._info); g.deleteAttribute('_info');
+      g.setAttribute('aStyle', g.attributes._style); g.deleteAttribute('_style');
       o.material = matBuildings;
       o.castShadow = o.receiveShadow = true;
     } else if (o.name.startsWith('terrain')) {
@@ -102,6 +103,42 @@ function adopt(gltf) {
 const waterMask = await texLoader.loadAsync(BASE + 'water.png');
 const jobs = [...manifest.tiles.map((t) => t.file), 'base.glb'].map((f) => loader.loadAsync(BASE + f).then(adopt));
 
+// balconies: instanced per 250 m chunk, only drawn near the camera
+const balconyChunks = [];
+jobs.push(Promise.all(manifest.tiles.filter((t) => t.balconies).map((t) => fetch(BASE + t.balconies).then((r) => r.arrayBuffer())))
+  .then((bufs) => {
+    const { slab, rail } = balconyGeometry();
+    const railGeo = mergeGeometries(rail);
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 0.8 });
+    const railMat = railingMaterial();
+    const cells = new Map();
+    for (const buf of bufs) {
+      const d = new Float32Array(buf);
+      for (let i = 0; i < d.length; i += 5) {
+        const k = `${Math.floor(d[i] / 250)},${Math.floor(d[i + 2] / 250)}`;
+        if (!cells.has(k)) cells.set(k, []);
+        cells.get(k).push(i, d);
+      }
+    }
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+    for (const list of cells.values()) {
+      const n = list.length / 2;
+      const a = new THREE.InstancedMesh(slab, slabMat, n), b = new THREE.InstancedMesh(railGeo, railMat, n);
+      const c = new THREE.Vector3();
+      for (let j = 0; j < n; j++) {
+        const i = list[j * 2], d = list[j * 2 + 1];
+        q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, d[i + 3]);
+        m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(d[i + 4], 1, 1));
+        a.setMatrixAt(j, m); b.setMatrixAt(j, m); c.add(p);
+      }
+      a.computeBoundingSphere(); b.computeBoundingSphere();
+      a.castShadow = true; a.receiveShadow = true;
+      const g = new THREE.Group(); g.add(a, b); g.userData.c = c.divideScalar(n);
+      balconyChunks.push(g); scene.add(g);
+    }
+    tick();
+  }));
+
 // water: plane clipped by the coastline mask
 jobs.push(Promise.resolve(waterMask).then((mask) => {
   const geo = new THREE.PlaneGeometry(maxX - minX, maxY - minY, 1, 1).rotateX(-Math.PI / 2);
@@ -115,10 +152,11 @@ jobs.push(Promise.resolve(waterMask).then((mask) => {
 // trees: one instanced draw call
 jobs.push(fetch(BASE + 'trees.bin').then((r) => r.arrayBuffer()).then((buf) => {
   const d = new Float32Array(buf), n = d.length / 4;
-  const crown = new THREE.IcosahedronGeometry(2.6, 0).scale(1, 1.15, 1).translate(0, 5.2, 0);
-  const trunk = new THREE.CylinderGeometry(0.22, 0.32, 3.4, 5).translate(0, 1.7, 0);
   const paint = (g, hex) => { const c = new THREE.Color(hex); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3)); return g; };
-  const geo = mergeGeometries([paint(crown.toNonIndexed(), 0xffffff), paint(trunk.toNonIndexed(), 0x6b4f3a)]);
+  // clumped crown: three overlapping low-poly lobes, lighter on top
+  const lobe = (r, x, y, z, shade) => paint(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z).toNonIndexed(), shade);
+  const trunk = new THREE.CylinderGeometry(0.2, 0.34, 4.2, 6).translate(0, 2.1, 0).toNonIndexed();
+  const geo = mergeGeometries([lobe(2.3, 0, 5.4, 0, 0xe6e6e6), lobe(1.7, 1.3, 6.4, 0.5, 0xffffff), lobe(1.6, -1.1, 6.1, -0.7, 0xf2f2f2), lobe(1.3, 0.2, 7.3, -0.2, 0xffffff), paint(trunk, 0x5e4636)]);
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
   const mesh = new THREE.InstancedMesh(geo, mat, n);
@@ -145,12 +183,13 @@ const warm = new THREE.Color(0xffb36b), noon = new THREE.Color(0xfff4e4);
 function setTime(h) {
   sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir);
   const elev = Math.asin(sunDir.y);
+  cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.04, 0.1);
   const golden = 1 - THREE.MathUtils.smoothstep(elev, 0.05, 0.5);
   sun.color.copy(noon).lerp(warm, golden);
-  sun.intensity = 3.6 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);
-  hemi.intensity = 0.12 + 0.18 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6);
-  scene.environmentIntensity = 0.16 + 0.16 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5);
-  renderer.toneMappingExposure = 0.82 + 0.25 * golden;
+  sun.intensity = 3.1 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);
+  hemi.intensity = 0.3 + 0.35 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6);
+  scene.environmentIntensity = 0.22 + 0.22 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5);
+  renderer.toneMappingExposure = 0.88 + 0.22 * golden;
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
   document.body.style.background = `radial-gradient(120% 90% at 50% 0%, ${new THREE.Color(0xf7f1e6).lerp(new THREE.Color(0xf6c99a), golden * 0.8).getStyle()} 0%, ${new THREE.Color(0xe9dfcf).lerp(new THREE.Color(0xc9a58c), golden * 0.7).getStyle()} 60%, ${new THREE.Color(0xd9cbb6).lerp(new THREE.Color(0x8f7d8c), golden * 0.6).getStyle()} 100%)`;
@@ -215,6 +254,7 @@ renderer.setAnimationLoop((now) => {
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
+  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 480;
   waterUniformTime.value = now / 1000;
   renderer.render(scene, camera);
 
