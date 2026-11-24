@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -329,6 +329,14 @@ function addBuilding_(p) {
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (!s.stone && s.h > 5) { roofExtras(S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  if (s.crenel) { // merlons along every edge (castle walls and towers)
+    const cs = [KIND.STONE / 8, 5 / 8, seed, 0.9];
+    for (const r of rings) for (let i = 0; i < r.length; i++) {
+      const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+      const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, n = Math.max(1, Math.floor(L / 1.8));
+      for (let k = 0; k < n; k++) { const t = (k + 0.5) / n * L; box(S, a[0] + dx * t - dy * 0.3, a[1] + dy * t + dx * 0.3, dx, dy, 0.42, 0.3, wallTop - 0.05, wallTop + 1.15, colWall, [0, 0, 0, 0], cs); }
+    }
+  }
   for (const b of res.balconies) T.balconies.push(...b);
   stats.balconies += res.balconies.length;
 }
@@ -346,7 +354,11 @@ function addBuilding_(p) {
   const [pxa, pya] = proj.fwd(38.7062, -9.1400), [pxb, pyb] = proj.fwd(38.7092, -9.1330);
   const inPraca = (p) => p.c[0] > pxa && p.c[0] < pxb && p.c[1] > pya && p.c[1] < pyb;
   const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p));
-  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  // Sé: the mapped parts carry no heights; the cathedral is modelled by hand below
+  const seOutline = polysB.find((p) => p.id === 'r19372558_0');
+  const seParts = seOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], seOutline.outer)) : [];
+  const seSet = new Set([seOutline, ...seParts]);
+  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
   const inZone = (x, y) => zones.some((z) => pointInRing(x, y, z));
@@ -387,6 +399,12 @@ function addBuilding_(p) {
     let best = null, bs = -1;
     theatre.outer.forEach((a, i) => { const b = theatre.outer[(i + 1) % theatre.outer.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); const oy = -(b[0] - a[0]) / L; const sc = -oy * L; if (sc > bs) { bs = sc; best = [a, b]; } });
     portico(tileB(...theatre.c), { a: best[0], b: best[1], ground: groundAt(...theatre.c), lin, srgb }); mark();
+  }
+  if (seOutline && seParts.length) {
+    const ob = obb(seParts.flatMap((p) => p.outer));
+    let { ux, uy } = ob; if (ux < 0) { ux = -ux; uy = -uy; }
+    let gmin = Infinity; for (const [x, y] of seOutline.outer) gmin = Math.min(gmin, groundAt(x, y));
+    seCathedral(tileB(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, ground: groundAt(ob.cx, ob.cy), gmin, lin, srgb }); mark();
   }
   const jose = byId.get('w663318739');
   if (jose) {
