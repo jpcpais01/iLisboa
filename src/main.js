@@ -168,20 +168,48 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
   // far LOD: one squat lobe on a stub trunk, ~26 triangles
   const far = mergeGeometries([lobe(2.7, 0, 5.9, 0, 0xf0f0f0, 0.4).scale(1, 0.85, 1), paint(new THREE.CylinderGeometry(0.25, 0.32, 4.2, 3, 1, true).translate(0, 2.1, 0).toNonIndexed(), 0x5e4636)]);
   far.computeVertexNormals();
-  // chunked so each patch of the city swaps detail by camera distance (and frustum-culls on its own)
+  // palms: slim ringed trunk under two layers of drooping fronds (open cones, seen from both sides)
+  const palmTrunk = (sides, segs) => paint(new THREE.CylinderGeometry(0.17, 0.27, 7.4, sides, segs, true).translate(0, 3.7, 0).toNonIndexed(), 0x8a7558);
+  // a star of arched, tapering blades: rises from the crown, then droops to the tip
+  const blades = (count, len, y0, rot) => {
+    const pos = [];
+    for (let f = 0; f < count; f++) {
+      const a = rot + (f / count) * Math.PI * 2 + (f % 2) * 0.12, c = Math.cos(a), sn = Math.sin(a), w = 0.32 + (f % 3) * 0.06;
+      const B = [0, y0, 0], M = [c * len * 0.45, y0 + 0.45, sn * len * 0.45], T = [c * len, y0 - 1.1 - (f % 2) * 0.5, sn * len];
+      const ML = [M[0] - sn * w, M[1], M[2] + c * w], MR = [M[0] + sn * w, M[1], M[2] - c * w];
+      pos.push(...B, ...ML, ...MR, ...ML, ...T, ...MR);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g;
+  };
+  const bare = (g) => { g.deleteAttribute('normal'); g.deleteAttribute('uv'); return g; };   // blades carry position + colour only
+  const palm = mergeGeometries([palmTrunk(6, 2), paint(blades(11, 3.2, 7.4, 0), 0xffffff), paint(blades(7, 2.3, 7.7, 0.4), 0xe6e6e6), paint(new THREE.IcosahedronGeometry(0.5, 0).translate(0, 7.45, 0).toNonIndexed(), 0x9a8a70)].map(bare));
+  palm.computeVertexNormals();
+  const palmFar = mergeGeometries([palmTrunk(3, 1), paint(blades(6, 3.0, 7.4, 0), 0xffffff)].map(bare)); palmFar.computeVertexNormals();
+  const palmMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side: THREE.DoubleSide });
+  // stone pines (pinheiro-manso): tall bare trunk, flat umbrella crown
+  const flat = (r, x, y, z, shade, ry, sy) => paint(new THREE.IcosahedronGeometry(r, 0).rotateY(ry).rotateX(ry * 0.6).scale(1, sy, 1).translate(x, y, z).toNonIndexed(), shade);
+  const pineTrunk = (sides) => paint(new THREE.CylinderGeometry(0.22, 0.38, 6.8, sides, 1, true).translate(0, 3.4, 0).toNonIndexed(), 0x6a5240);
+  const pine = mergeGeometries([pineTrunk(5), flat(3.4, 0, 7.6, 0, 0xe4e4e4, 0.3, 0.42), flat(2.4, 1.2, 8.2, 0.6, 0xffffff, 1.1, 0.4), flat(2.2, -1.3, 8.0, -0.5, 0xf2f2f2, 2.0, 0.42)]);
+  pine.computeVertexNormals();
+  const pineFar = mergeGeometries([pineTrunk(3), flat(3.6, 0, 7.8, 0, 0xf0f0f0, 0.3, 0.45)]); pineFar.computeVertexNormals();
+  const KINDS = [
+    { near: geo, far, mat, greens: [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c] },
+    { near: palm, far: palmFar, mat: palmMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
+    { near: pine, far: pineFar, mat, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
+  ];
+  // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
   const CH = 600, cells = new Map();
-  for (let i = 0; i < n; i++) { const k = Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); }
+  for (let i = 0; i < n; i++) { const kind = Math.min(2, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); }
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-  const greens = [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c];
-  for (const ids of cells.values()) {
-    const near = new THREE.InstancedMesh(geo, mat, ids.length), lo = new THREE.InstancedMesh(far, mat, ids.length);
+  for (const { kind, ids } of cells.values()) {
+    const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
     ids.forEach((i, j) => {
       const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
       q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
-      const k = d[i * 4 + 3];
+      const k = d[i * 4 + 3] - kind * 10;
       s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
       m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
-      for (const mesh of [near, lo]) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(greens[Math.floor(Math.abs(r) * greens.length) % greens.length])); }
+      for (const mesh of [near, lo]) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
     });
     for (const mesh of [near, lo]) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); }
     treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });

@@ -798,11 +798,14 @@ log('AO baked');
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
 const groundPx = (x, y) => { const c = Math.floor(((x - minX) / (maxX - minX)) * GW), r = Math.floor(((maxY - y) / (maxY - minY)) * GH); return c >= 0 && r >= 0 && c < GW && r < GH ? r * GW + c : -1; };
-const addTree = (x, y, sc) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, groundAt(x, y), -y, sc); };
-for (const t of treeNodes) addTree(t.p[0], t.p[1], 0.8 + hash(t.id) * 0.6);
+// tree kind rides in the scale's tens digit: 0 broadleaf, 1 palm, 2 stone pine / conifer
+const PALMS = /^(phoenix|chamaerops|howea|jubaea|washingtonia|cocos|trachycarpus|syagrus|livistona|butia|archontophoenix)/i, CONIFERS = /^(pinus|cupressus|cedrus|araucaria|taxus|juniperus|abies|picea)/i;
+const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
+const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, groundAt(x, y), -y, sc + 10 * kind); };
+for (const t of treeNodes) addTree(t.p[0], t.p[1], 0.8 + hash(t.id) * 0.6, treeKind(t.tags));
 for (const r of treeRows) for (let i = 0; i + 1 < r.pts.length; i++) {
   const [x1, y1] = r.pts[i], [x2, y2] = r.pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
-  for (let s = 0; s < L; s += 8) addTree(x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L, 0.8 + hash(r.id + s) * 0.5);
+  for (let s = 0; s < L; s += 8) addTree(x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L, 0.8 + hash(r.id + s) * 0.5, treeKind(r.tags));
 }
 const nTagged = trees.length / 4;
 { // scatter inside parks / woods (procedural, flagged in manifest)
@@ -821,7 +824,7 @@ const nTagged = trees.length / 4;
       if (!pointInRing(jx, jy, p.outer) || p.holes.some((h) => pointInRing(jx, jy, h))) continue;
       const c = Math.floor(bm.px(jx)), r = Math.floor(bm.py(jy));
       if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) continue;
-      addTree(jx, jy, 0.75 + hash(`${jx}`) * 0.6);
+      addTree(jx, jy, 0.75 + hash(`${jx}`) * 0.6, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
     }
   }
 }
