@@ -178,6 +178,23 @@ const srgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return [(n
 const lin = (c) => c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
 const NAMED = { white: '#f3f0ea', black: '#3a3a3a', grey: '#b8b4ad', gray: '#b8b4ad', silver: '#c8c8c8', beige: '#e8dcc0', yellow: '#e9c873', orange: '#df9a5a', red: '#b8553f', darkred: '#8e3b2e', brown: '#8a5a3c', pink: '#e9b6a6', blue: '#a9c0d2', lightblue: '#bcd0de', green: '#a9bf98', cream: '#efe4c8', tan: '#d6b98f', maroon: '#7c3a2e', ochre: '#d9a650' };
 const ROOF_NAMED = { brown: '#a4604a', red: '#b05a43', orange: '#c47a55' };   // tagged tile roofs are terracotta, not paint-chart brown
+// mappers pick paint-chart oranges (#f56f42, #ee4b2b…) for tile roofs; real Lisbon tiles are weathered terracotta.
+// Keep the hue, cap saturation and pull lightness into the fired-clay band. Greys and greens just lose some punch.
+const tameRoof = (v) => {
+  if (!v) return null; v = v.toLowerCase().split(';').pop().trim();
+  if (ROOF_NAMED[v]) return ROOF_NAMED[v];
+  if (NAMED[v]) v = NAMED[v];
+  if (!/^#[0-9a-f]{6}$/.test(v)) return v;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16) / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  let h = 0, l = (mx + mn) / 2, sat = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+  if (mx !== mn) h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+  h *= 60;
+  const clay = (h < 40 || h > 340) && sat > 0.35;
+  sat = Math.min(sat, clay ? 0.42 : 0.22); if (clay) l = Math.min(0.5, Math.max(0.38, l * 0.82));
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [R, G, B].map((q) => Math.round((q + m) * 255).toString(16).padStart(2, '0')).join('');
+};
 const parseColour = (v) => { if (!v) return null; v = v.toLowerCase().trim(); if (/^#[0-9a-f]{6}$/.test(v)) return srgb(v); if (/^#[0-9a-f]{3}$/.test(v)) return srgb('#' + [...v.slice(1)].map((c) => c + c).join('')); return NAMED[v] ? srgb(NAMED[v]) : null; };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, u) => { const tot = list.reduce((s, x) => s + x[1], 0); let a = u * tot; for (const [c, w] of list) { if ((a -= w) <= 0) return c; } return list[0][0]; };
@@ -259,7 +276,7 @@ function buildingSpec(p) {
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
   const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
-  const roofCol = parseColour(ROOF_NAMED[(t['roof:colour'] || '').toLowerCase()] || t['roof:colour']) || pick(ROOFS, u('r'));
+  const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(ROOFS, u('r'));
   const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(FLAT_ROOF, u('f'));
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
