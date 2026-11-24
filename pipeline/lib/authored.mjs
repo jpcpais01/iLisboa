@@ -69,6 +69,7 @@ export const OVERRIDES = {
 // Churches built by parishChurch(): known tower counts, façade ends (+1 = the OBB's +u end) and caps.
 // Everything not listed is inferred from the footprint (size → towers, open side → façade).
 export const CHURCHES = {
+  w96359439: { towers: 2, force: true, H: 24 },   // Basílica da Estrela (cruciform plan; authored dome)
   w96758905: { towers: 2, cap: 'cupola' },          // São Miguel (Alfama): twin towers
   w142915549: { towers: 1, cap: 'cupola' },         // Santo Estêvão
   w96758903: { towers: 0 },                         // Santa Luzia, by the miradouro
@@ -88,7 +89,7 @@ export const AREAS = [
 ];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536']);   // + São Bento frontispiece (authored)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252']);   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
@@ -1222,8 +1223,8 @@ export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9 }) {
 }
 
 // Shallow ribbed metal dome on a round drum (Coliseu dos Recreios), with a small glazed lantern.
-export function metalDome(S, { cx, cy, r, z0, rise, lin, srgb, seg = 28 }) {
-  const a = lin(srgb('#73787d')), b = lin(srgb('#5f6469')), ring = lin(srgb('#d9d2c2')), glass = lin(srgb('#3a4148'));
+export function metalDome(S, { cx, cy, r, z0, rise, lin, srgb, seg = 28, cols = ['#73787d', '#5f6469', '#d9d2c2', '#3a4148'] }) {
+  const [a, b, ring, glass] = cols.map((c) => lin(srgb(c)));
   const PL = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], I0 = [0, 0, 0, 0];
   const R = (r * r + rise * rise) / (2 * rise), zc = z0 + rise - R;                // sphere through the rim and the crown
   const rings = 5, phi0 = Math.asin(Math.min(1, r / R));
@@ -1237,4 +1238,45 @@ export function metalDome(S, { cx, cy, r, z0, rise, lin, srgb, seg = 28 }) {
   limb(S, [cx, z0 - 0.6, -cy], [cx, z0 + 0.25, -cy], r + 0.6, r + 0.6, seg, ring, PL, true);   // cornice ring under the rim
   limb(S, [cx, z0 + rise - 0.3, -cy], [cx, z0 + rise + 2.2, -cy], 2.6, 2.6, 8, glass, PL, false);
   limb(S, [cx, z0 + rise + 2.2, -cy], [cx, z0 + rise + 3.4, -cy], 2.9, 0.3, 8, a, PL, true);
+}
+
+// Basílica da Estrela: twin-towered baroque front (parishChurch) crowned by a tall drum and dome over the crossing.
+export function estrelaBasilica(S, o) {
+  const { cx, cy, ux, uy, hl, hw, ground, lin, srgb } = o;
+  parishChurch(S, { ...o, towers: 2, cap: 'cupola', wall: '#f2efe8', roofHex: '#9fa3a6' });
+  const H = o.H, uc = hl * 0.22, x = cx + ux * uc, y = cy + uy * uc, r = Math.min(hw * 0.62, 9.5);
+  const white = lin(srgb('#f1eee6')), stone = lin(srgb('#d9d4c8')), dark = lin(srgb('#34373b'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.4, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1];
+  const P = (z) => [x, ground + z, -y];
+  limb(S, P(H - 1), P(H + 2), r + 1.2, r + 1.2, 16, stone, ST, true);              // square-ish base ring
+  limb(S, P(H + 2), P(H + 12), r, r, 16, white, PL, false);                          // drum
+  for (let k = 0; k < 8; k++) {                                                      // drum windows
+    const a = (k / 8) * 2 * Math.PI, wx = x + Math.cos(a) * (r + 0.05), wy = y + Math.sin(a) * (r + 0.05);
+    box(S, wx, wy, -Math.sin(a), Math.cos(a), 0.8, 0.06, ground + H + 4.5, ground + H + 9.5, dark, [0, 0, 0, 0], ST);
+  }
+  limb(S, P(H + 12), P(H + 13), r + 0.6, r + 0.6, 16, stone, ST, true);              // cornice
+  metalDome(S, { cx: x, cy: y, r: r + 0.2, z0: ground + H + 13, rise: r * 0.95, lin, srgb, seg: 20, cols: ['#e3e1dc', '#d2d0ca', '#efece5', '#3a3f45'] });
+  limb(S, P(H + 13 + r * 0.95 + 3.4), P(H + 13 + r * 0.95 + 6.5), 0.5, 0.08, 6, stone, ST, true);   // lantern finial
+}
+
+// Marquês de Pombal: stepped plinth, sculpted pedestal, tall column, the Marquês with his lion on top.
+export function marquesColumn(S, { cx, cy, ground, lin, srgb }) {
+  const stone = lin(srgb('#ece7dc')), shade = lin(srgb('#d3cbba')), bronze = lin(srgb('#4c5747'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.31, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.31, 1], I0 = [0, 0, 0, 0], P = (z) => [cx, ground + z, -cy];
+  for (let k = 0; k < 4; k++) limb(S, P(-0.6 + k * 0.5 * (k > 0)), P(0.5 * (k + 1)), 12.5 - k * 1.4, 12.5 - k * 1.4, 16, k % 2 ? shade : stone, ST, true);
+  box(S, cx, cy, 1, 0, 5.2, 5.2, ground + 2, ground + 4, shade, I0, ST);
+  box(S, cx, cy, 1, 0, 4.2, 4.2, ground + 4, ground + 12.5, stone, I0, ST);
+  box(S, cx, cy, 1, 0, 4.6, 4.6, ground + 12.5, ground + 13.4, shade, I0, ST);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {                    // allegorical groups on each face
+    box(S, cx + dx * 5.4, cy + dy * 5.4, 1, 0, 1.6, 1.6, ground + 2, ground + 5.5, bronze, I0, PL);
+    box(S, cx + dx * 5.0, cy + dy * 5.0, 1, 0, 1.0, 1.0, ground + 5.5, ground + 7.2, bronze, I0, PL);
+  }
+  limb(S, P(13.4), P(14.6), 2.2, 2.0, 16, shade, ST, true);
+  limb(S, P(14.6), P(34.5), 1.75, 1.5, 16, stone, ST, false);
+  limb(S, P(34.5), P(35.6), 2.1, 2.1, 12, shade, ST, true);
+  limb(S, P(35.6), P(36.3), 1.6, 1.6, 12, stone, ST, true);
+  limb(S, P(36.3), P(40.2), 0.55, 0.42, 8, bronze, PL, true);                     // the Marquês, hand on the lion
+  limb(S, P(40.2), P(40.9), 0.32, 0.28, 6, bronze, PL, true);
+  box(S, cx + 0.9, cy - 0.3, 0.6, 0.8, 1.2, 0.45, ground + 36.3, ground + 37.6, bronze, I0, PL);
+  box(S, cx + 1.6, cy + 0.4, 0.6, 0.8, 0.4, 0.38, ground + 37.2, ground + 38.1, bronze, I0, PL);
 }

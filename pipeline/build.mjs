@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -396,17 +396,17 @@ function addBuilding_(p) {
   const inBuilding = (x, y, self) => polysB.some((q) => q !== self && !q.tags['building:part'] && Math.abs(q.c[0] - x) < 80 && Math.abs(q.c[1] - y) < 80 && pointInRing(x, y, q.outer));
   for (const p of todo) {
     const ob = churchy(p) && obb(p.outer), info = CHURCHES[p.id] || {};
-    if (!ob || info.skip || p.holes.length || Math.abs(p.area) / (4 * ob.hl * ob.hw) < 0.7 || ob.hw < 2.8 || ob.hl < 4.5 || ob.hl / ob.hw > 4.5) { addBuilding(p); continue; }
+    if (!ob || info.skip || p.holes.length || (Math.abs(p.area) / (4 * ob.hl * ob.hw) < 0.7 && !info.force) || ob.hw < 2.8 || ob.hl < 4.5 || ob.hl / ob.hw > 4.5) { addBuilding(p); continue; }
     let { ux, uy } = ob;
     const blocked = (s) => [-0.7, -0.35, 0, 0.35, 0.7].filter((f) => inBuilding(ob.cx + ux * s * (ob.hl + 3) - uy * f * ob.hw, ob.cy + uy * s * (ob.hl + 3) + ux * f * ob.hw, p)).length;
     const bm = blocked(-1), bp = blocked(1);
     if (info.front ? info.front > 0 : bp < bm || (bp === bm && ux * 0.8 + uy * 0.6 < 0)) { ux = -ux; uy = -uy; }   // façade at u = -hl; ties face west/south
     let gmin = Infinity; for (const [x, y] of p.outer) gmin = Math.min(gmin, groundAt(x, y));
     const chapel = p.tags.building === 'chapel' || Math.abs(p.area) < 160, th = parseMeters(p.tags.height);
-    const H = th ? Math.min(20, Math.max(6, th * 0.8)) : chapel ? Math.min(10, Math.max(6, ob.hw * 1.3 + 3)) : Math.min(17, Math.max(8, ob.hw * 1.45 + 3));
+    const H = info.H ?? (th ? Math.min(20, Math.max(6, th * 0.8)) : chapel ? Math.min(10, Math.max(6, ob.hw * 1.3 + 3)) : Math.min(17, Math.max(8, ob.hw * 1.45 + 3)));
     const towers = info.towers ?? (chapel ? 0 : ob.hw >= 7.5 && ob.hl >= 14 ? 2 : ob.hw >= 4.2 ? 1 : 0);
     const u = (k) => hash(p.id + k);
-    parishChurch(tileB0(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, hw: ob.hw, ground: groundAt(ob.cx, ob.cy), gmin, H, towers, towerSide: u('ts') < 0.5 ? -1 : 1,
+    (p.id === 'w96359439' ? estrelaBasilica : parishChurch)(tileB0(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, hw: ob.hw, ground: groundAt(ob.cx, ob.cy), gmin, H, towers, towerSide: u('ts') < 0.5 ? -1 : 1,
       cap: info.cap || (u('cap') < 0.6 ? 'cupola' : 'spire'), wall: info.wall || (u('w') < 0.75 ? '#f1ede4' : '#efe4cc'), roofHex: info.roof, lin, srgb, seed: u('s') });
     stats.buildings++; stats.authored++; stats.churches = (stats.churches || 0) + 1;
   }
@@ -499,6 +499,10 @@ function addBuilding_(p) {
     const c = byId.get('w96390844'), [x, y] = proj.fwd(38.716633, -9.140276);
     const g = c.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / c.outer.length;
     metalDome(tileB(x, y), { cx: x, cy: y, r: 31, z0: g + 17, rise: 10, lin, srgb }); mark();
+  }
+  {   // Praça Marquês de Pombal: the column (its OSM outline is dropped)
+    const mp = els.find((e) => e.type === 'way' && e.id === 822816252);
+    if (mp) { const g = mp.geometry, [x, y] = proj.fwd(g.reduce((a, q) => a + q.lat, 0) / g.length, g.reduce((a, q) => a + q.lon, 0) / g.length); marquesColumn(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   }
   const camara = byId.get('w95417254');
   if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }
