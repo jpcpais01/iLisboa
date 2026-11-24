@@ -192,7 +192,7 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
 // ─── sun / time of day ──────────────────────────────────────────────────
 const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
 const sunDir = new THREE.Vector3();
-const warm = new THREE.Color(0xffb36b), noon = new THREE.Color(0xfff4e4);
+const warm = new THREE.Color(0xffb36b), noon = new THREE.Color(0xfff4e4), moonSky = new THREE.Color(0x5a6d9c), moonGround = new THREE.Color(0x24222c);
 function setTime(h) {
   sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir);
   const elev = Math.asin(sunDir.y);
@@ -200,12 +200,16 @@ function setTime(h) {
   const golden = 1 - THREE.MathUtils.smoothstep(elev, 0.05, 0.5);
   sun.color.copy(noon).lerp(warm, golden);
   sun.intensity = 3.1 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);
-  hemi.intensity = 0.3 + 0.35 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6);
-  scene.environmentIntensity = 0.22 + 0.22 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5);
+  const night = cityUniforms.uNight.value;
+  // night: cool moonlit sky light, no warm ground bounce; the warmth comes from the windows
+  hemi.color.set(0xdfeaff).lerp(moonSky, night); hemi.groundColor.set(0xb59a7c).lerp(moonGround, night);
+  hemi.intensity = (0.3 + 0.35 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6)) * (1 - 0.5 * night);
+  scene.environmentIntensity = (0.22 + 0.22 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5)) * (1 - 0.85 * night);
   renderer.toneMappingExposure = 0.88 + 0.22 * golden;
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
-  document.body.style.background = `radial-gradient(120% 90% at 50% 0%, ${new THREE.Color(0xf7f1e6).lerp(new THREE.Color(0xf6c99a), golden * 0.8).getStyle()} 0%, ${new THREE.Color(0xe9dfcf).lerp(new THREE.Color(0xc9a58c), golden * 0.7).getStyle()} 60%, ${new THREE.Color(0xd9cbb6).lerp(new THREE.Color(0x8f7d8c), golden * 0.6).getStyle()} 100%)`;
+  const sky = (day, dusk, nite, g) => new THREE.Color(day).lerp(new THREE.Color(dusk), golden * g).lerp(new THREE.Color(nite), night).getStyle();
+  document.body.style.background = `radial-gradient(120% 90% at 50% 0%, ${sky(0xf7f1e6, 0xf6c99a, 0x2a3350, 0.8)} 0%, ${sky(0xe9dfcf, 0xc9a58c, 0x1b2238, 0.7)} 60%, ${sky(0xd9cbb6, 0x8f7d8c, 0x10141f, 0.6)} 100%)`;
 }
 timeEl.addEventListener('input', () => setTime(+timeEl.value));
 setTime(+timeEl.value);

@@ -148,7 +148,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     // far away: blend everything to the façade's average tone (no shimmer)
     vec3 avg = mix(wallC, vec3(.16, .18, .2), .22);
     col = mix(col, avg, far);
-    glassAmt *= 1. - far; glow = mix(glow, .3, far);
+    glassAmt *= 1. - far; glow = mix(glow, .035, far);   // lit windows averaged over the wall: a faint warm wash, not a lit wall
   }
 } else if (kind < 3.5 || kind > 4.5 && kind < 5.5) {      // roof tiles (3) and mansard (5)
   vec2 t = vSurf;
