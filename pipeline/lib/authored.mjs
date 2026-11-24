@@ -40,6 +40,9 @@ export const OVERRIDES = {
   w96315909: { wall: '#efe7d6' },
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
   w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
+  // Mercado da Ribeira: the two market halls are walled (OSM maps only their roofs), cream walls with tall openings
+  w961075426: { h: 12.5, minH: 0, wall: '#ecdfc2', variant: 4, roofCol: '#c8c4bc', floorH: 6, groundH: 6.5, bayW: 4.2, balconyFloors: [], stone: false },
+  w961075427: { h: 12.5, minH: 0, wall: '#ecdfc2', variant: 4, roofCol: '#c8c4bc', floorH: 6, groundH: 6.5, bayW: 4.2, balconyFloors: [], stone: false },
   // Hospital de São José (old Jesuit college of Santo Antão-o-Novo): whitewashed wings under tiled hip roofs
   ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`r8383242_${i}`, { shape: 'hipped', wall: '#efe9dc', roofCol: '#a9614b', variant: 4, stone: false }])),   // Coliseu dos Recreios: drum under an authored metal dome
   // Palácio de São Bento: the untagged parts of the palace are white like the rest
