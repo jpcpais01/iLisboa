@@ -40,6 +40,7 @@ export const OVERRIDES = {
   w96315909: { wall: '#efe7d6' },
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
   w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
+  w481570880: { shape: 'flat', variant: 3, wall: '#6f6b65', flatCol: [139, 160, 104], h: 10 },   // Lisbon cruise terminal (2017): dark concrete block under a planted roof terrace
   // Mercado da Ribeira: the two market halls are walled (OSM maps only their roofs), cream walls with tall openings
   w961075426: { h: 12.5, minH: 0, wall: '#ecdfc2', variant: 4, roofCol: '#c8c4bc', floorH: 6, groundH: 6.5, bayW: 4.2, balconyFloors: [], stone: false },
   w961075427: { h: 12.5, minH: 0, wall: '#ecdfc2', variant: 4, roofCol: '#c8c4bc', floorH: 6, groundH: 6.5, bayW: 4.2, balconyFloors: [], stone: false },
