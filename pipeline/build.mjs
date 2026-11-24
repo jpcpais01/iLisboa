@@ -705,7 +705,31 @@ function addBuilding_(p) {
       catenaryMast(tileB0(mx, my), { x: mx, y: my, z: groundAt(mx, my), nx, ny, lin, srgb }); nM++;
     }
   }
-  stats.trains = nT; stats.masts = nM; log(`trains ${nT} (${nC} cars), catenary masts ${nM}`);
+  // tram overhead: in wide streets slim poles with a bracket arm over the track; in the narrow lanes the wire hangs
+  // from rosettes on the façades, so where the pole spot falls inside a building there is no pole
+  const hitB = (x, y) => polysB.some((q) => !q.tags['building:part'] && Math.abs(q.c[0] - x) < 60 && Math.abs(q.c[1] - y) < 60 && pointInRing(x, y, q.outer));
+  const tsegs = []; for (const r of rails) if (r.tags.railway === 'tram') for (let i = 1; i < r.pts.length; i++) tsegs.push([r.pts[i - 1], r.pts[i]]);
+  const nearTram = (x, y) => { let d = 1e9; for (const [a, b] of tsegs) { if (Math.min(a[0], b[0]) - 5 > x || Math.max(a[0], b[0]) + 5 < x || Math.min(a[1], b[1]) - 5 > y || Math.max(a[1], b[1]) + 5 < y) continue;
+    const vx = b[0] - a[0], vy = b[1] - a[1], t = Math.max(0, Math.min(1, ((x - a[0]) * vx + (y - a[1]) * vy) / (vx * vx + vy * vy || 1))); d = Math.min(d, Math.hypot(x - a[0] - vx * t, y - a[1] - vy * t)); } return d; };
+  let nP = 0;
+  for (const r of rails) {
+    if (r.tags.railway !== 'tram' || r.tags.service) continue;
+    const cum = [0]; for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1]));
+    const side = hash(r.id + 'p') < 0.5 ? -1 : 1;
+    for (let s = 10 + hash(r.id) * 20; s < cum.at(-1) - 5; s += 34) {
+      const [x, y] = at(r.pts, cum, s), [x2, y2] = at(r.pts, cum, Math.min(cum.at(-1), s + 2)), l = Math.hypot(x2 - x, y2 - y) || 1, nx = -(y2 - y) / l * side, ny = (x2 - x) / l * side;
+      let ok = false, mx = 0, my = 0, sx = nx, sy = ny;
+      for (const f of [1, -1]) {           // the far side of a double track is the other track: try both sides
+        sx = nx * f; sy = ny * f; mx = x - sx * 3.4; my = y - sy * 3.4;
+        if (nearTram(mx, my) < 2.4 || nearTram(x - sx * 1.8, y - sy * 1.8) < 1.2) continue;
+        ok = true; break;
+      }
+      if (!ok || mx < minX + 5 || mx > maxX - 5 || my < minY + 5 || my > maxY - 5 || isWaterAt(mx, my) || hitB(mx, my) || hitB(x - sx * 1.6, y - sy * 1.6)) continue;
+      catenaryMast(tileB0(mx, my), { x: mx, y: my, z: groundAt(mx, my), nx: sx, ny: sy, lin, srgb, H: 6.6, arm: 3.4 }); nP++;
+    }
+  }
+  stats.tramPoles = nP;
+  stats.trains = nT; stats.masts = nM; log(`trains ${nT} (${nC} cars), catenary masts ${nM}, tram poles ${nP}`);
 }
 
 // ─── cacilheiros: one moored at each terminal pier, one under way on each crossing ──
