@@ -23,7 +23,7 @@ Q="[out:json][timeout:300];
 out body geom;"
 for M in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
   echo "trying $M"
-  if curl -sf -m 400 --data-urlencode "data=$Q" "$M" -o /tmp/osm.json && head -c 200 /tmp/osm.json | grep -q '"elements"'; then
+  if curl -sf -m 180 --data-urlencode "data=$Q" "$M" -o /tmp/osm.json && head -c 200 /tmp/osm.json | grep -q '"elements"'; then
     gzip -9c /tmp/osm.json > "$OUT"; ls -la "$OUT"; exit 0
   fi
   sleep 5

@@ -12,11 +12,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch OSM for each area
+      - name: Fetch OSM for each area (Overpass, else Geofabrik extract)
         run: |
+          set -e
           while read -r name s w n e; do
             [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
-            pipeline/fetch_osm.sh $s $w $n $e data/raw/$name.osm.json.gz
+            if ! timeout 900 pipeline/fetch_osm.sh $s $w $n $e data/raw/$name.osm.json.gz; then
+              echo "Overpass failed, using Geofabrik"
+              [ -f /tmp/pt.osm.pbf ] || curl -sfL -o /tmp/pt.osm.pbf https://download.geofabrik.de/europe/portugal-latest.osm.pbf
+              command -v osmium || (sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool)
+              pip install -q osmium
+              osmium extract -b $w,$s,$e,$n --strategy complete_ways --set-bounds -O -o /tmp/$name.osm.pbf /tmp/pt.osm.pbf
+              python pipeline/pbf_to_overpass.py /tmp/$name.osm.pbf data/raw/$name.osm.json.gz
+            fi
           done < pipeline/areas.txt
       - name: Commit
         run: |
