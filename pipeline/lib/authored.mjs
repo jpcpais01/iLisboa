@@ -87,7 +87,7 @@ export const AREAS = [
 ];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176']);   // + São Bento frontispiece (authored)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536']);   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 

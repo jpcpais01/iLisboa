@@ -697,6 +697,17 @@ for (const r of rails) { // two rails per track
   const cas = extractPolygons(els, proj, (t) => !!(t.historic || t.tourism || t.castle_type));
   for (const [id, hex] of [['w1382432568', '#cbbb98'], ['w244745550', '#bfa985']]) { const p = cas.find((q) => q.id === id); if (p) gm.fillRings([p.outer, ...p.holes], paint(srgb(hex))); }
 }
+// Ribeira das Naus: the old Doca Seca is a sunken stone dry dock (OSM maps it as a ruined building): paint it as a basin
+{
+  const dock = polysB.find((p) => p.id === 'w678721536');
+  if (dock) {   // the way traces the dock walls as a thin C; fill its convex hull as the basin floor, walls darker, coping pale
+    const pts = [...dock.outer].sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], hi = []; for (const q of pts) { while (lo.length > 1 && cr(lo.at(-2), lo.at(-1), q) <= 0) lo.pop(); lo.push(q); }
+    for (const q of pts.reverse()) { while (hi.length > 1 && cr(hi.at(-2), hi.at(-1), q) <= 0) hi.pop(); hi.push(q); }
+    const hull = [...lo.slice(0, -1), ...hi.slice(0, -1)];
+    gm.fillRings([hull], paint(srgb('#a49d8e'))); gm.fillRings([dock.outer], paint(srgb('#7f796d'))); gm.strokeLine([...dock.outer, dock.outer[0]], 0.9, paint(srgb('#ddd5c3')));
+  }
+}
 // Praça do Comércio: pale lioz paving crossed by the darker diagonal bands (mapped as footways)
 {
   const sq = polysArea.find((p) => p.id === 'w677181958');
