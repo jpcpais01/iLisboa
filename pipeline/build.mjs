@@ -215,6 +215,9 @@ let waterSource = 'osm-coastline';
     const v = g < 3 ? 2 : 3;
     wr.fillRings([p.outer, ...p.holes], (i) => { if (water[i] !== 2) water[i] = v; });
   }
+  // a building stands on land: where the coastline or a dock polygon runs under one (Santos quays), the footprint is ground
+  for (const p of polysB) if (!p.tags['building:part'] && p.tags.amenity !== 'ferry_terminal' && !p.tags.man_made && p.tags.building !== 'houseboat')
+    wr.fillRings([p.outer], (i) => { if (water[i] === 2 || water[i] === 3) water[i] = 0; });
 }
 const isWaterAt = (x, y) => {
   const c = Math.floor(wr.px(x)), r = Math.floor(wr.py(y));
