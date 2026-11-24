@@ -553,7 +553,8 @@ function addBuilding_(p) {
 
 // ─── miradouros: balustrades where the terrace drops away; Santa Luzia's pergola ──
 {
-  const ids = ['w169007610', 'w565894105', 'r19112367_0', 'w526129020', 'r9060636_0', 'w573667052', 'w1450837674'];
+  const ids = ['w169007610', 'w565894105', 'r19112367_0', 'w526129020', 'r9060636_0', 'w573667052', 'w1450837674',
+    'w40705509', 'r8065262_0', 'w39221574'];   // + São Pedro de Alcântara, Santa Catarina (Adamastor), Torel
   const views = extractPolygons(els, proj, (t) => t.tourism === 'viewpoint' || t.leisure || t.highway || t.place);
   let n = 0;
   for (const id of ids) {
