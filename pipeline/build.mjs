@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -459,6 +459,20 @@ function addBuilding_(p) {
     const r = [a[0] + (b[0] - a[0]) * 3.5 / d, a[1] + (b[1] - a[1]) * 3.5 / d];
     log(`Cais das Colunas: ground ${groundAt(...b).toFixed(1)} … ${groundAt(...a).toFixed(1)}`);
     caisColunas(tileB(...r), { a: r, b, ground: Math.max(1.6, groundAt(...b)), lin, srgb }); mark();
+  }
+  const rest = byId.get('w663347630');
+  if (rest) { const ob = obb(rest.outer); restauradoresObelisk(tileB(...rest.c), { cx: rest.c[0], cy: rest.c[1], ux: ob.ux, uy: ob.uy, ground: groundAt(...rest.c), lin, srgb }); mark(); }
+  // façade pieces on the edge that faces the street: Rossio station (most east-facing long edge), Câmara (west)
+  const facing = (p, nx, ny, minL) => { let best = null, bs = -Infinity; const sg = ringArea(p.outer) > 0 ? 1 : -1;
+    p.outer.forEach((a, i) => { const b = p.outer[(i + 1) % p.outer.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < minL) return;
+      const ox = sg * (b[1] - a[1]) / L, oy = -sg * (b[0] - a[0]) / L, sc = ox * nx + oy * ny; if (sc > bs) { bs = sc; best = sg > 0 ? [a, b] : [a, b]; } }); return best; };
+  const rossioSt = byId.get('w96530649');
+  if (rossioSt) { const [a, b] = facing(rossioSt, 0.85, 0.5, 30); const sg = ringArea(rossioSt.outer) > 0; rossioStationFront(tileB(...rossioSt.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), H: 21, lin, srgb }); mark(); }
+  const camara = byId.get('w95417254');
+  if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }
+  {
+    const pel = els.find((e) => e.type === 'node' && e.id === 1120633222);
+    if (pel) { const [x, y] = proj.fwd(pel.lat, pel.lon); pelourinho(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   }
   const jose = byId.get('w663318739');
   if (jose) {

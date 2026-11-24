@@ -50,6 +50,12 @@ export const OVERRIDES = {
   w9254766: { variant: 4, wall: '#eee6d3', roofCol: '#a7654f', stone: false, h: 15, roofH: 3.5, floorH: 4.8, groundH: 5.6, bayW: 3.6, balconyFloors: [1], balconyChance: 0.25, parapet: 0 },
   // Conceição Velha: Manueline church front in white lioz
   w96319788: { wall: '#e6e0d0' },
+  // Estação do Rossio (1890): neo-Manueline stone front, its horseshoe portals and clock turret modelled separately
+  w96530649: { variant: 4, wall: '#ddd3bd', roofCol: '#8f9194', stone: false, h: 21, roofH: 3, floorH: 4.4, groundH: 6, bayW: 3.2, balconyFloors: [], parapet: 0.8 },
+  // Paços do Concelho: neoclassical, pale, with its pedimented centre (portico modelled separately)
+  w95417254: { variant: 4, wall: '#efe9dc', roofCol: '#a5644e', stone: false, h: 21, roofH: 3.5, floorH: 5, groundH: 6, bayW: 3.8, balconyFloors: [1], balconyChance: 0.6, parapet: 0 },
+  // Palácio Foz (Restauradores): rose-pink palace
+  w96188746: { variant: 4, wall: '#e9bfae', roofCol: '#9e5f4c', stone: false, h: 20, roofH: 3.5, floorH: 4.4, groundH: 5, bayW: 3.6, balconyFloors: [1], balconyChance: 0.8, parapet: 0 },
   // Teatro Nacional D. Maria II: neoclassical, pale stone, low roof; portico modelled separately
   w77473968: { variant: 4, wall: '#ece5d4', stone: false, shape: 'hipped', pitch: 20, h: 21, roofH: 3.4, floorH: 5.2, groundH: 6, bayW: 4.2, balconyFloors: [], parapet: 0 },
 };
@@ -69,7 +75,7 @@ export const CHURCHES = {
 };
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981']);   // + Carmo church, Santa Justa lift (tower and its base)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630']);   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
 // Pombaline façade palette, read off the reference by eye: mostly pale, a few warm ochres and pinks.
@@ -554,17 +560,17 @@ export function rossioFountain(S, { cx, cy, r, ground, lin, srgb }) {
 }
 
 // Neoclassical hexastyle portico with pediment (Teatro D. Maria II), on a façade edge a→b (outward = right).
-export function portico(S, { a, b, ground, depth = 6, colH = 11, lin, srgb, statue = true }) {
+export function portico(S, { a, b, ground, depth = 6, colH = 11, lin, srgb, statue = true, cols = 6, span = null }) {
   const stone = lin(srgb('#efe8d8')), shade = lin(srgb('#d8cfbc'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.77, 0.9], I0 = [0, 0, 0, 0];
   const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, ox = uy, oy = -ux;
-  const W = Math.min(L * 0.5, 22), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  const W = span ?? Math.min(L * 0.5, 22), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
   const at = (u, v) => [mx + ux * u + ox * v, my + uy * u + oy * v];
   // stylobate steps
   for (let k = 0; k < 3; k++) { const [x, y] = at(0, depth / 2 + 0.6 - k * 0.5); box(S, x, y, ux, uy, W / 2 + 1.2 - k * 0.4, depth / 2 + 0.6 - k * 0.5, ground - 0.5, ground + 0.4 * (k + 1), shade, I0, ST); }
   const z0 = ground + 1.2;
-  for (let k = 0; k < 6; k++) {
-    const u = -W / 2 + 1 + (k * (W - 2)) / 5, [x, y] = at(u, depth - 0.9);
+  for (let k = 0; k < cols; k++) {
+    const u = -W / 2 + 1 + (k * (W - 2)) / (cols - 1), [x, y] = at(u, depth - 0.9);
     box(S, x, y, ux, uy, 0.75, 0.75, z0, z0 + 0.6, stone, I0, ST);
     limb(S, [x, z0 + 0.6, -y], [x, z0 + colH, -y], 0.6, 0.52, 12, stone, ST);
     box(S, x, y, ux, uy, 0.75, 0.75, z0 + colH, z0 + colH + 0.5, stone, I0, ST);
@@ -1052,4 +1058,77 @@ export function miradouro(S, { ring, groundAt, lin, srgb, pergola = false, seed 
       for (let j = 0; j < 2; j++) { const tt = t + L2 * (0.25 + 0.5 * j), [bx, by] = P(tt, 0.4 + ((tt * 3.7) % 3)); box(S, bx, by, ux, uy, 0.7, 0.55, g + 3.4, g + 3.65, bloom, I0, PL); }
     }
   }
+}
+
+// Square-section frustum along local axes (obelisks, pedestals): half-sizes h0 → h1 from z0 to z1.
+function frustum(S, cx, cy, ux, uy, h0, h1, z0, z1, col, st, top = true) {
+  const I0 = [0, 0, 0, 0], c = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const P = (k, h, z) => [cx + (ux * c[k][0] - uy * c[k][1]) * h, z, -(cy + (uy * c[k][0] + ux * c[k][1]) * h)];
+  for (let k = 0; k < 4; k++) {
+    const k2 = (k + 1) % 4, mx = (c[k][0] + c[k2][0]) / 2, my = (c[k][1] + c[k2][1]) / 2;
+    const n = [ux * mx - uy * my, (h0 - h1) / (z1 - z0), -(uy * mx + ux * my)], l = Math.hypot(...n), nn = n.map((v) => v / l);
+    tri(S, P(k, h0, z0), P(k2, h0, z0), P(k2, h1, z1), nn, col, [0, 0], [1, 0], [1, 1], I0, st);
+    tri(S, P(k, h0, z0), P(k2, h1, z1), P(k, h1, z1), nn, col, [0, 0], [1, 1], [0, 1], I0, st);
+  }
+  if (top && h1 > 0.01) { tri(S, P(0, h1, z1), P(1, h1, z1), P(2, h1, z1), [0, 1, 0], col, [0, 0], [1, 0], [1, 1], I0, st); tri(S, P(0, h1, z1), P(2, h1, z1), P(3, h1, z1), [0, 1, 0], col, [0, 0], [1, 1], [0, 1], I0, st); }
+}
+
+// Monumento aos Restauradores (1886): 30 m obelisk on a stepped pedestal, bronze Victory and
+// Freedom groups on its long sides.
+export function restauradoresObelisk(S, { cx, cy, ux, uy, ground, lin, srgb }) {
+  const stone = lin(srgb('#ece6d7')), shade = lin(srgb('#d5ccb9')), bronze = lin(srgb('#4e5a4b'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.61, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.61, 1], g = ground;
+  for (let k = 0; k < 3; k++) frustum(S, cx, cy, ux, uy, 6.2 - k * 0.6, 6.2 - k * 0.6, g - 1, g + 0.35 * (k + 1), shade, ST);
+  frustum(S, cx, cy, ux, uy, 3.3, 3.1, g + 1.05, g + 4.6, stone, ST);
+  frustum(S, cx, cy, ux, uy, 3.6, 3.6, g + 4.6, g + 5.1, shade, ST);
+  frustum(S, cx, cy, ux, uy, 2.4, 2.2, g + 5.1, g + 7.0, stone, ST);
+  frustum(S, cx, cy, ux, uy, 1.45, 0.8, g + 7.0, g + 28.6, stone, ST);
+  frustum(S, cx, cy, ux, uy, 0.8, 0.02, g + 28.6, g + 30.2, shade, ST, false);
+  for (const s of [-1, 1]) {                         // the two bronze groups, seated on plinths before the pedestal
+    const x = cx + ux * s * 4.3, y = cy + uy * s * 4.3;
+    frustum(S, x, y, ux, uy, 0.9, 0.9, g + 1.05, g + 2.6, stone, ST);
+    limb(S, [x, g + 2.6, -y], [x, g + 4.0, -y], 0.7, 0.5, 8, bronze, PL);
+    limb(S, [x, g + 4.0, -y], [x, g + 4.6, -y], 0.28, 0.24, 6, bronze, PL);
+    limb(S, [x, g + 3.6, -y], [x + uy * 0.9, g + 5.3, -(y - ux * 0.9)], 0.12, 0.1, 4, bronze, PL);
+  }
+}
+
+// Estação do Rossio: the neo-Manueline front on edge a→b (outward = right side). Two great horseshoe
+// portals, a central clock turret over the cornice, corner turrets and a row of pinnacles.
+export function rossioStationFront(S, { a, b, ground, H, lin, srgb }) {
+  const stone = lin(srgb('#ddd3bd')), carve = lin(srgb('#cbbfa5')), dark = lin(srgb('#2f2f30')), white = lin(srgb('#f2efe6')), lead = lin(srgb('#7d8084'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.83, 0.9], I0 = [0, 0, 0, 0];
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, ox = uy, oy = -ux;
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, at = (u, v) => [mx + ux * u + ox * v, my + uy * u + oy * v];
+  const V = (u, v, z) => { const [x, y] = at(u, v); return [x, ground + z, -y]; };
+  const bx = (u, v, hu, hv, z0, z1, col) => { const [x, y] = at(u, v); box(S, x, y, ux, uy, hu, hv, ground + z0, ground + z1, col, I0, ST); };
+  for (const s of [-1, 1]) {                         // horseshoe portals
+    const u = s * 4.2;
+    bx(u, 0.25, 3.6, 0.25, 0, 11.5, carve);
+    limb(S, V(u, 0.5, 7.4), V(u, 0.62, 7.4), 3.3, 3.3, 20, stone, ST);
+    limb(S, V(u, 0.62, 7.4), V(u, 0.72, 7.4), 2.7, 2.7, 20, dark, ST);
+    bx(u, 0.67, 2.25, 0.05, 0, 7.4, dark);
+  }
+  bx(0, 0.4, 0.6, 0.4, 0, H + 1.5, carve);           // central pier rising into the turret
+  bx(0, 0.6, 2.6, 1.2, H - 1, H + 6, stone);         // clock turret
+  limb(S, V(0, 1.8, H + 3), V(0, 1.86, H + 3), 1.35, 1.35, 16, dark, ST);
+  limb(S, V(0, 1.86, H + 3), V(0, 1.92, H + 3), 1.15, 1.15, 16, white, ST);
+  { const [x, y] = at(0, 0.6); limb(S, [x, ground + H + 6, -y], [x, ground + H + 10.5, -y], 2.4, 0.1, 4, lead, ST); }
+  for (const s of [-1, 1]) {                         // corner turrets with little spires
+    bx(s * (L / 2 - 1.4), 0.4, 1.4, 1.4, 0, H + 3.5, stone);
+    const [x, y] = at(s * (L / 2 - 1.4), 0.4); limb(S, [x, ground + H + 3.5, -y], [x, ground + H + 6.5, -y], 1.3, 0.08, 4, lead, ST);
+  }
+  for (let u = -L / 2 + 4.5; u < L / 2 - 4; u += 3.2) if (Math.abs(u) > 3.4) { const [x, y] = at(u, 0.3); limb(S, [x, ground + H - 0.2, -y], [x, ground + H + 2.2, -y], 0.35, 0.05, 4, carve, ST); }
+  bx(0, 0.15, L / 2 - 0.2, 0.15, H - 1.2, H - 0.4, carve);   // cornice band
+}
+
+// Pelourinho de Lisboa (Praça do Município): twisted marble column on octagonal steps, iron crown.
+export function pelourinho(S, { cx, cy, ground, lin, srgb }) {
+  const marble = lin(srgb('#eeeae0')), shade = lin(srgb('#d3cbb9')), iron = lin(srgb('#3b3c3e'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.19, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.19, 1], P = (z) => [cx, ground + z, -cy];
+  for (let k = 0; k < 4; k++) limb(S, P(-0.5 + k * 0.32 * (k > 0)), P(0.32 * (k + 1)), 2.6 - k * 0.5, 2.6 - k * 0.5, 8, shade, ST);
+  limb(S, P(1.28), P(1.9), 0.75, 0.7, 8, marble, ST);
+  for (let k = 0; k < 6; k++) limb(S, P(1.9 + k * 0.85), P(1.9 + (k + 1) * 0.85), 0.42 - k * 0.012, 0.36 - k * 0.012, 6, k % 2 ? shade : marble, ST);
+  limb(S, P(7.0), P(7.5), 0.55, 0.7, 8, marble, ST);
+  limb(S, P(7.5), P(8.6), 0.55, 0.06, 8, iron, PL);
 }
