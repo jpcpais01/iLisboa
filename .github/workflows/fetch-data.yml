@@ -1,10 +1,10 @@
 name: fetch-data
-# Pulls raw open data (OSM via Overpass) into data/raw and commits it.
+# Pulls raw OSM data (Geofabrik daily extract) into data/raw and commits it.
 # Runs on demand, or when the fetch script changes.
 on:
   workflow_dispatch:
   push:
-    paths: [pipeline/fetch_osm.sh, pipeline/areas.txt, .github/workflows/fetch-data.yml]
+    paths: [pipeline/pbf_to_overpass.py, pipeline/areas.txt, .github/workflows/fetch-data.yml]
 permissions:
   contents: write
 jobs:
@@ -12,19 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch OSM for each area (Overpass, else Geofabrik extract)
+      - name: Fetch OSM (Geofabrik Portugal extract → bbox → Overpass-style JSON)
         run: |
           set -e
+          mkdir -p data/raw
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool > /dev/null
+          pip install -q osmium
+          curl -sfL -o /tmp/pt.osm.pbf https://download.geofabrik.de/europe/portugal-latest.osm.pbf
           while read -r name s w n e; do
             [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
-            if ! timeout 900 pipeline/fetch_osm.sh $s $w $n $e data/raw/$name.osm.json.gz; then
-              echo "Overpass failed, using Geofabrik"
-              [ -f /tmp/pt.osm.pbf ] || curl -sfL -o /tmp/pt.osm.pbf https://download.geofabrik.de/europe/portugal-latest.osm.pbf
-              command -v osmium || (sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool)
-              pip install -q osmium
-              osmium extract -b $w,$s,$e,$n --strategy complete_ways --set-bounds -O -o /tmp/$name.osm.pbf /tmp/pt.osm.pbf
-              python pipeline/pbf_to_overpass.py /tmp/$name.osm.pbf data/raw/$name.osm.json.gz
-            fi
+            osmium extract -b $w,$s,$e,$n --strategy complete_ways -O -o /tmp/$name.osm.pbf /tmp/pt.osm.pbf
+            python pipeline/pbf_to_overpass.py /tmp/$name.osm.pbf data/raw/$name.osm.json.gz
           done < pipeline/areas.txt
       - name: Commit
         run: |
