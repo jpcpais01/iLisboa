@@ -93,7 +93,7 @@ function adopt(gltf) {
       o.castShadow = o.receiveShadow = true;
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
-      map.anisotropy = Math.min(8, maxAniso);
+      map.anisotropy = Math.min(8, maxAniso); map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
       o.material = terrainMaterial(map, waterMask, manifest.bounds);
       o.receiveShadow = true;
     } else if (o.name.startsWith('base')) {
@@ -343,7 +343,7 @@ controls.addEventListener('end', () => {
   const v = [...camera.position.toArray(), ...controls.target.toArray()].map((n) => Math.round(n));
   history.replaceState(null, '', '#' + v.join(','));
 });
-window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
+window.__scene = scene; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');

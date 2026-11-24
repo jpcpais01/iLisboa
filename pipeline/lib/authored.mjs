@@ -51,6 +51,8 @@ export const OVERRIDES = {
   w96628628: { variant: 7, wall: '#e4ddcc', roofCol: '#a5604b', stone: false, shape: 'hipped', pitch: 24, h: 14.5, roofH: 3, floorH: 3.3, groundH: 4.4, bayW: 3.4, balconyFloors: [], parapet: 0 },
   // Santa Apolónia station: long pale neoclassical front (OSM paints it sky blue), tiled hip roof
   w9254766: { variant: 4, wall: '#eee6d3', roofCol: '#a7654f', stone: false, h: 15, roofH: 3.5, floorH: 4.8, groundH: 5.6, bayW: 3.6, balconyFloors: [1], balconyChance: 0.25, parapet: 0 },
+  // Cais do Sodré platform canopy: a tall shelter over the tracks (default 3.5 m would sit on the trains' roofs)
+  w636444743: { h: 6.8, minH: 6.1 },
   // Conceição Velha: Manueline church front in white lioz
   w96319788: { wall: '#e6e0d0' },
   // Estação do Rossio (1890): neo-Manueline stone front, its horseshoe portals and clock turret modelled separately
@@ -1012,6 +1014,54 @@ export function tramCar(S, { x0, y0, z0, x1, y1, z1, lin, srgb, funicular = fals
   cub(-h + 0.15, h - 0.15, -hw + 0.1, hw - 0.1, 2.75, 3.0, roofC);
   cub(-h * 0.5, h * 0.5, -hw * 0.55, hw * 0.55, 3.0, 3.2, cream);
   if (!funicular) limb(S, Q(-h * 0.2, 0, 3.2), Q(-h * 0.2 - 3.2, 0, 4.9), 0.05, 0.04, 4, skirt, PL, false);
+}
+
+// A railway carriage on broad gauge, laid along the chord (x0,y0,z0)→(x1,y1,z1): dark bogies and skirt,
+// a long body in the livery colour, a dark window band with a thin accent stripe below, a grey roof with
+// equipment boxes, and (on cab cars) a sloped nose. livery = [body, band, stripe, roof]; cab = +1 / -1 end.
+export function trainCar(S, { x0, y0, z0, x1, y1, z1, lin, srgb, livery, cab = 0, pantograph = false, seed = 0 }) {
+  const L = Math.hypot(x1 - x0, y1 - y0) || 1, dx = (x1 - x0) / L, dy = (y1 - y0) / L, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const [body, band, stripe, roofC] = livery.map((c) => lin(srgb(c))), dark = lin(srgb('#2b2c2e'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0], hw = 1.5, sl = (z1 - z0) / L;
+  const Q = (u, v, z) => [mx + dx * u - dy * v, (z0 + z1) / 2 + sl * u + z, -(my + dy * u + dx * v)];
+  const cub = (u0, u1, v0, v1, za, zb, col, zb1 = zb) => {     // zb1: top height at the u1 end (for the nose slope)
+    const c = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], top = (u) => (u === u1 ? zb1 : zb);
+    for (let i = 0; i < 4; i++) {
+      const [ua, va] = c[i], [ub, vb] = c[(i + 1) % 4], n = [(vb - va) * dx + (ua - ub) * -dy, 0, -((vb - va) * dy + (ua - ub) * dx)], l = Math.hypot(...n) || 1;
+      const nn = n.map((x) => x / l);
+      tri(S, Q(ua, va, za), Q(ub, vb, za), Q(ub, vb, top(ub)), nn, col, [0, 0], [1, 0], [1, 1], I0, PL);
+      tri(S, Q(ua, va, za), Q(ub, vb, top(ub)), Q(ua, va, top(ua)), nn, col, [0, 0], [1, 1], [0, 1], I0, PL);
+    }
+    const g = (zb1 - zb) / (u1 - u0 || 1) + sl, up = [-dx * g, 1, dy * g], ul = Math.hypot(...up), nu = up.map((x) => x / ul);
+    tri(S, Q(u0, v0, zb), Q(u1, v0, zb1), Q(u1, v1, zb1), nu, col, [0, 0], [1, 0], [1, 1], I0, PL);
+    tri(S, Q(u0, v0, zb), Q(u1, v1, zb1), Q(u0, v1, zb), nu, col, [0, 0], [1, 1], [0, 1], I0, PL);
+  };
+  const h = L / 2, nose = cab ? 2.6 : 0, a = cab < 0 ? -h + nose : -h, b = cab > 0 ? h - nose : h;
+  for (const u of [-h + 3, h - 3]) cub(u - 1.4, u + 1.4, -hw + 0.25, hw - 0.25, 0.15, 1.05, dark);          // bogies
+  cub(a, b, -hw, hw, 1.05, 2.05, body);
+  cub(a, b, -hw - 0.01, hw + 0.01, 1.3, 1.45, stripe);
+  cub(a, b, -hw - 0.02, hw + 0.02, 2.05, 2.95, band);
+  cub(a, b, -hw, hw, 2.95, 3.75, body);
+  cub(a + 0.3, b - 0.3, -hw + 0.25, hw - 0.25, 3.75, 4.05, roofC);
+  if (cab) {                                                                                   // sloped nose: body below, raked dark windscreen above
+    const [n0, n1] = cab > 0 ? [b, h] : [a, -h], s = Math.sign(n1 - n0);
+    const lo = s > 0 ? [n0, n1] : [n1, n0];
+    cub(lo[0], lo[1], -hw, hw, 1.05, 2.05, body);
+    if (s > 0) cub(n0, n1, -hw + 0.05, hw - 0.05, 2.05, 3.75, band, 2.25); else cub(n1, n0, -hw + 0.05, hw - 0.05, 2.05, 2.25, band, 3.75);
+  }
+  if (pantograph) {                                                                            // folded-down diamond frame on the roof
+    const u = -h * 0.35; cub(u - 1.2, u + 1.2, -0.7, 0.7, 4.05, 4.2, dark);
+    limb(S, Q(u - 1, 0, 4.2), Q(u + 0.6, 0, 4.85), 0.04, 0.04, 4, dark, PL, false);
+    limb(S, Q(u + 0.6, -0.8, 4.85), Q(u + 0.6, 0.8, 4.85), 0.04, 0.04, 4, dark, PL, false);
+  }
+}
+
+// Overhead-line mast beside an electrified track: a slim steel pole with a cantilever arm over the track.
+export function catenaryMast(S, { x, y, z, nx, ny, lin, srgb, H = 7.2, arm = 2.8 }) {
+  const steel = lin(srgb('#6f7378')), PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1];
+  limb(S, [x, z, -y], [x, z + H, -y], 0.11, 0.09, 4, steel, PL, false);
+  limb(S, [x, z + H - 0.6, -y], [x + nx * arm, z + H - 0.9, -(y + ny * arm)], 0.05, 0.05, 4, steel, PL, false);
+  limb(S, [x, z + H - 1.6, -y], [x + nx * arm, z + H - 0.9, -(y + ny * arm)], 0.04, 0.04, 4, steel, PL, false);
 }
 
 // Cacilheiro: the double-ended Tagus ferry. Orange hull with a white rubbing band, white main-deck

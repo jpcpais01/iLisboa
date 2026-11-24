@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -103,7 +103,7 @@ log(`OSM elements: ${els.length}`);
 const isBuilding = (t) => (t.building && t.building !== 'no') || (t['building:part'] && t['building:part'] !== 'no');
 const underground = (t) => t.location === 'underground' || (t.layer && +t.layer < 0) || t.tunnel === 'yes' || t.tunnel === 'building_passage';
 const polysB = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t));
-const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism));
+const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
 for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
 const roads = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
 const rails = extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !underground(t));
@@ -545,6 +545,79 @@ function addBuilding_(p) {
   log(`trams ${n}, e.g. at ${firstTram.map((v) => v.toFixed(5))}`);
 }
 
+// ─── trains: parked at the buffer stops of the termini (Santa Apolónia, Cais do Sodré, Rossio) ──
+// Walk back from each buffer stop along the chained track ways and lay a set of carriages on it.
+{
+  const heavy = rails.filter((r) => r.tags.railway === 'rail');
+  const K = (p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`, ends = new Map();
+  for (const r of heavy) for (const p of [r.pts[0], r.pts.at(-1)]) { const k = K(p); if (!ends.has(k)) ends.set(k, []); ends.get(k).push(r); }
+  const stops = extractNodes(els, proj, (t) => t.railway === 'buffer_stop');
+  const LIV = {
+    ap: ['#e4e6e8', '#242a31', '#b3303a', '#a3a8ad'],      // tilting long-distance set: pale grey, dark glazing, red accent
+    ic: ['#b9bec3', '#2a2f35', '#d06a2a', '#8f959b'],      // stainless intercity coaches
+    sub: ['#eeeeea', '#27313b', '#2f5f9a', '#a9adb1'],     // white suburban unit, blue stripe
+    cas: ['#c4c8cb', '#2b3036', '#e08a2e', '#9aa0a5'],     // Cascais line stainless units
+  };
+  const at = (pts, cum, s) => { let i = 1; while (i < cum.length - 1 && cum[i] < s) i++; const t = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1); return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; };
+  let nT = 0, nC = 0; const claimed = new Set(), usedStops = [];
+  for (const st of stops) {
+    let way = heavy.find((r) => [r.pts[0], r.pts.at(-1)].some((p) => Math.hypot(p[0] - st.p[0], p[1] - st.p[1]) < 3));
+    if (!way || claimed.has(way.id) || usedStops.some((q) => Math.hypot(q[0] - st.p[0], q[1] - st.p[1]) < 4.2)) continue;   // buffer stops come in pairs: one train per track
+    claimed.add(way.id); usedStops.push(st.p);
+    const H = hash(st.id); if (H > 0.7) continue;                       // some platforms stand empty
+    // chain ways from the buffer stop outward until ~170 m of track
+    let pts = Math.hypot(way.pts[0][0] - st.p[0], way.pts[0][1] - st.p[1]) < 3 ? way.pts.slice() : way.pts.slice().reverse();
+    const used = new Set([way.id]);
+    for (let g = 0; g < 6; g++) {
+      let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      if (len > 170) break;
+      const e = pts.at(-1), d0 = [e[0] - pts.at(-2)[0], e[1] - pts.at(-2)[1]], dl = Math.hypot(...d0) || 1;
+      let best = null, bd = 0.9;
+      for (const r of ends.get(K(e)) || []) {
+        if (used.has(r.id)) continue;
+        const q = K(r.pts[0]) === K(e) ? r.pts : r.pts.slice().reverse(), d1 = [q[1][0] - q[0][0], q[1][1] - q[0][1]], c = (d0[0] * d1[0] + d0[1] * d1[1]) / (dl * (Math.hypot(...d1) || 1));
+        if (c > bd) { bd = c; best = [r, q]; }
+      }
+      if (!best) break;
+      used.add(best[0].id); pts = pts.concat(best[1].slice(1));
+    }
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const len = cum.at(-1), [la, lo] = proj.inv(...st.p);
+    const cais = lo < -9.143 && la < 38.708, rossio = lo < -9.14 && la > 38.713;
+    const kind = cais ? 'cas' : rossio ? 'sub' : ['ap', 'ic', 'sub', 'ic'][Math.floor(hash(st.id + 'k') * 4)];
+    const CL = kind === 'ic' ? 26.4 : 24.5, want = kind === 'ap' ? 6 : kind === 'ic' ? 3 + Math.floor(H * 6) : 4 * (1 + (H < 0.35));
+    const n = Math.min(want, Math.floor((len - 4) / (CL + 0.8)));
+    if (n < 2) continue;
+    // trains stand level: one height for the whole set, from the lower quartile of the ground along it (the DEM bulges near buildings)
+    const zs = []; for (let s = 0; s <= Math.min(len, n * (CL + 0.8) + 3); s += 5) zs.push(groundAt(...at(pts, cum, s)));
+    zs.sort((a, b) => a - b); const zT = zs[Math.floor(zs.length * 0.25)] + 0.2;
+    for (let k = 0; k < n; k++) {
+      const s0 = 3 + k * (CL + 0.8), [x0, y0] = at(pts, cum, s0), [x1, y1] = at(pts, cum, s0 + CL);
+      const cab = kind === 'ic' ? 0 : k === 0 ? -1 : k === n - 1 ? 1 : 0;   // coaches are loco-hauled: no cab ends
+      trainCar(tileB0(x0, y0), { x0, y0, z0: zT, x1, y1, z1: zT, lin, srgb, livery: LIV[kind], cab, pantograph: kind !== 'ic' && k % 4 === 1, seed: hash(st.id + k) }); nC++;
+    }
+    if (kind === 'ic') {                                                    // the electric loco at the head end, away from the buffers
+      const s0 = 3 + n * (CL + 0.8), [x0, y0] = at(pts, cum, s0), [x1, y1] = at(pts, cum, Math.min(len, s0 + 19));
+      if (s0 + 19 <= len) { trainCar(tileB0(x0, y0), { x0, y0, z0: zT, x1, y1, z1: zT, lin, srgb, livery: ['#b8c0c6', '#2a2f35', '#d06a2a', '#7e858b'], cab: 1, pantograph: true, seed: 0.5 }); nC++; }
+    }
+    nT++; if (process.env.DBG) log('train', kind, n, la.toFixed(5), lo.toFixed(5), 'z', zT.toFixed(1));
+  }
+  // overhead-line masts along the electrified main lines (yards get them from their own ways)
+  let nM = 0;
+  for (const r of heavy) {
+    if (!r.tags.electrified || r.tags.electrified === 'no' || underground(r.tags) || r.tags.covered === 'yes' || r.tags.service === 'crossover') continue;
+    const cum = [0]; for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1]));
+    const side = hash(r.id + 'm') < 0.5 ? -1 : 1;
+    for (let s = 20 + hash(r.id) * 30; s < cum.at(-1) - 5; s += 58) {
+      const [x, y] = at(r.pts, cum, s), [x2, y2] = at(r.pts, cum, Math.min(cum.at(-1), s + 2)), l = Math.hypot(x2 - x, y2 - y) || 1, nx = -(y2 - y) / l * side, ny = (x2 - x) / l * side;
+      const mx = x - nx * 2.7, my = y - ny * 2.7;
+      if (mx < minX + 5 || mx > maxX - 5 || my < minY + 5 || my > maxY - 5 || isWaterAt(mx, my)) continue;
+      catenaryMast(tileB0(mx, my), { x: mx, y: my, z: groundAt(mx, my), nx, ny, lin, srgb }); nM++;
+    }
+  }
+  stats.trains = nT; stats.masts = nM; log(`trains ${nT} (${nC} cars), catenary masts ${nM}`);
+}
+
 // ─── cacilheiros: one moored at each terminal pier, one under way on each crossing ──
 {
   let n = 0;
@@ -673,7 +746,7 @@ const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#e2dbcd'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#5d5650'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
+  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 for (let i = 0; i < gm.w * gm.h; i++) paint(C.ground)(i);
@@ -687,6 +760,8 @@ const areaColor = (t) => {
   if (t.place === 'square' || t.highway === 'pedestrian' || t['area:highway'] === 'pedestrian' || t['area:highway'] === 'footway') return C.plaza;
   if (t['area:highway']) return C.asphalt;
   if (t.man_made === 'pier' || t.man_made === 'quay' || t.man_made === 'breakwater') return C.pier;
+  if (t.landuse === 'railway' && !underground(t) && !t.man_made) return C.yard;
+  if (t.railway === 'platform' && !underground(t)) return C.platform;
   return null;
 };
 // big areas first so small ones draw on top
@@ -708,8 +783,9 @@ for (const r of sorted) {
   const w = parseMeters(r.tags.width) ?? ROAD_W[k];
   gm.strokeLine(r.pts, w, paint(pedestrianish(k) ? C.calcada : C.asphalt));
 }
+for (const r of rails) if (r.tags.railway === 'rail' && !underground(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
 for (const r of rails) { // two rails per track
-  const g = r.tags.railway === 'tram' || r.tags.railway === 'funicular' ? 0.9 : 1.435;
+  const g = r.tags.railway === 'tram' || r.tags.railway === 'funicular' ? 0.9 : (+r.tags.gauge || 1668) / 1000;
   for (const side of [-1, 1]) {
     const off = r.pts.map((p, i) => {
       const a = r.pts[Math.max(0, i - 1)], b = r.pts[Math.min(r.pts.length - 1, i + 1)];
@@ -974,7 +1050,19 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
     idx.set([a, d, b, b, d, e], q); q += 6;
   }
-  addMesh(doc, scene, 'terrain', { POSITION: [pos, 'VEC3'], NORMAL: [nrm, 'VEC3'], TEXCOORD_0: [uv, 'VEC2'], indices: [idx] }, gmat);
+  // skirts: hang a 3 m strip down from every tile edge so hairline cracks between tiles (vertex quantisation is per tile)
+  // show more ground instead of the sky
+  const edge = [];
+  for (let c = 0; c < cols; c++) edge.push([0 * cols + c, 0]);
+  for (let r = 0; r < rows; r++) edge.push([r * cols + cols - 1, 1]);
+  for (let c = cols - 1; c >= 0; c--) edge.push([(rows - 1) * cols + c, 2]);
+  for (let r = rows - 1; r >= 0; r--) edge.push([r * cols, 3]);
+  const nV = cols * rows, sPos = new Float32Array(pos.length + edge.length * 3), sUv = new Float32Array(uv.length + edge.length * 2), sN = new Float32Array(nrm.length + edge.length * 3);
+  sPos.set(pos); sUv.set(uv); sN.set(nrm);
+  edge.forEach(([k], i) => { sPos.set([pos[k * 3], pos[k * 3 + 1] - 3, pos[k * 3 + 2]], (nV + i) * 3); sUv.set([uv[k * 2], uv[k * 2 + 1]], (nV + i) * 2); sN.set([nrm[k * 3], nrm[k * 3 + 1], nrm[k * 3 + 2]], (nV + i) * 3); });
+  const sIdx = new Uint32Array(idx.length + edge.length * 6); sIdx.set(idx); let sq = idx.length;
+  for (let i = 0; i + 1 < edge.length; i++) { if (edge[i][1] !== edge[i + 1][1]) continue; const a = edge[i][0], b = edge[i + 1][0], a2 = nV + i, b2 = nV + i + 1; sIdx.set([a, b, a2, b, b2, a2], sq); sq += 6; }
+  addMesh(doc, scene, 'terrain', { POSITION: [sPos, 'VEC3'], NORMAL: [sN, 'VEC3'], TEXCOORD_0: [sUv, 'VEC2'], indices: [sIdx.subarray(0, sq)] }, gmat);
   totalTris += idx.length / 3;
   // buildings
   const T = tiles.get(`${i}_${j}`);
