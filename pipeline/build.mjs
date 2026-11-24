@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -357,7 +357,9 @@ function addBuilding_(p) {
   // Sé: the mapped parts carry no heights; the cathedral is modelled by hand below
   const seOutline = polysB.find((p) => p.id === 'r19372558_0');
   const seParts = seOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], seOutline.outer)) : [];
-  const seSet = new Set([seOutline, ...seParts]);
+  const ptOutline = polysB.find((p) => p.id === 'w9253917');
+  const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
+  const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
   let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
@@ -405,6 +407,11 @@ function addBuilding_(p) {
     let { ux, uy } = ob; if (ux < 0) { ux = -ux; uy = -uy; }
     let gmin = Infinity; for (const [x, y] of seOutline.outer) gmin = Math.min(gmin, groundAt(x, y));
     seCathedral(tileB(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, ground: groundAt(ob.cx, ob.cy), gmin, lin, srgb }); mark();
+  }
+  if (ptOutline) {
+    const ob = obb(ptOutline.outer);
+    let gmin = Infinity; for (const [x, y] of ptOutline.outer) gmin = Math.min(gmin, groundAt(x, y));
+    panteao(tileB(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, ground: groundAt(ob.cx, ob.cy), gmin, lin, srgb }); mark();
   }
   const jose = byId.get('w663318739');
   if (jose) {

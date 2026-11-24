@@ -38,6 +38,8 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  // Mosteiro de São Vicente de Fora: white mannerist monastery, tiled hip roofs
+  'r3310877_0': { variant: 4, wall: '#f0ece2', roofCol: '#a8624c', stone: false, h: 24, roofH: 5, floorH: 4.6, groundH: 5, bayW: 4.4, balconyFloors: [], parapet: 0 },
   // Castelo de São Jorge, Castelejo: bare crenellated walls and square towers in weathered limestone
   'r19072300_0': { castle: true, stone: true, wall: '#cdbd9f', shape: 'flat', h: 12, floorH: 0, parapet: 0, crenel: true, variant: 5 },
   ...Object.fromEntries(['r19072289_0', 'r19072290_0', 'r19072291_0', 'r19072292_0', 'r19072293_0', 'r19072294_0', 'r19072296_0', 'r19072297_0', 'r19072298_0', 'r19072299_0']
@@ -654,4 +656,44 @@ export function seCathedral(S, { cx, cy, ux, uy, hl, ground, gmin, lin, srgb }) 
   for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + ((k + 0.5) / 5) * Math.PI; const [x, y] = P2(nE + Math.cos(a) * 13.1, Math.sin(a) * 13.1); box(S, x, y, Math.cos(a) * ux - Math.sin(a) * uy, Math.cos(a) * uy + Math.sin(a) * ux, 0.1, 0.45, ground + 3.5, ground + 7.5, dark, I0, ST); }
   // buttresses along the aisles
   for (const s of [-1, 1]) for (let u = W + 11; u < nE; u += 4.5) { const [x, y] = P2(u + 2.25, s * 12.6); box(S, x, y, ux, uy, 0.5, 0.6, ground + zb, ground + 9, stone2, I0, ST); }
+}
+
+// Panteão Nacional (Santa Engrácia): white baroque Greek cross with undulating arms, four corner
+// towers, a tall drum and dome with lantern (~80 m above the street on the slope; ~62 m to the cross).
+export function panteao(S, { cx, cy, ux, uy, ground, gmin, lin, srgb }) {
+  const white = lin(srgb('#f1eee6')), trim = lin(srgb('#ddd6c6')), dark = lin(srgb('#3d3d3b')), domeC = lin(srgb('#e9e5dc'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.67, 0.9], I0 = [0, 0, 0, 0];
+  const P2 = (u, v) => [cx + ux * u - uy * v, cy + uy * u + ux * v];
+  const zb = gmin - ground - 1.5;
+  const blk = (u, v, hu, hv, z0, z1, col = white) => { const [x, y] = P2(u, v); box(S, x, y, ux, uy, hu, hv, ground + z0, ground + z1, col, I0, ST); };
+  // cross arms and core
+  blk(0, 0, 27, 10.5, zb, 24); blk(0, 0, 10.5, 23, zb, 24); blk(0, 0, 15, 15, zb, 24);
+  blk(0, 0, 27.4, 10.9, 24, 25.2, trim); blk(0, 0, 10.9, 23.4, 24, 25.2, trim);       // cornice
+  for (const [u, v] of [[27, 0], [-27, 0], [0, 23], [0, -23]]) {                    // arm ends: pediment-like attics + doors
+    const along = u !== 0;
+    blk(u * 0.98, v * 0.98, along ? 0.6 : 6, along ? 6 : 0.6, 25.2, 28.5, white);
+    blk(u * 1.005, v * 1.005, along ? 0.1 : 1.6, along ? 1.6 : 0.1, 0, 6.5, dark);
+    for (const z of [9, 15.5]) for (const o of [-4, 0, 4]) blk(u * 1.005 + (along ? 0 : o), v * 1.005 + (along ? o : 0), along ? 0.1 : 0.7, along ? 0.7 : 0.1, z, z + 3.2, dark);
+  }
+  for (const su of [-1, 1]) for (const sv of [-1, 1]) {                             // corner towers with small cupolas
+    blk(su * 17, sv * 15.5, 4.5, 4.5, zb, 31); blk(su * 17, sv * 15.5, 4.9, 4.9, 31, 32, trim);
+    const [x, y] = P2(su * 17, sv * 15.5);
+    limb(S, [x, ground + 32, -y], [x, ground + 35.5, -y], 3.4, 0.6, 12, domeC, ST);
+    limb(S, [x, ground + 35.5, -y], [x, ground + 37, -y], 0.3, 0.15, 6, white, ST);
+  }
+  // drum, dome and lantern
+  const c = [cx, 0, -cy], at = (z) => [cx, ground + z, -cy];
+  limb(S, at(24), at(28), 14, 14, 24, white, ST);
+  limb(S, at(28), at(40), 12.5, 12.5, 24, white, ST);
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, x = cx + Math.cos(a) * 12.6, y = cy + Math.sin(a) * 12.6; box(S, x, y, -Math.sin(a), Math.cos(a), 0.9, 0.1, ground + 31, ground + 37, dark, I0, ST); }
+  limb(S, at(40), at(41.2), 13.3, 13.3, 24, trim, ST);
+  const rings = 6;
+  for (let k = 0; k < rings; k++) {                                                   // dome as a stack of frusta
+    const a0 = (k / rings) * Math.PI / 2, a1 = ((k + 1) / rings) * Math.PI / 2;
+    limb(S, at(41.2 + Math.sin(a0) * 15), at(41.2 + Math.sin(a1) * 15), Math.max(0.3, Math.cos(a0) * 12.5), Math.max(2.2, Math.cos(a1) * 12.5), 24, domeC, ST, k === rings - 1);
+  }
+  limb(S, at(55.5), at(62), 2.2, 1.8, 12, white, ST);                                 // lantern
+  limb(S, at(62), at(64.5), 1.9, 0.2, 12, domeC, ST);
+  limb(S, at(64.5), at(66.5), 0.12, 0.12, 4, dark, ST);
+  void c;
 }
