@@ -26,7 +26,7 @@ export function obb(ring) {
   }
   if (!best) return null;
   let { ux, uy, vx, vy, u0, u1, v0, v1 } = best;
-  if (v1 - v0 > u1 - u0) { [ux, uy, vx, vy] = [vx, vy, -ux, -uy]; [u0, u1, v0, v1] = [-v1, -v0, u0, u1]; }
+  if (v1 - v0 > u1 - u0) { [ux, uy, vx, vy] = [vx, vy, -ux, -uy]; [u0, u1, v0, v1] = [v0, v1, -u1, -u0]; }
   const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
   return { ux, uy, vx, vy, cx: cu * ux + cv * vx, cy: cu * uy + cv * vy, hl: (u1 - u0) / 2, hw: (v1 - v0) / 2, area: best.area };
 }
@@ -175,7 +175,7 @@ export function buildRoofAndWalls(S, ctx) {
   const f = planes ? (x, y) => Math.max(wallTop, Math.min(...planes.map((P) => pv(P, x, y)))) : () => wallTop;
   out.f = f;
   const info = (bays) => [Math.min(1, (wallTop - ground) / 128), spec.floorH / 8, Math.min(1, bays / 128), spec.groundH / 8];
-  const style = (kind) => [kind / 8, spec.variant / 8, seed, spec.bayW / 6];
+  const style = (kind, ri = 0) => [kind / 8, (ri > 0 && spec.variant === 6 ? 4 : spec.variant) / 8, seed, spec.bayW / 6]; // courtyards: no arcade
 
   // ── walls (split where the roof plane changes so gables follow the roof) ──
   const isFlat = !planes && !shape.startsWith('skeleton');
@@ -198,7 +198,7 @@ export function buildRoofAndWalls(S, ctx) {
         if (ts[k + 1] - ts[k] < 1e-5) continue;
         const p = [a[0] + (b[0] - a[0]) * ts[k], a[1] + (b[1] - a[1]) * ts[k]], q = [a[0] + (b[0] - a[0]) * ts[k + 1], a[1] + (b[1] - a[1]) * ts[k + 1]];
         const t0 = f(p[0], p[1]) + (isP ? 0 : parapet), t1 = f(q[0], q[1]) + (isP ? 0 : parapet);
-        wallQuad(S, p, q, bottom, bottom, t0, t1, colWall, ts[k] * bays, ts[k + 1] * bays, ground, info(bays), style(kind));
+        wallQuad(S, p, q, bottom, bottom, t0, t1, colWall, ts[k] * bays, ts[k + 1] * bays, ground, info(bays), style(kind, ri));
         if (parapet && !isP) wallQuad(S, p, q, wallTop, wallTop, t0, t1, colWall, 0, 1, ground, info(0), style(KIND.BLANK), true);
       }
       // balconies: on façades of styles that have them

@@ -154,7 +154,13 @@ let waterSource = 'osm-coastline';
   for (let i = 0; i < water.length; i++) if (water[i] === 1) water[i] = 2; // barrier is shoreline → water
   // inland water bodies (ponds, fountains, docks)
   for (const p of polysArea) if (p.tags.natural === 'water' || p.tags.waterway === 'riverbank' || p.tags.waterway === 'dock' || p.tags.leisure === 'swimming_pool' || p.tags.amenity === 'fountain')
-    wr.fillRings([p.outer, ...p.holes], (i) => { water[i] = 2; });
+  {
+    // at river level (docks, basins) it joins the river; uphill (ponds, pools, fountains) it is drawn
+    // on the ground instead — cutting the terrain there opened deep holes down to the river plane
+    let g = 0; for (const [x, y] of p.outer) g += dem.ground(x, y); g /= p.outer.length;
+    const v = g < 3 ? 2 : 3;
+    wr.fillRings([p.outer, ...p.holes], (i) => { if (water[i] !== 2) water[i] = v; });
+  }
 }
 const isWaterAt = (x, y) => {
   const c = Math.floor(wr.px(x)), r = Math.floor(wr.py(y));
@@ -260,7 +266,13 @@ function buildingSpec(p) {
   return spec;
 }
 
+const BAD = []; // guard: any building vertex far outside the diorama fails the build
 function addBuilding(p) {
+  const S0 = (() => { const [ti, tj] = tileOf(p.c[0], p.c[1]); return getTile(ti, tj).b; })(), n0 = S0.pos.length;
+  addBuilding_(p);
+  for (let i = n0 + 1; i < S0.pos.length; i += 3) if (S0.pos[i] < -40 || S0.pos[i] > 400 || !isFinite(S0.pos[i])) { { BAD.push(`${p.id} y=${S0.pos[i].toFixed(0)}`); break; } }
+}
+function addBuilding_(p) {
   const s = buildingSpec(p);
   stats.buildings++; stats[s.src]++;
   const seed = hash(p.id + 'seed');
@@ -439,13 +451,14 @@ const authoredSpots = polysB.filter((p) => DROP.has(p.id)).map((p) => p.c);
   }
 }
 log(`buildings built`, JSON.stringify(stats));
+if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); process.exitCode = 1; }
 
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#ddd6c8'), calcada: srgb('#efe9dc'), asphalt: srgb('#8f8c88'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#5d5650'), water: srgb('#4c8296'), pier: srgb('#b8aa94'), plaza: srgb('#ebe4d4'),
+  parking: srgb('#b7b2aa'), rail: srgb('#5d5650'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#ebe4d4'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 for (let i = 0; i < gm.w * gm.h; i++) paint(C.ground)(i);
@@ -513,6 +526,7 @@ for (const r of rails) { // two rails per track
 for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
   const wi = Math.floor((r * SS) / WM) * wr.w + Math.floor((c * SS) / WM);
   if (water[wi] === 2) paint(C.water)(r * gm.w + c);
+  else if (water[wi] === 3) paint(C.pond)(r * gm.w + c);
 }
 log(`ground map painted ${gm.w}×${gm.h}`);
 

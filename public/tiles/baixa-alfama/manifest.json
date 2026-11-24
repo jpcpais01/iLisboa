@@ -23,7 +23,7 @@
     -391.61047827112156,
     -82.34729133504857
    ],
-   "bytes": 1944120,
+   "bytes": 2242232,
    "balconies": "bal_0_0.bin"
   },
   {
@@ -36,7 +36,7 @@
     608.3895217288784,
     -82.34729133504857
    ],
-   "bytes": 1671180,
+   "bytes": 1863300,
    "balconies": "bal_1_0.bin"
   },
   {
@@ -49,7 +49,7 @@
     1391.6104782711216,
     -82.34729133504857
    ],
-   "bytes": 303188,
+   "bytes": 346452,
    "balconies": "bal_2_0.bin"
   },
   {
@@ -62,7 +62,7 @@
     -391.61047827112156,
     917.6527086649514
    ],
-   "bytes": 2738660,
+   "bytes": 3199324,
    "balconies": "bal_0_1.bin"
   },
   {
@@ -75,7 +75,7 @@
     608.3895217288784,
     917.6527086649514
    ],
-   "bytes": 3394200,
+   "bytes": 3793664,
    "balconies": "bal_1_1.bin"
   },
   {
@@ -88,7 +88,7 @@
     1391.6104782711216,
     917.6527086649514
    ],
-   "bytes": 2105052,
+   "bytes": 2388220,
    "balconies": "bal_2_1.bin"
   },
   {
@@ -101,7 +101,7 @@
     -391.61047827112156,
     1082.3472913350486
    ],
-   "bytes": 399212,
+   "bytes": 431380,
    "balconies": "bal_0_2.bin"
   },
   {
@@ -114,7 +114,7 @@
     608.3895217288784,
     1082.3472913350486
    ],
-   "bytes": 493684,
+   "bytes": 535516,
    "balconies": "bal_1_2.bin"
   },
   {
@@ -127,7 +127,7 @@
     1391.6104782711216,
     1082.3472913350486
    ],
-   "bytes": 179896,
+   "bytes": 207152,
    "balconies": "bal_2_2.bin"
   }
  ],
@@ -145,7 +145,7 @@
   "skippedOutlines": 71,
   "partyEdges": 20216,
   "balconies": 88396,
-  "statues": 93,
+  "statues": 94,
   "wallsM": 26446.157846817794,
   "pillars": 0,
   "chimneys": 8651,
@@ -154,11 +154,11 @@
   "fireWalls": 257,
   "landmarks": 2,
   "waterSource": "osm-coastline",
-  "trees": 3893,
+  "trees": 3907,
   "treesMapped": 2828,
-  "bytes": 15130032,
-  "triangles": 788975
+  "bytes": 16896925,
+  "triangles": 852870
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-24T16:12:23.441Z"
+ "built": "2026-11-24T16:23:40.591Z"
 }
