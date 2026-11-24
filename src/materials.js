@@ -124,6 +124,18 @@ if (kind < .5) {                                  // plain trims, chimneys
     col = mix(col, winC, inWin);
     glassAmt = inGlass * (1. - shutters);
     glow = glassAmt * step(h21(vec2(bi * 1.7, fi) + seed * 5.), .42) * (1. - shop * .3);
+    if (variant > 5.5 && isG > .5) {                           // Praça do Comércio: arcade of round arches on square piers
+      float hwA = bw * .5 - .9, spring = gh - .8 - hwA;
+      float sd = y < spring ? abs(ux) - hwA : length(vec2(ux, y - spring)) - hwA;
+      float inA = 1. - smoothstep(-aa, aa, sd);
+      vec3 back = mix(vec3(.10, .09, .085), vec3(.24, .22, .2), smoothstep(0., gh, y));
+      back = mix(back, vec3(.06, .055, .05), rect(vec2(-.75, 0.), vec2(.75, 3.1), vec2(ux, y), aa));   // shop door at the back
+      vec3 pier = wallC * (.97 + .03 * grime);
+      pier = mix(pier, stoneC, box1(-9., .7, y, aa) + box1(spring - .35, spring, y, aa) * step(hwA - .05, abs(ux)));
+      pier = mix(pier, stoneC * 1.04, (1. - smoothstep(.35 - aa, .35 + aa, abs(sd + .18))) * step(spring - .1, y));  // voussoir ring
+      col = mix(pier, back, inA);
+      glassAmt = 0.; glow = inA * .45 * smoothstep(1., 4., y);
+    }
     // far away: blend everything to the façade's average tone (no shimmer)
     vec3 avg = mix(wallC, vec3(.16, .18, .2), .22);
     col = mix(col, avg, far);
@@ -168,7 +180,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v2';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v3';
   return m;
 }
 

@@ -15,6 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONE, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -187,7 +188,7 @@ const getTile = (i, j) => {
   if (!tiles.has(k)) tiles.set(k, { i, j, b: makeSink(), balconies: [] });
   return tiles.get(k);
 };
-const stats = { buildings: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
+const stats = { authored: 0, buildings: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
 
 const LEVEL_H = 3.2;
 const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8, garage: 3, garages: 3, shed: 3, kiosk: 3.2, hut: 3, roof: 3.5, school: 13, hospital: 18, train_station: 12, ruins: 5, castle: 14, tower: 25, bunker: 3, carport: 3, pillar: 5, service: 3.5, construction: 6 };
@@ -199,7 +200,7 @@ const POMBALINE = pal([['#f1ece2', 24], ['#ece0c2', 14], ['#e9c97f', 22], ['#e8b
 const VERNACULAR = pal([['#f5f2eb', 34], ['#f0e3c4', 11], ['#efcc7e', 12], ['#ecb79e', 10], ['#bcd3e3', 8], ['#d3dfb8', 5], ['#e8ac84', 5], ['#e2bccb', 5], ['#c86a53', 3], ['#b8cbbb', 3], ['#f3d899', 5]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
-const ROOFS = pal([['#ad5d43', 5], ['#b86b4d', 4], ['#9d5643', 3], ['#c07d5c', 3], ['#8f4f3e', 2], ['#a8664f', 3]]);
+const ROOFS = pal([['#a85e47', 5], ['#b0694f', 4], ['#9a5746', 3], ['#b97c60', 3], ['#8d5242', 2], ['#a3654f', 3]]);
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
 
@@ -252,8 +253,11 @@ function buildingSpec(p) {
   const roofCol = parseColour(t['roof:colour']) || pick(ROOFS, u('r'));
   const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(FLAT_ROOF, u('f'));
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
-  return { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
+  const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
+  const o = OVERRIDES[p.id]; // hand-authored
+  if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
+  return spec;
 }
 
 function addBuilding(p) {
@@ -310,7 +314,8 @@ function addBuilding(p) {
   const spec = { ...s, shape: mode === 'planar' ? s.shape : mode === 'skeleton' ? 'skeleton-done' : 'flat' };
   const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1] };
   const res = buildRoofAndWalls(S, ctx);
-  if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
+  if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
+  else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (!s.stone && s.h > 5) { roofExtras(S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
   for (const b of res.balconies) T.balconies.push(...b);
   stats.balconies += res.balconies.length;
@@ -325,12 +330,42 @@ function addBuilding(p) {
     if (o.skip) stats.skippedOutlines++;
   }
   stats.parts = parts.length;
-  const todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2);
+  // hand-authored pilot: the Praça's arcade pillars live in the façade shader; the Arco and D. José are modelled below
+  const [pxa, pya] = proj.fwd(38.7062, -9.1400), [pxb, pyb] = proj.fwd(38.7092, -9.1330);
+  const inPraca = (p) => p.c[0] > pxa && p.c[0] < pxb && p.c[1] > pya && p.c[1] < pyb;
+  const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p));
+  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  // Pombaline blocks of the pilot zone: built block by block
+  const zone = BAIXA_ZONE.map(([la, lo]) => proj.fwd(la, lo));
+  const baixa = todo.filter((p) => !p.tags['building:part'] && pointInRing(p.c[0], p.c[1], zone) && !OVERRIDES[p.id]);
+  const baixaSet = new Set(baixa);
+  todo = todo.filter((p) => !baixaSet.has(p) && !(p.tags['building:part'] && pointInRing(p.c[0], p.c[1], zone)));
   markPartyWalls(todo.filter((p) => !p.tags['building:part']));
   for (const p of todo) addBuilding(p);
+  pombalineBlocks(baixa, {
+    SkeletonBuilder, groundAt, lin, srgb, jitter, pick, pal, hash, stats,
+    getSink: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; },
+    balconies: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).balconies; },
+  });
+  stats.buildings += baixa.length; stats.authored += baixa.length;
+  // landmarks
+  const byId = new Map(polysB.map((p) => [p.id, p]));
+  const [sx, sy] = proj.fwd(38.70851, -9.13684), [nx_, ny_] = proj.fwd(38.70959, -9.13726);   // Rua Augusta axis, pointing to the river
+  const L = Math.hypot(sx - nx_, sy - ny_), vx = (sx - nx_) / L, vy = (sy - ny_) / L;
+  const arco = byId.get('w41683195');
+  if (arco) {
+    const g = groundAt(arco.c[0], arco.c[1]), [ti, tj] = tileOf(arco.c[0], arco.c[1]);
+    arcoRuaAugusta(getTile(ti, tj).b, { cx: arco.c[0], cy: arco.c[1], ux: vy, uy: -vx, ground: g, lin, srgb }); stats.landmarks = (stats.landmarks || 0) + 1;
+  }
+  const jose = byId.get('w663318739');
+  if (jose) {
+    const g = groundAt(jose.c[0], jose.c[1]), [ti, tj] = tileOf(jose.c[0], jose.c[1]);
+    equestrianJose(getTile(ti, tj).b, { cx: jose.c[0], cy: jose.c[1], ground: g, heading: Math.atan2(vx, vy), lin, srgb }); stats.landmarks++;
+  }
 }
 
 // ─── statues, columns & historic walls ──────────────────────────────────
+const authoredSpots = polysB.filter((p) => DROP.has(p.id)).map((p) => p.c);
 {
   const bronze = lin(srgb('#55614f')), stoneC = lin(LIOZ), wallC = lin(srgb('#d3c6aa')), whiteC = lin(srgb('#ece6da'));
   const SI = [0, 0, 0, 0], ST = (seed) => [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = (seed) => [KIND.PLAIN / 8, 5 / 8, seed, 1];
@@ -350,6 +385,7 @@ function addBuilding(p) {
     if (/mural|azulejo|tile|plaque|graffiti|stolperstein|street_art|painting|blue_plaque/.test(typ) || t.material === 'tile') continue;
     const [x, y] = proj.fwd(e.lat, e.lon);
     if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) continue;
+    if (authoredSpots.some(([ax, ay]) => Math.hypot(x - ax, y - ay) < 22)) continue; // modelled by hand
     const g = groundAt(x, y), [ti, tj] = tileOf(x, y), S = getTile(ti, tj).b, seed = hash('m' + e.id);
     const name = (t.name || '').toLowerCase();
     if (typ === 'column' || /coluna|column/.test(name)) {
@@ -453,6 +489,24 @@ for (const r of rails) { // two rails per track
       return [p[0] - ((b[1] - a[1]) / L) * g * side * 0.5, p[1] + ((b[0] - a[0]) / L) * g * side * 0.5];
     });
     gm.strokeLine(off, 0.35, paint(C.rail));
+  }
+}
+// Praça do Comércio: pale lioz paving crossed by the darker diagonal bands (mapped as footways)
+{
+  const sq = polysArea.find((p) => p.id === 'w677181958');
+  if (sq) {
+    // rhombus lattice centred on D. José, long axis along Rua Augusta
+    const [ax, ay] = proj.fwd(38.70851, -9.13684), [bx, by] = proj.fwd(38.70959, -9.13726), Lv = Math.hypot(ax - bx, ay - by);
+    const vx = (ax - bx) / Lv, vy = (ay - by) / Lv, ang = (29 * Math.PI) / 180;
+    const n1 = [vx * Math.cos(ang) - vy * Math.sin(ang), vx * Math.sin(ang) + vy * Math.cos(ang)], n2 = [vx * Math.cos(-ang) - vy * Math.sin(-ang), vx * Math.sin(-ang) + vy * Math.cos(-ang)];
+    const jose = polysB.find((p) => p.id === 'w663318739'), o = jose ? jose.c : sq.c, SP = 33, HW = 0.45;
+    const base = srgb('#dcd6c8'), band = srgb('#a99f8e');
+    gm.fillRings([sq.outer, ...sq.holes], (i) => {
+      const x = minX + ((i % gm.w) + 0.5) * SS - o[0], y = maxY - (Math.floor(i / gm.w) + 0.5) * SS - o[1];
+      const d1 = x * -n1[1] + y * n1[0], d2 = x * -n2[1] + y * n2[0];
+      const m1 = Math.abs(((d1 % SP) + SP * 1.5) % SP - SP / 2), m2 = Math.abs(((d2 % SP) + SP * 1.5) % SP - SP / 2);
+      paint(Math.min(m1, m2) < HW ? band : base)(i);
+    });
   }
 }
 // water (from 1 m mask)

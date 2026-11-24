@@ -160,7 +160,7 @@ export function buildRoofAndWalls(S, ctx) {
       if (use.length === 1 && (use[0] === 0 || use[0] === 1)) use = [2, 3];  // lone hip end → gable along the long axis
     }
     const mans = shape === 'mansard' || shape === 'gambrel';
-    const s1 = mans ? Math.tan((68 * Math.PI) / 180) : shape === 'pyramidal' ? Math.tan((40 * Math.PI) / 180) : s;
+    const s1 = mans ? Math.tan((68 * Math.PI) / 180) : shape === 'pyramidal' ? Math.tan(((spec.pitch || 40) * Math.PI) / 180) : s;
     planes = use.map((k) => plane(sides[k][0], sides[k][1], sides[k][2], sides[k][3], wallTop, s1, mans ? KIND.MANSARD : KIND.TILES));
     if (mans) { // upper shallow pitch starts at capH
       const capH = Math.min(2.9, spec.roofH || 2.9), d0 = capH / s1;

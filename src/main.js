@@ -231,7 +231,16 @@ const endPos = focus.clone().add(new THREE.Vector3(-360, 330, 900).multiplyScala
 const startPos = new THREE.Vector3(center.x, size * 1.5, center.z + 300);
 let introT = 0;
 const fromHash = location.hash.slice(1).split(',').map(Number);
-if (fromHash.length === 6 && fromHash.every(isFinite)) {
+// ?cam=lat,lon,range,heading,tilt — same convention as Google Earth URLs, for side-by-side checks
+const cam = (new URLSearchParams(location.search).get('cam') || '').split(',').map(Number);
+if (cam.length === 5 && cam.every(isFinite)) {
+  const [lat, lon, d, h, t] = cam, hr = (h * Math.PI) / 180, tr = (t * Math.PI) / 180;
+  const tgt = ll(lat, lon).setY(6);
+  camera.fov = 35; camera.updateProjectionMatrix();
+  controls.target.copy(tgt);
+  camera.position.copy(tgt).add(new THREE.Vector3(-Math.sin(hr) * Math.sin(tr) * d, Math.cos(tr) * d, Math.cos(hr) * Math.sin(tr) * d));
+  introT = 1;
+} else if (fromHash.length === 6 && fromHash.every(isFinite)) {
   camera.position.fromArray(fromHash, 0); controls.target.fromArray(fromHash, 3); introT = 1;
 } else {
   camera.position.copy(startPos); controls.target.copy(focus);
