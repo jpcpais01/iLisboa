@@ -153,7 +153,8 @@ jobs.push(Promise.resolve(waterMask).then((mask) => {
   tick();
 }));
 
-// trees: one instanced draw call
+// trees: instanced, in chunks with a near/far level of detail
+const treeChunks = [];
 jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((buf) => {
   const d = new Float32Array(buf), n = d.length / 4;
   const paint = (g, hex) => { const c = new THREE.Color(hex); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3)); return g; };
@@ -164,20 +165,27 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
   const geo = mergeGeometries([lobe(2.45, 0, 5.4, 0, 0xe6e6e6, 0), lobe(1.8, 1.35, 6.3, 0.55, 0xffffff, 0.7), lobe(1.7, -1.15, 6.1, -0.75, 0xf2f2f2, 1.3), lobe(1.6, -0.3, 5.9, 1.3, 0xeeeeee, 2.1), lobe(1.4, 0.2, 7.3, -0.2, 0xffffff, 2.9), paint(trunk, 0x5e4636)]);
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  const mesh = new THREE.InstancedMesh(geo, mat, n);
+  // far LOD: one squat lobe on a stub trunk, ~26 triangles
+  const far = mergeGeometries([lobe(2.7, 0, 5.9, 0, 0xf0f0f0, 0.4).scale(1, 0.85, 1), paint(new THREE.CylinderGeometry(0.25, 0.32, 4.2, 3, 1, true).translate(0, 2.1, 0).toNonIndexed(), 0x5e4636)]);
+  far.computeVertexNormals();
+  // chunked so each patch of the city swaps detail by camera distance (and frustum-culls on its own)
+  const CH = 600, cells = new Map();
+  for (let i = 0; i < n; i++) { const k = Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); }
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
   const greens = [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c];
-  for (let i = 0; i < n; i++) {
-    const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
-    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
-    const k = d[i * 4 + 3];
-    s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
-    m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
-    mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, col.setHex(greens[Math.floor(Math.abs(r) * greens.length) % greens.length]));
+  for (const ids of cells.values()) {
+    const near = new THREE.InstancedMesh(geo, mat, ids.length), lo = new THREE.InstancedMesh(far, mat, ids.length);
+    ids.forEach((i, j) => {
+      const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
+      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
+      const k = d[i * 4 + 3];
+      s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
+      m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
+      for (const mesh of [near, lo]) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(greens[Math.floor(Math.abs(r) * greens.length) % greens.length])); }
+    });
+    for (const mesh of [near, lo]) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); }
+    treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
   tick();
 }));
 
@@ -270,6 +278,7 @@ renderer.setAnimationLoop((now) => {
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 480;
+  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 520; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
   renderer.render(scene, camera);
 

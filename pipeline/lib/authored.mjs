@@ -38,6 +38,8 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  // Palácio de São Bento: the untagged parts of the palace are white like the rest
+  ...Object.fromEntries(['w1570029244', 'w1570029245', 'w1570029246', 'w1571587396'].map((id) => [id, { wall: '#eee9de', variant: 4 }])),
   // Mosteiro de São Vicente de Fora: white mannerist monastery, tiled hip roofs
   'r3310877_0': { variant: 4, wall: '#f0ece2', roofCol: '#a8624c', stone: false, h: 24, roofH: 5, floorH: 4.6, groundH: 5, bayW: 4.4, balconyFloors: [], parapet: 0 },
   // Castelo de São Jorge, Castelejo: bare crenellated walls and square towers in weathered limestone
@@ -85,7 +87,8 @@ export const AREAS = [
 ];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981', 'w663347630']);   // + Carmo church, Santa Justa lift (tower and its base)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176']);   // + São Bento frontispiece (authored)
+ //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
 // Pombaline façade palette, read off the reference by eye: mostly pale, a few warm ochres and pinks.
@@ -1159,4 +1162,36 @@ export function domedTower(S, { cx, cy, ux, uy, ground, h = 20, half = 3.2, lin,
   for (let k = 0; k < 5; k++) { const a0 = (k / 5) * Math.PI / 2, a1 = ((k + 1) / 5) * Math.PI / 2; limb(S, P(h + 1.2 + Math.sin(a0) * half * 1.1), P(h + 1.2 + Math.sin(a1) * half * 1.1), Math.max(0.3, Math.cos(a0) * half), Math.max(0.5, Math.cos(a1) * half), 16, dome, ST, k === 4); }
   limb(S, P(h + 1.2 + half * 1.1), P(h + 2.6 + half * 1.1), 0.5, 0.45, 8, white, PL);
   limb(S, P(h + 2.6 + half * 1.1), P(h + 3.4 + half * 1.1), 0.55, 0.05, 8, dome, ST);
+}
+
+// Palácio de São Bento: hexastyle portico on its marble frontispiece, the grand staircase down to the Largo,
+// and the four lions on pedestals that flank it. a→b runs along the façade with the outside on the right.
+export function saoBentoFront(S, { a, b, zTop, zSq, lin, srgb }) {
+  const stone = lin(srgb('#ece6d8')), step = lin(srgb('#ddd5c4')), lion = lin(srgb('#7a7468'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.77, 0.9], I0 = [0, 0, 0, 0];
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, ox = uy, oy = -ux;
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, at = (u, v) => [mx + ux * u + ox * v, my + uy * u + oy * v];
+  const depth = 6.5, span = Math.min(L - 2, 28);
+  portico(S, { a, b, ground: zTop, depth, colH: 14, cols: 6, span, statue: false, lin, srgb });
+  // stair: risers of ~0.18 m and treads of 0.42 m, slightly narrower than the portico
+  const v0 = depth + 1.2, rise = Math.max(0, zTop + 0.2 - zSq), n = Math.max(1, Math.round(rise / 0.18)), run = n * 0.42;
+  const hw = span / 2 - 1;
+  for (let k = 0; k < n; k++) {
+    const zt = zTop + 0.2 - (k + 1) * (rise / n) + rise / n, vMid = v0 + (k + 0.5) * 0.42;
+    const [x, y] = at(0, vMid);
+    box(S, x, y, ux, uy, hw, 0.21, zSq - 0.6, zt, step, I0, ST);
+  }
+  // cheek walls and lions on pedestals: two at the top landing, two at the foot
+  for (const s of [-1, 1]) {
+    const [cx, cy] = at(s * (hw + 0.7), v0 + run / 2);
+    box(S, cx, cy, ux, uy, 0.7, run / 2 + 0.3, zSq - 0.6, zSq + 0.9, stone, I0, ST);
+    for (const [v, z] of [[v0 + 0.6, zTop + 0.2], [v0 + run - 0.4, zSq]]) {
+      const [px, py] = at(s * (hw + 0.7), v);
+      box(S, px, py, ux, uy, 0.8, 1.3, z - 0.3, z + 1.6, stone, I0, ST);
+      const [lx, ly] = at(s * (hw + 0.7), v + 0.2);
+      box(S, lx, ly, ux, uy, 0.45, 1.0, z + 1.6, z + 2.3, lion, I0, ST);              // couchant body
+      const [hx, hy] = at(s * (hw + 0.7), v + 0.95);
+      box(S, hx, hy, ux, uy, 0.4, 0.35, z + 1.9, z + 2.8, lion, I0, ST);              // raised head
+    }
+  }
 }

@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -177,6 +177,7 @@ const groundAt = (x, y) => (isDeepWater(x, y) ? -5 : Math.max(LAND_MIN, dem.grou
 const srgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const lin = (c) => c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
 const NAMED = { white: '#f3f0ea', black: '#3a3a3a', grey: '#b8b4ad', gray: '#b8b4ad', silver: '#c8c8c8', beige: '#e8dcc0', yellow: '#e9c873', orange: '#df9a5a', red: '#b8553f', darkred: '#8e3b2e', brown: '#8a5a3c', pink: '#e9b6a6', blue: '#a9c0d2', lightblue: '#bcd0de', green: '#a9bf98', cream: '#efe4c8', tan: '#d6b98f', maroon: '#7c3a2e', ochre: '#d9a650' };
+const ROOF_NAMED = { brown: '#a4604a', red: '#b05a43', orange: '#c47a55' };   // tagged tile roofs are terracotta, not paint-chart brown
 const parseColour = (v) => { if (!v) return null; v = v.toLowerCase().trim(); if (/^#[0-9a-f]{6}$/.test(v)) return srgb(v); if (/^#[0-9a-f]{3}$/.test(v)) return srgb('#' + [...v.slice(1)].map((c) => c + c).join('')); return NAMED[v] ? srgb(NAMED[v]) : null; };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, u) => { const tot = list.reduce((s, x) => s + x[1], 0); let a = u * tot; for (const [c, w] of list) { if ((a -= w) <= 0) return c; } return list[0][0]; };
@@ -258,7 +259,7 @@ function buildingSpec(p) {
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
   const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
-  const roofCol = parseColour(t['roof:colour']) || pick(ROOFS, u('r'));
+  const roofCol = parseColour(ROOF_NAMED[(t['roof:colour'] || '').toLowerCase()] || t['roof:colour']) || pick(ROOFS, u('r'));
   const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(FLAT_ROOF, u('f'));
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
@@ -470,6 +471,13 @@ function addBuilding_(p) {
       const ox = sg * (b[1] - a[1]) / L, oy = -sg * (b[0] - a[0]) / L, sc = ox * nx + oy * ny; if (sc > bs) { bs = sc; best = sg > 0 ? [a, b] : [a, b]; } }); return best; };
   const rossioSt = byId.get('w96530649');
   if (rossioSt) { const [a, b] = facing(rossioSt, 0.85, 0.5, 30); const sg = ringArea(rossioSt.outer) > 0; rossioStationFront(tileB(...rossioSt.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), H: 21, lin, srgb }); mark(); }
+  {   // Palácio de São Bento: portico + grand stair on the frontispiece (its OSM part is dropped)
+    const a = proj.fwd(38.712327, -9.153664), b = proj.fwd(38.712567, -9.153511), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ox = (b[1] - a[1]) / L, oy = -(b[0] - a[0]) / L;
+    const zTop = groundAt(m[0] - ox * 4, m[1] - oy * 4) + 1.5, zSq = groundAt(m[0] + ox * 24, m[1] + oy * 24);
+    log(`São Bento: floor ${zTop.toFixed(1)}, Largo ${zSq.toFixed(1)}`);
+    saoBentoFront(tileB(...m), { a, b, zTop, zSq: Math.min(zSq, zTop - 0.5), lin, srgb }); mark();
+  }
   const camara = byId.get('w95417254');
   if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }
   {
