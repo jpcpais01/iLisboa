@@ -1195,3 +1195,27 @@ export function saoBentoFront(S, { a, b, zTop, zSq, lin, srgb }) {
     }
   }
 }
+
+// Small sailing yacht on the Tagus: white hull, cabin, mast, mainsail and jib (both faces), heeled a touch.
+export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9 }) {
+  const white = lin(srgb('#f4f2ec')), hullC = lin(srgb(seed < 0.3 ? '#1f3550' : '#f1efe8')), deck = lin(srgb('#b9a587')), sail = lin(srgb('#f7f5ee')), mastC = lin(srgb('#c9ccd0'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
+  const L = len / 2, B = len * 0.17;
+  const P = (u, v) => [x + dx * u - dy * v, y + dy * u + dx * v];
+  const r = [[L, 0], [L * 0.45, B], [-L * 0.85, B * 0.9], [-L, B * 0.6], [-L, -B * 0.6], [-L * 0.85, -B * 0.9], [L * 0.45, -B]].map(([u, v]) => P(u, v));
+  for (let i = 0; i < r.length; i++) wallQuad(S, r[i], r[(i + 1) % r.length], -0.4, -0.4, 0.75, 0.75, hullC, 0, 1, -0.4, I0, PL);
+  for (let i = 1; i + 1 < r.length; i++) triUp(S, [r[0][0], 0.75, -r[0][1]], [r[i][0], 0.75, -r[i][1]], [r[i + 1][0], 0.75, -r[i + 1][1]], deck, [0, 0], [0, 0], [0, 0], I0, PL);
+  const [cx, cy] = P(-L * 0.15, 0);
+  box(S, cx, cy, dx, dy, L * 0.3, B * 0.55, 0.75, 1.35, white, I0, PL);
+  const m = P(L * 0.12, 0), H = len * 1.35, heel = (seed - 0.5) * 0.6;           // mast top leans to leeward
+  const top = [m[0] - dy * heel, H, -(m[1] + dx * heel)];
+  limb(S, [m[0], 0.75, -m[1]], top, 0.07, 0.05, 4, mastC, PL, false);
+  const tack = P(-L * 0.62, (seed - 0.5) * 2.2), clewZ = 1.6;                    // boom swung out to the wind side
+  const foot = [m[0], 1.5, -m[1]], clew = [tack[0], clewZ, -tack[1]], head = [top[0], H - 0.4, top[2]];
+  const bow = P(L * 0.95, 0), jibFoot = [bow[0], 1.0, -bow[1]], jibClew = P(-L * 0.05, (seed - 0.5) * 1.6);
+  const n = [-dy, 0, -dx];
+  for (const s of [1, -1]) {
+    tri(S, foot, clew, head, n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
+    tri(S, jibFoot, [jibClew[0], 1.2, -jibClew[1]], [top[0], H * 0.85, top[2]], n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
+  }
+}

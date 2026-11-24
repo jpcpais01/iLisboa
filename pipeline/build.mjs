@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -538,17 +538,34 @@ function addBuilding_(p) {
 // ─── cacilheiros: one moored at each terminal pier, one under way on each crossing ──
 {
   let n = 0;
-  const put = (x, y, dx, dy, k) => { if (x < minX + 20 || x > maxX - 20 || y < minY + 20 || y > maxY - 20 || !isDeepWater(x, y)) return; cacilheiro(tileB0(x, y), { x, y, dx, dy, lin, srgb, seed: k }); n++; };
+  const hullWet = (x, y, dx, dy) => [-15, -8, 0, 8, 15].every((u) => [-4, 0, 4].every((v) => isWaterAt(x + dx * u - dy * v, y + dy * u + dx * v)));
+  const put = (x, y, dx, dy, k, moored = false) => { if (x < minX + 20 || x > maxX - 20 || y < minY + 20 || y > maxY - 20 || !(moored ? hullWet(x, y, dx, dy) : isDeepWater(x, y))) return; cacilheiro(tileB0(x, y), { x, y, dx, dy, lin, srgb, seed: k }); n++; };
   for (const [a, b] of [[[38.7048156, -9.1458602], [38.7043741, -9.1458431]], [[38.7065673, -9.1335673], [38.7062885, -9.1334308]]]) {   // pier root → head
     const [ax, ay] = proj.fwd(...a), [bx, by] = proj.fwd(...b), L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L;
-    put(bx + ux * 18 + uy * 6.5, by + uy * 18 - ux * 6.5, ux, uy, 0.2);          // bow to the pontoon, lying alongside its end
+    // gangway along the mapped pier, a floating pontoon at its head, and the ferry berthed bow-on against it
+    const S = tileB0(bx, by), grey = lin(srgb('#9a9792')), dark = lin(srgb('#4b4d50')), PLs = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0];
+    box(S, (ax + bx) / 2, (ay + by) / 2, ux, uy, L / 2, 1.6, 0.6, 1.5, grey, I0, PLs);
+    box(S, bx + ux * 5, by + uy * 5, ux, uy, 5, 9, -0.6, 1.2, dark, I0, PLs);
+    box(S, bx + ux * 5, by + uy * 5, ux, uy, 4.6, 8.6, 1.2, 1.35, grey, I0, PLs);
+    put(bx + ux * 26.5, by + uy * 26.5, ux, uy, 0.2, true);
   }
+  const moored = n;
   const routes = extractLines(els, proj, (t) => t.route === 'ferry');
   for (const r of routes) {
     const [x0, y0] = r.pts[0], far = r.pts[r.pts.length - 1], L = Math.hypot(far[0] - x0, far[1] - y0), ux = (far[0] - x0) / L, uy = (far[1] - y0) / L;
     const s = 95 + hash(r.id) * 90; put(x0 + ux * s, y0 + uy * s, ux, uy, hash(r.id + 'f'));
   }
-  stats.ferries = n; log(`ferries ${n}`);
+  // a few yachts out on the river, spread along the reach, sailing roughly up or down stream
+  let sb = 0;
+  for (let k = 0; k < 40 && sb < 7; k++) {
+    const rnd = (j) => { const v = Math.sin((k + 1) * 12.9898 + j * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const x = minX + (0.08 + 0.84 * rnd(1)) * (maxX - minX), y = minY + 25 + rnd(2) * 420;
+    if (!isDeepWater(x, y) || !isDeepWater(x, y - 25)) continue;
+    const a = (rnd(3) < 0.5 ? 0.35 : Math.PI + 0.35) + (rnd(4) - 0.5) * 0.9;
+    sailboat(tileB0(x, y), { x, y, dx: Math.cos(a), dy: Math.sin(a), lin, srgb, seed: rnd(5), len: 8 + rnd(6) * 5 }); sb++;
+    if (sb === 1) log('first sailboat at', proj.inv(x, y).map((v) => v.toFixed(5)).join(','));
+  }
+  stats.ferries = n; stats.sailboats = sb; log(`ferries ${n} (${moored} moored), sailboats ${sb}`);
 }
 
 // ─── miradouros: balustrades where the terrace drops away; Santa Luzia's pergola ──
