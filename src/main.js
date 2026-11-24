@@ -77,7 +77,7 @@ document.getElementById('attrib').textContent = manifest.attribution;
 const matBuildings = buildingMaterial();
 const maxAniso = renderer.capabilities.getMaxAnisotropy();
 let done = 0;
-const total = manifest.tiles.length + 5;
+const total = manifest.tiles.length + 6;
 const tick = () => { progressEl.style.width = `${(++done / total) * 100}%`; };
 
 function adopt(gltf) {
@@ -185,6 +185,35 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
     });
     for (const mesh of [near, lo]) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); }
     treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
+  }
+  tick();
+}));
+
+// cars: instanced boxes (body, glass cabin, roof), chunked and only drawn near the camera
+const carChunks = [];
+jobs.push(fetch(url('cars.bin')).then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0))).then((buf) => {
+  const d = new Float32Array(buf), n = d.length / 6;
+  const tint = (g, v) => { g = g.toNonIndexed(); g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 3).fill(v), 3)); return g; };
+  const geo = mergeGeometries([
+    tint(new THREE.BoxGeometry(4.3, 0.78, 1.78).translate(0, 0.56, 0), 1),
+    tint(new THREE.BoxGeometry(2.25, 0.56, 1.6).translate(-0.25, 1.22, 0), 0.13),
+    tint(new THREE.BoxGeometry(1.95, 0.07, 1.52).translate(-0.3, 1.52, 0), 1),
+  ]);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.1 });
+  const PAL = [[0xf2f2ef, 30], [0xb9bcbf, 18], [0x7d8185, 12], [0x1e2023, 15], [0x2b3e5c, 8], [0x8e2b2b, 7], [0xd8cdb4, 4], [0x3f5a46, 3], [0x5d6f86, 3]];
+  const tot = PAL.reduce((a, p) => a + p[1], 0), pick = (h) => { let x = h * tot; for (const [c, w] of PAL) { if ((x -= w) < 0) return c; } return PAL[0][0]; };
+  const CH = 400, cells = new Map();
+  for (let i = 0; i < n; i++) { const k = Math.floor(d[i * 6] / CH) + ',' + Math.floor(d[i * 6 + 2] / CH); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); }
+  const m = new THREE.Matrix4(), e = new THREE.Euler(0, 0, 0, 'YZX'), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color();
+  for (const ids of cells.values()) {
+    const mesh = new THREE.InstancedMesh(geo, mat, ids.length);
+    ids.forEach((i, j) => {
+      const o = i * 6; e.set(0, d[o + 3], d[o + 4]); q.setFromEuler(e);
+      m.compose(p.set(d[o], d[o + 1], d[o + 2]), q, one); mesh.setMatrixAt(j, m);
+      mesh.setColorAt(j, col.setHex(pick((d[o + 5] * 7.31) % 1)));
+    });
+    mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); mesh.visible = false;
+    scene.add(mesh); carChunks.push({ mesh, c: mesh.boundingSphere.center.clone(), r: mesh.boundingSphere.radius });
   }
   tick();
 }));
@@ -304,6 +333,7 @@ renderer.setAnimationLoop((now) => {
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 480;
+  for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 420;
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 520; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
   if (lampPoints) { lampPoints.visible = cityUniforms.uNight.value > 0.01; lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }

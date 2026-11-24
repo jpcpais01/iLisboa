@@ -862,9 +862,49 @@ const lamps = [];
   }
   log(`street lamps ${lamps.length / 3}`);
 }
+// cars: parked along kerbs of ordinary streets, in lanes on the avenues. x, z, -y, heading, pitch, colour seed
+const cars = [];
+{
+  const CAR = { primary: 'lane', secondary: 'lane', tertiary: 'both', trunk: 'lane', residential: 'park', unclassified: 'park', living_street: 'park' };
+  const carHash = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const taken = new Set();
+  for (const r of sorted) {
+    const k = roadKind(r.tags), mode = CAR[k]; if (!mode) continue;
+    if (r.tags.access === 'no' || r.tags.motor_vehicle === 'no' || r.tags.tunnel) continue;
+    const w = parseMeters(r.tags.width) ?? ROAD_W[k]; if (w < 6) continue;
+    const oneway = r.tags.oneway === 'yes';
+    let acc = 0; const total = r.pts.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - r.pts[i - 1][0], p[1] - r.pts[i - 1][1]) : 0), 0);
+    if (total < 24) continue;
+    for (let i = 0; i + 1 < r.pts.length; i++) {
+      const [ax, ay] = r.pts[i], [bx, by] = r.pts[i + 1], L = Math.hypot(bx - ax, by - ay); if (L < 1e-3) { continue; }
+      const ux = (bx - ax) / L, uy = (by - ay) / L, nx = -uy, ny = ux;
+      for (let t = 2; t < L; t += 5.2) {
+        const along = acc + t; if (along < 10 || along > total - 10) continue;   // keep junctions clear
+        const h = carHash(r.pts[0][0] + along, r.pts[0][1] + i);
+        let off, dir;
+        if (mode === 'park' || (mode === 'both' && h < 0.5)) {
+          if (h > 0.62) continue;                                            // gaps between parked cars
+          const side = carHash(along, r.pts[0][0]) < 0.5 ? 1 : -1; off = side * (w / 2 - 1.1); dir = side > 0 ? 0 : (oneway ? 0 : Math.PI);
+        } else {
+          if (h > 0.16) continue;                                            // sparse traffic
+          const lane = oneway ? (carHash(along, 7) < 0.5 ? 1 : -1) * w / 6 : (carHash(along, 9) < 0.5 ? 1 : -1) * w / 4;
+          off = lane; dir = oneway || lane < 0 ? 0 : Math.PI;                 // drive on the right
+        }
+        const x = ax + ux * t + nx * off, y = ay + uy * t + ny * off;
+        if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) continue;
+        const key = Math.round(x / 4) + ',' + Math.round(y / 4); if (taken.has(key)) continue; taken.add(key);
+        const z0 = groundAt(x - ux * 2, y - uy * 2), z1 = groundAt(x + ux * 2, y + uy * 2);
+        const head = Math.atan2(uy, ux) + dir;
+        cars.push(x, (z0 + z1) / 2, -y, head, Math.atan2(z1 - z0, 4) * (dir ? -1 : 1), h);
+      }
+      acc += L;
+    }
+  }
+  log(`cars ${cars.length / 6}`);
+}
 const manifest = {
   area: AREA, origin: { lat: lat0, lon: lon0 }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
-  tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3 },
+  tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3, cars: cars.length / 6 },
   attribution: '© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus',
   built: new Date().toISOString(),
 };
@@ -971,6 +1011,8 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   await sharp(m, { raw: { width: wr.w, height: wr.h, channels: 1 } }).blur(0.7).png({ compressionLevel: 9, palette: false }).toFile(path.join(OUT, 'water.png'));
   fs.writeFileSync(path.join(OUT, 'trees.bin'), Buffer.from(Float32Array.from(trees).buffer));
   fs.writeFileSync(path.join(OUT, 'lamps.bin'), Buffer.from(Float32Array.from(lamps).buffer));
+  fs.writeFileSync(path.join(OUT, 'cars.bin'), Buffer.from(Float32Array.from(cars).buffer));
+  totalBytes += cars.length * 4;
   totalBytes += fs.statSync(path.join(OUT, 'water.png')).size + trees.length * 4 + lamps.length * 4;
 }
 manifest.stats.bytes = totalBytes;
