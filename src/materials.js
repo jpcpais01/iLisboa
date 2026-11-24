@@ -51,7 +51,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     float ux = (fu - .5) * bw;                               // metres from bay centre
     float pxm = max(fwidth(bx) * bw, fwidth(y)) + 1e-4;
     float aa = pxm * .7;
-    float far = smoothstep(.22, .65, pxm);
+    float far = smoothstep(.38, 1.05, pxm);   // windows hold until a bay is ~1 px wide
     float isG = step(y, gh);
     float fi = isG > .5 ? 0. : 1. + floor((y - gh) / fh);
     float fy = isG > .5 ? y : mod(y - gh, fh);
@@ -154,7 +154,7 @@ if (kind < .5) {                                  // plain trims, chimneys
 } else if (kind < 3.5 || kind > 4.5 && kind < 5.5) {      // roof tiles (3) and mansard (5)
   vec2 t = vSurf;
   float pxm = max(fwidth(t.x), fwidth(t.y)) + 1e-4, aa = pxm;
-  float far = smoothstep(.06, .2, pxm);
+  float far = smoothstep(.08, .26, pxm);
   float row = floor(t.y / .34), fv = fract(t.y / .34);
   float cu = t.x / .23 + .5 * mod(row, 2.), ci = floor(cu), fuu = fract(cu);
   float shade = (.78 + .22 * smoothstep(0., .8, fv)) * (.86 + .14 * sin(fuu * 3.1416)) * (.9 + .2 * h21(vec2(ci, row) + seed));
@@ -193,7 +193,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v7';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v8';
   return m;
 }
 

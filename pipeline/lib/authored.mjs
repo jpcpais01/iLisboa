@@ -38,7 +38,10 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
-  w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // Coliseu dos Recreios: drum under an authored metal dome
+  w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
+  w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
+  // Hospital de São José (old Jesuit college of Santo Antão-o-Novo): whitewashed wings under tiled hip roofs
+  ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`r8383242_${i}`, { shape: 'hipped', wall: '#efe9dc', roofCol: '#a9614b', variant: 4, stone: false }])),   // Coliseu dos Recreios: drum under an authored metal dome
   // Palácio de São Bento: the untagged parts of the palace are white like the rest
   ...Object.fromEntries(['w1570029244', 'w1570029245', 'w1570029246', 'w1571587396'].map((id) => [id, { wall: '#eee9de', variant: 4 }])),
   // Mosteiro de São Vicente de Fora: white mannerist monastery, tiled hip roofs

@@ -361,9 +361,9 @@ renderer.setAnimationLoop((now) => {
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
-  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 480;
-  for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 420;
-  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 520; t.near.visible = nearby; t.lo.visible = !nearby; }
+  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 900;
+  for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 850;
+  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
   if (lampPoints) { lampPoints.visible = cityUniforms.uNight.value > 0.01; lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   renderer.render(scene, camera);

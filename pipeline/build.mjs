@@ -30,7 +30,7 @@ const OUT = path.join(ROOT, 'public/tiles', AREA);
 fs.mkdirSync(OUT, { recursive: true });
 
 const TILE = 500;             // tile size (m): small enough that the camera and shadow frusta cull most of the city up close
-const TEX_PX = 1024;          // ground texture px per km
+const TEX_PX = 2048;          // ground texture px per km
 const GRID = 8;               // terrain mesh spacing (m)
 const SS = 0.5;               // ground map supersample (m/px)
 const WATER_Y = 0;            // river surface
@@ -80,7 +80,7 @@ async function loadDEM() {
     }
     ero[i] = m;
   }
-  const g = boxBlur(ero, w, h, 1, 2);
+  let g = boxBlur(ero, w, h, 1, 2);
   const lonC = (c) => ox + (c0 + c + 0.5) * rx, latC = (r) => oy + (r0 + r + 0.5) * ry;
   const sample = (grid, lat, lon) => {
     const fx = (lon - lonC(0)) / rx, fy = (lat - latC(0)) / ry;
@@ -89,7 +89,42 @@ async function loadDEM() {
     const a = grid[y0 * w + x0], b = grid[y0 * w + x0 + 1], c = grid[(y0 + 1) * w + x0], d = grid[(y0 + 1) * w + x0 + 1];
     return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
   };
+  // Big footprints (stations, convents, hospitals) are wider than the 3×3 erosion window, so their roofs survived as
+  // mounds the streets climbed over. With the OSM buildings known: cells mostly under a roof become unknown and are
+  // filled in from the surrounding street-level cells, then eroded and smoothed as before.
+  const refine = (covered) => {
+    const cov = new Float32Array(w * h);
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+      let k = 0; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) if (covered(latC(r) + (a - 1.5) / 4 * ry, lonC(c) + (b - 1.5) / 4 * rx)) k++;
+      cov[r * w + c] = k / 16;
+    }
+    const fill = Float32Array.from(raw), known = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) known[i] = isW(raw[i]) || cov[i] < 0.6 ? 1 : 0;
+    let todo = known.reduce((a, v) => a + (1 - v), 0); const start = todo;
+    for (let pass = 0; pass < 40 && todo > 0; pass++) {
+      const next = []; 
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = y * w + x; if (known[i]) continue;
+        let s = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= h || xx >= w) continue; const j = yy * w + xx; if (known[j] && !isW(raw[j])) { s += fill[j]; n++; } }
+        if (n >= 2 || (n && pass > 3)) next.push([i, s / n]);
+      }
+      for (const [i, v] of next) { fill[i] = Math.min(raw[i], v); known[i] = 1; todo--; }
+    }
+    const ero2 = new Float32Array(raw.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (isW(raw[i])) { ero2[i] = 0; continue; }
+      let m = fill[i];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= h || xx >= w) continue; const v = fill[yy * w + xx]; if (!isW(raw[yy * w + xx])) m = Math.min(m, v); }
+      ero2[i] = m;
+    }
+    const g2 = boxBlur(ero2, w, h, 1, 2);
+    let d = 0, dm = 0; for (let i = 0; i < g.length; i++) { const e = Math.abs(g2[i] - g[i]); d += e; dm = Math.max(dm, e); }
+    g = g2;
+    return { roofCells: start, meanShift: d / g.length, maxShift: dm };
+  };
   return {
+    refine,
     ground: (x, y) => { const [la, lo] = proj.inv(x, y); return sample(g, la, lo); },
     rawWater: (x, y) => { const [la, lo] = proj.inv(x, y); return sample(raw, la, lo) < 0.5; },
   };
@@ -102,7 +137,25 @@ const els = loadOverpass(path.join(ROOT, 'data/raw', `${AREA}.osm.json.gz`));
 log(`OSM elements: ${els.length}`);
 const isBuilding = (t) => (t.building && t.building !== 'no') || (t['building:part'] && t['building:part'] !== 'no');
 const underground = (t) => t.location === 'underground' || (t.layer && +t.layer < 0) || t.tunnel === 'yes' || t.tunnel === 'building_passage';
-const polysB = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t));
+const polysB = (() => {   // the same footprint mapped twice (a convent relation over its hospital ways) z-fights: keep one
+  const all = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t)), seen = new Map(), out = [];
+  const score = (p) => (OVERRIDES[p.id] ? 4 : 0) + (p.tags.height || p.tags['building:levels'] ? 2 : 0) + (p.tags.name ? 1 : 0);
+  for (const p of all) {
+    if (p.tags['building:part']) { out.push(p); continue; }
+    const k = `${Math.round(p.c[0] * 2)},${Math.round(p.c[1] * 2)},${Math.round(Math.abs(p.area) / 5)}`, q = seen.get(k);
+    if (!q) { seen.set(k, p); out.push(p); continue; }
+    if (score(p) > score(q)) { out[out.indexOf(q)] = p; seen.set(k, p); }
+  }
+  console.log('duplicate footprints dropped', all.length - out.length);
+  return out;
+})();
+{ // building-aware ground (see dem.refine)
+  const cr = new Raster(minX - 400, minY - 400, maxX + 400, maxY + 400, 3);
+  for (const p of polysB) if (!p.tags['building:part']) cr.fillRings([p.outer, ...p.holes], (i) => { cr.data[i] = 1; });
+  const covered = (la, lo) => { const [x, y] = proj.fwd(la, lo), c = Math.floor((x - cr.minX) / 3), r = Math.floor((cr.maxY - y) / 3); return c >= 0 && r >= 0 && c < cr.w && r < cr.h && cr.data[r * cr.w + c] === 1; };
+  const st = dem.refine(covered);
+  log(`ground refined under roofs: ${st.roofCells} cells, mean shift ${st.meanShift.toFixed(2)} m, max ${st.maxShift.toFixed(1)} m`);
+}
 const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
 for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
 const roads = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
@@ -172,6 +225,20 @@ const isWaterAt = (x, y) => {
 const isDeepWater = (x, y) => { for (const [dx, dy] of [[0, 0], [7, 0], [-7, 0], [0, 7], [0, -7], [5, 5], [-5, 5], [5, -5], [-5, -5]]) if (!isWaterAt(x + dx, y + dy)) return false; return true; };
 const LAND_MIN = 1.6;
 const groundAt = (x, y) => (isDeepWater(x, y) ? -5 : Math.max(LAND_MIN, dem.ground(x, y)));
+// the height of the rendered terrain mesh (8 m grid per 500 m tile, split b–d like the index buffer): small things
+// (cars, lamps, trees, posts) sit on this so they neither float nor sink where the slope bends between grid nodes
+const meshAt = (x, y) => {
+  const ni_ = Math.ceil((maxX - minX) / TILE), nj_ = Math.ceil((maxY - minY) / TILE);
+  const i = Math.max(0, Math.min(ni_ - 1, Math.floor((x - minX) / TILE))), j = Math.max(0, Math.min(nj_ - 1, Math.floor((y - minY) / TILE)));
+  const x0 = minX + i * TILE, x1 = Math.min(maxX, x0 + TILE), y0 = minY + j * TILE, y1 = Math.min(maxY, y0 + TILE);
+  const cols = Math.max(2, Math.round((x1 - x0) / GRID) + 1), rows = Math.max(2, Math.round((y1 - y0) / GRID) + 1);
+  const fx = Math.max(0, Math.min(cols - 1.000001, ((x - x0) / (x1 - x0)) * (cols - 1))), fy = Math.max(0, Math.min(rows - 1.000001, ((y1 - y) / (y1 - y0)) * (rows - 1)));
+  const c = Math.floor(fx), r = Math.floor(fy), u = fx - c, v = fy - r;
+  const N = (rr, cc) => groundAt(x0 + ((x1 - x0) * cc) / (cols - 1), y1 - ((y1 - y0) * rr) / (rows - 1));
+  const a = N(r, c), b = N(r, c + 1), d = N(r + 1, c), e = N(r + 1, c + 1);
+  return u + v <= 1 ? a + u * (b - a) + v * (d - a) : e + (1 - u) * (d - e) + (1 - v) * (b - e);
+};
+if (process.env.DBG) { let mx = 0, sum = 0, n = 0, big = 0; for (let k = 0; k < 20000; k++) { const x = minX + Math.random() * (maxX - minX), y = minY + Math.random() * (maxY - minY), d = Math.abs(meshAt(x, y) - groundAt(x, y)); mx = Math.max(mx, d); sum += d; n++; if (d > 0.5) big++; } console.log('mesh vs groundAt: mean', (sum / n).toFixed(2), 'max', mx.toFixed(2), '>0.5m', big); }
 
 // ─── colours ────────────────────────────────────────────────────────────
 const srgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -310,6 +377,22 @@ function addBuilding_(p) {
   const colTrim = lin(s.stone ? jitter(s.wall, 0.6, 4) : TRIM);
   const party = p.party || p.outer.map(() => false);
   stats.partyEdges += party.filter(Boolean).length;
+  if (s.kind === 'roof' && s.minH > 1.5) {   // free-standing canopies (station shelters, petrol stations, markets) stand on slim posts
+    const post = lin(srgb('#8f9296')), PLp = [KIND.PLAIN / 8, 5 / 8, 0.3, 1];
+    let k = 0;
+    for (const r of [p.outer]) {
+      let since = 99;                                   // metres walked since the last post: corners get one, long edges one every 9 m
+      for (let i = 0; i < r.length && k < 80; i++) {
+        const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        for (let t = 0; t < L; t += 1, since += 1) {
+          if (!(since >= 9 || (t === 0 && since >= 3))) continue;
+          const x = a[0] + (b[0] - a[0]) * (t / L), y = a[1] + (b[1] - a[1]) * (t / L);
+          const dx = p.c[0] - x, dy = p.c[1] - y, dl = Math.hypot(dx, dy) || 1, px = x + (dx / dl) * 0.45, py = y + (dy / dl) * 0.45;
+          box(S, px, py, 1, 0, 0.13, 0.13, groundAt(px, py) - 0.3, bottom, post, [0, 0, 0, 0], PLp); k++; since = 0;
+        }
+      }
+    }
+  }
 
   if (s.pillar) { // arcade pillars / columns → octagonal stone shafts
     stats.pillars++;
@@ -364,7 +447,11 @@ function addBuilding_(p) {
 
 {
   // Simple-3D-Buildings rule: if an outline contains building:parts, draw the parts instead.
-  const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && (['church', 'chapel', 'basilica'].includes(p.tags.building) || p.tags.amenity === 'place_of_worship');
+  // a church is one outline: convents mapped as multi-outer relations tagged place_of_worship (Santo Antão-o-Novo,
+  // Mónicas) put a tower on every wing; and a place_of_worship tag on a house is a chapel inside it, not a church
+  const multiOuter = new Set(polysB.filter((p) => /^r\d+_[1-9]/.test(p.id)).map((p) => p.id.split('_')[0]));
+  const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && !multiOuter.has(p.id.split('_')[0]) &&
+    (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
   const parts = polysB.filter((p) => p.tags['building:part']);
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
@@ -408,7 +495,7 @@ function addBuilding_(p) {
     const u = (k) => hash(p.id + k);
     (p.id === 'w96359439' ? estrelaBasilica : parishChurch)(tileB0(ob.cx, ob.cy), { cx: ob.cx, cy: ob.cy, ux, uy, hl: ob.hl, hw: ob.hw, ground: groundAt(ob.cx, ob.cy), gmin, H, towers, towerSide: u('ts') < 0.5 ? -1 : 1,
       cap: info.cap || (u('cap') < 0.6 ? 'cupola' : 'spire'), wall: info.wall || (u('w') < 0.75 ? '#f1ede4' : '#efe4cc'), roofHex: info.roof, lin, srgb, seed: u('s') });
-    stats.buildings++; stats.authored++; stats.churches = (stats.churches || 0) + 1;
+    stats.buildings++; stats.authored++; stats.churches = (stats.churches || 0) + 1; if (process.env.DBG) log('church', p.id, towers, proj.inv(ob.cx, ob.cy).map((v) => v.toFixed(5)).join(','), p.tags.name || '', p.tags.building, Math.round(Math.abs(p.area)));
   }
   pombalineBlocks(baixa, {
     SkeletonBuilder, groundAt, lin, srgb, jitter, pick, pal, hash, stats,
@@ -496,9 +583,10 @@ function addBuilding_(p) {
     saoBentoFront(tileB(...m), { a, b, zTop, zSq: Math.min(zSq, zTop - 0.5), lin, srgb }); mark();
   }
   if (byId.get('w96390844')) {   // Coliseu dos Recreios: the big shallow metal dome over the auditorium drum
-    const c = byId.get('w96390844'), [x, y] = proj.fwd(38.716633, -9.140276);
+    // sized to the drum's own outline (the theatre outline also holds the front block): the rim sits on the drum wall
+    const c = byId.get('w1561006352') || byId.get('w96390844'), x = c.c[0], y = c.c[1], r = Math.sqrt(Math.abs(c.area) / Math.PI) + 0.4;
     const g = c.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / c.outer.length;
-    metalDome(tileB(x, y), { cx: x, cy: y, r: 31, z0: g + 17, rise: 10, lin, srgb }); mark();
+    metalDome(tileB(x, y), { cx: x, cy: y, r, z0: g + 17, rise: r * 0.34, lin, srgb }); mark();
   }
   {   // Praça Marquês de Pombal: the column (its OSM outline is dropped)
     const mp = els.find((e) => e.type === 'way' && e.id === 822816252);
@@ -852,14 +940,14 @@ for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
 log(`ground map painted ${gm.w}×${gm.h}`);
 
 // downsample to 1 m and bake contact AO around buildings
-const GW = Math.round(gm.w / 2), GH = Math.round(gm.h / 2);
-let ground1 = await sharp(Buffer.from(gm.data.buffer), { raw: { width: gm.w, height: gm.h, channels: 3 } }).resize(GW, GH, { kernel: 'lanczos3' }).raw().toBuffer();
+const GW = gm.w, GH = gm.h;   // keep the full 0.5 m/px paint: roads and kerbs stay crisp
+let ground1 = Buffer.from(gm.data.buffer);
 gm.data = null;
 {
   const bm = new Raster(minX, minY, maxX, maxY, (maxX - minX) / GW);
   const mask = new Float32Array(bm.w * bm.h);
   for (const p of polysB) if (!p.tags['building:part'] || true) bm.fillRings([p.outer, ...p.holes], (i) => { if (i < mask.length) mask[i] = 1; });
-  const ao = boxBlur(mask, bm.w, bm.h, 3, 3);
+  const ao = boxBlur(mask, bm.w, bm.h, 6, 3);
   for (let i = 0; i < GW * GH; i++) {
     const k = 1 - Math.min(1, ao[i] * 1.15) * 0.42;
     ground1[i * 3] *= k; ground1[i * 3 + 1] *= k; ground1[i * 3 + 2] *= k;
@@ -1024,7 +1112,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   const py0 = Math.round(((maxY - y1) / (maxY - minY)) * GH), py1 = Math.round(((maxY - y0) / (maxY - minY)) * GH);
   const tw = Math.max(16, Math.round((TEX_PX * (x1 - x0)) / 1000)), th = Math.max(16, Math.round((TEX_PX * (y1 - y0)) / 1000));   // TEX_PX per km
   const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } })
-    .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th).webp({ quality: 82, effort: 6 }).toBuffer();
+    .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).sharpen({ sigma: 0.7, m1: 0.6, m2: 1.4 }).webp({ quality: 80, effort: 6 }).toBuffer();
   doc.createExtension(EXTTextureWebP).setRequired(true);
   const tex = doc.createTexture('ground').setImage(webp).setMimeType('image/webp');
   const gmat = doc.createMaterial('ground').setBaseColorTexture(tex).setRoughnessFactor(1).setMetallicFactor(0);
