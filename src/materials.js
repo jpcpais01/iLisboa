@@ -32,7 +32,7 @@ vWP = (modelMatrix * vec4(transformed, 1.)).xyz;`);
 float kind = floor(vStyle.x + .5), variant = floor(vStyle.y + .5), seed = vStyle.z, bw = max(vStyle.w, .5);
 vec3 base = diffuseColor.rgb;
 vec3 col = base;
-float rough = .9, glassAmt = 0., glow = 0.;
+float rough = .9, glassAmt = 0., glow = 0., flood = 0.;
 float grime = vnoise(vWP.xz * .35 + vWP.y * .2) * .5 + vnoise(vWP.xz * 1.7 + vWP.y) * .5;
 vec3 stoneC = vec3(.80, .76, .68);
 vec3 frameC = mix(vec3(.93, .92, .88), stoneC, step(.5, fract(seed * 7.3)));
@@ -185,13 +185,14 @@ if (kind < .5) {                                  // plain trims, chimneys
   float j = max(box1(-.02, .02, fract(t.y / .48) - .5, pxm), box1(-.02, .02, fract(t.x / .95 + .5 * mod(row, 2.)) - .5, pxm)) * (1. - smoothstep(.05, .2, pxm));
   col = base * (.86 + .16 * grime) * (1. - .22 * j) * (.95 + .1 * h21(vec2(floor(t.x / .95), row) + seed));
   rough = .8;
+  flood = .55 + .45 * (1. - smoothstep(0., 30., t.y));             // monuments are floodlit from below after dusk
 }
 diffuseColor.rgb = col;
 `)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v5';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v6';
   return m;
 }
 
