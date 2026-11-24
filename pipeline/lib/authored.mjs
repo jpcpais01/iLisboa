@@ -15,7 +15,14 @@ function tri(S, a, b, c, n, ...rest) {
 
 // ─── authored data ──────────────────────────────────────────────────────
 // Baixa Pombalina pilot: blocks between Rua Áurea and Rua da Prata, Rua do Comércio to Rossio.
-export const BAIXA_ZONE = [[38.70868, -9.13778], [38.71328, -9.13948], [38.71330, -9.13788], [38.70866, -9.13603]];
+// Expanded 2026-11-24: the whole Pombaline grid, Rua do Crucifixo to Rua da Madalena, Rua do Comércio to Rossio/Figueira.
+export const BAIXA_ZONES = [
+  [[38.70895, -9.13888], [38.71139, -9.13935], [38.71322, -9.13995], [38.71332, -9.13655], [38.70885, -9.13468]],
+  // Rossio and Praça da Figueira: the Pombaline ranges around both squares
+  [[38.71322, -9.14002], [38.71520, -9.14062], [38.71522, -9.13868], [38.71458, -9.13850], [38.71452, -9.13660], [38.71332, -9.13650]],
+];
+// not part of a block: churches, monuments, banks with their own architecture stay procedural/authored
+export const notBlock = (t) => ['church', 'cathedral', 'chapel', 'basilica', 'kiosk', 'roof', 'shed', 'hut', 'service', 'train_station'].includes(t.building) || t.amenity === 'place_of_worship' || !!t.historic || t.tourism === 'museum' || t.amenity === 'bank' || t.man_made === 'arch';
 
 // Praça do Comércio wings: ochre arcaded ranges, two floors over the arcade, dormered roof.
 const PRACA_WINGS = ['r1388351_0', 'w96313048', 'r3282309_0', 'r275363_0', 'r1388355_0', 'r1388352_0', 'w96315896', 'w249076538', 'w96315931', 'w96315948'];
@@ -31,9 +38,11 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  // Teatro Nacional D. Maria II: neoclassical, pale stone, low roof; portico modelled separately
+  w77473968: { variant: 4, wall: '#ece5d4', stone: false, shape: 'hipped', pitch: 20, h: 21, roofH: 3.4, floorH: 5.2, groundH: 6, bayW: 4.2, balconyFloors: [], parapet: 0 },
 };
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w41683195', 'w663318739']);
+export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735']);
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
 // Pombaline façade palette, read off the reference by eye: mostly pale, a few warm ochres and pinks.
@@ -414,13 +423,13 @@ export function arcoRuaAugusta(S, { cx, cy, ux, uy, ground, lin, srgb }) {
 
 // Equestrian statue of D. José I (Machado de Castro, 1775): bronze king on horseback
 // trampling serpents, on a tall lioz pedestal flanked by sculpture groups, on an oval stepped base.
-export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb }) {
+export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb, plain = false }) {
   const bronze = lin(srgb('#4e5a4b')), bronzeHi = lin(srgb('#66735f')), stone = lin(srgb('#e6dfcf')), shade = lin(srgb('#cfc6b2'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.61, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.61, 1], I0 = [0, 0, 0, 0];
   const fx = Math.sin(heading), fy = Math.cos(heading);   // facing direction (heading 180° = south)
   const F = frame(cx, cy, fy, -fx, ground);               // u = statue's right, v = forward
   // oval stepped platform: four steps
-  const steps = [[12.5, 9.5, 0.35], [11.6, 8.7, 0.7], [10.7, 7.9, 1.05], [9.8, 7.1, 1.4]];
+  const steps = plain ? [[6.5, 5.0, 0.4], [5.8, 4.4, 0.8], [5.2, 3.9, 1.4]] : [[12.5, 9.5, 0.35], [11.6, 8.7, 0.7], [10.7, 7.9, 1.05], [9.8, 7.1, 1.4]];
   let z = -0.6;
   for (const [ra, rb, zt] of steps) {
     const n = 28, ring = Array.from({ length: n }, (_, k) => { const a = (k / n) * Math.PI * 2; return [Math.cos(a) * ra, Math.sin(a) * rb]; });
@@ -437,7 +446,7 @@ export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb }) {
   box(S, px, py, fy, -fx, 4.0, 2.75, ground + 7.6, ground + 8.3, shade, I0, ST);
   box(S, px, py, fy, -fx, 3.5, 2.3, ground + 8.3, ground + 8.8, stone, I0, ST);
   // allegorical groups on both flanks (Triumph with a horse, Fame with an elephant), bronze
-  for (const s of [-1, 1]) {
+  if (!plain) for (const s of [-1, 1]) {
     const [gx, gy] = P(s * 5.2, 0.4);
     box(S, gx, gy, fy, -fx, 1.6, 1.9, ground + 1.4, ground + 2.4, stone, I0, ST);
     limb(S, F(s * 5.2, -0.9, 2.4), F(s * 5.2, 1.2, 3.6), 0.95, 0.7, 8, bronze, PL);
@@ -466,4 +475,87 @@ export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb }) {
   limb(S, Bp(0, 0.15, 5.95), Bp(0, 0.1, 6.6), 0.36, 0.08, 8, bronzeHi, PL);                // plumed helmet
   limb(S, Bp(0.45, 0.2, 5.2), Bp(0.75, 1.1, 5.0), 0.12, 0.1, 5, bronze, PL);               // sceptre arm
   return 1;
+}
+
+// Column of D. Pedro IV, Rossio (Davioud & Robert, 1870): 27.5 m. Stepped base, pedestal with four
+// seated virtues, Corinthian shaft, bronze emperor on top.
+export function pedroIVColumn(S, { cx, cy, ground, lin, srgb }) {
+  const stone = lin(srgb('#e8e1d1')), shade = lin(srgb('#d0c7b3')), bronze = lin(srgb('#4e5a4b'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.23, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.23, 1], I0 = [0, 0, 0, 0];
+  const g = ground, P = (z) => [cx, g + z, -cy];
+  box(S, cx, cy, 1, 0, 5.2, 5.2, g - 0.5, g + 0.5, shade, I0, ST);
+  box(S, cx, cy, 1, 0, 4.5, 4.5, g + 0.5, g + 1.0, stone, I0, ST);
+  box(S, cx, cy, 1, 0, 3.0, 3.0, g + 1.0, g + 6.2, stone, I0, ST);
+  box(S, cx, cy, 1, 0, 3.3, 3.3, g + 6.2, g + 6.8, shade, I0, ST);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {              // the four virtues at the corners of the base
+    const x = cx + dx * 3.6, y = cy + dy * 3.6;
+    box(S, x, y, 1, 0, 0.9, 0.9, g + 1.0, g + 1.8, stone, I0, ST);
+    limb(S, [x, g + 1.8, -y], [x, g + 3.0, -y], 0.55, 0.42, 8, bronze, PL);
+    limb(S, [x, g + 3.0, -y], [x, g + 3.5, -y], 0.2, 0.18, 6, bronze, PL);
+  }
+  limb(S, P(6.8), P(8.0), 1.25, 1.1, 16, stone, ST);                         // base moulding
+  limb(S, P(8.0), P(21.8), 0.95, 0.82, 16, stone, ST);                        // shaft
+  limb(S, P(21.8), P(23.2), 0.85, 1.2, 12, shade, ST);                        // capital
+  box(S, cx, cy, 1, 0, 1.3, 1.3, g + 23.2, g + 23.8, stone, I0, ST);
+  limb(S, P(23.8), P(25.4), 0.5, 0.42, 8, bronze, PL);                        // D. Pedro IV
+  limb(S, P(25.4), P(26.6), 0.42, 0.36, 8, bronze, PL);
+  limb(S, P(26.6), P(27.4), 0.2, 0.18, 6, bronze, PL);
+  limb(S, [cx + 0.3, g + 26.3, -cy], [cx + 0.9, g + 27.1, -cy - 0.2], 0.09, 0.08, 4, bronze, PL);
+}
+
+// Rossio's twin bronze fountains (1889): wide stone basin, sculpted base, two bowls, crowning figure.
+export function rossioFountain(S, { cx, cy, r, ground, lin, srgb }) {
+  const stone = lin(srgb('#ded6c4')), bronze = lin(srgb('#56604f'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.41, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.41, 1], I0 = [0, 0, 0, 0];
+  const n = 24, R = Math.max(3.5, r), ring = (rad) => Array.from({ length: n }, (_, k) => [cx + rad * Math.cos((k / n) * Math.PI * 2), cy + rad * Math.sin((k / n) * Math.PI * 2)]);
+  const outer = ring(R), inner = ring(R - 0.5);
+  for (let k = 0; k < n; k++) {                                                // basin rim: outside, inside, top
+    const k2 = (k + 1) % n;
+    wallQuad(S, outer[k], outer[k2], ground - 0.3, ground - 0.3, ground + 0.7, ground + 0.7, stone, 0, 1, ground, I0, ST);
+    wallQuad(S, inner[k2], inner[k], ground - 0.3, ground - 0.3, ground + 0.7, ground + 0.7, stone, 0, 1, ground, I0, ST);
+    triUp(S, [outer[k][0], ground + 0.7, -outer[k][1]], [outer[k2][0], ground + 0.7, -outer[k2][1]], [inner[k2][0], ground + 0.7, -inner[k2][1]], stone, [0, 0], [0, 0], [0, 0], I0, ST);
+    triUp(S, [outer[k][0], ground + 0.7, -outer[k][1]], [inner[k2][0], ground + 0.7, -inner[k2][1]], [inner[k][0], ground + 0.7, -inner[k][1]], stone, [0, 0], [0, 0], [0, 0], I0, ST);
+  }
+  const P = (z) => [cx, ground + z, -cy];
+  limb(S, P(0), P(1.8), 1.5, 1.0, 10, bronze, PL);                            // sculpted base (tritons)
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + 0.4; limb(S, [cx + Math.cos(a) * 1.6, ground + 0.2, -(cy + Math.sin(a) * 1.6)], [cx + Math.cos(a) * 1.1, ground + 1.6, -(cy + Math.sin(a) * 1.1)], 0.35, 0.25, 6, bronze, PL); }
+  limb(S, P(1.8), P(2.4), 0.6, 2.4, 14, bronze, PL);                          // lower bowl
+  limb(S, P(2.4), P(4.2), 0.45, 0.35, 8, bronze, PL);
+  limb(S, P(4.2), P(4.7), 0.35, 1.3, 12, bronze, PL);                         // upper bowl
+  limb(S, P(4.7), P(5.9), 0.3, 0.24, 8, bronze, PL);                          // crowning figure
+  limb(S, P(5.9), P(6.3), 0.15, 0.13, 6, bronze, PL);
+}
+
+// Neoclassical hexastyle portico with pediment (Teatro D. Maria II), on a façade edge a→b (outward = right).
+export function portico(S, { a, b, ground, depth = 6, colH = 11, lin, srgb, statue = true }) {
+  const stone = lin(srgb('#efe8d8')), shade = lin(srgb('#d8cfbc'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.77, 0.9], I0 = [0, 0, 0, 0];
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, ox = uy, oy = -ux;
+  const W = Math.min(L * 0.5, 22), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  const at = (u, v) => [mx + ux * u + ox * v, my + uy * u + oy * v];
+  // stylobate steps
+  for (let k = 0; k < 3; k++) { const [x, y] = at(0, depth / 2 + 0.6 - k * 0.5); box(S, x, y, ux, uy, W / 2 + 1.2 - k * 0.4, depth / 2 + 0.6 - k * 0.5, ground - 0.5, ground + 0.4 * (k + 1), shade, I0, ST); }
+  const z0 = ground + 1.2;
+  for (let k = 0; k < 6; k++) {
+    const u = -W / 2 + 1 + (k * (W - 2)) / 5, [x, y] = at(u, depth - 0.9);
+    box(S, x, y, ux, uy, 0.75, 0.75, z0, z0 + 0.6, stone, I0, ST);
+    limb(S, [x, z0 + 0.6, -y], [x, z0 + colH, -y], 0.6, 0.52, 12, stone, ST);
+    box(S, x, y, ux, uy, 0.75, 0.75, z0 + colH, z0 + colH + 0.5, stone, I0, ST);
+  }
+  const zE = z0 + colH + 0.5;
+  { const [x, y] = at(0, depth / 2); box(S, x, y, ux, uy, W / 2 + 0.3, depth / 2 + 0.2, zE, zE + 1.8, stone, I0, ST); }
+  // pediment: triangular prism
+  const ph = 4.2, zP = zE + 1.8;
+  const A = at(-W / 2 - 0.3, depth + 0.2), B = at(W / 2 + 0.3, depth + 0.2), C = at(0, depth + 0.2);
+  const A2 = at(-W / 2 - 0.3, 0), B2 = at(W / 2 + 0.3, 0), C2 = at(0, 0);
+  const V = (p, z) => [p[0], z, -p[1]], n = [ox, 0, -oy];
+  tri(S, V(A, zP), V(B, zP), V(C, zP + ph), n, stone, [0, 0], [W, 0], [W / 2, ph], I0, ST);
+  for (const [p, q, p2, q2] of [[A, C, A2, C2], [C, B, C2, B2]]) {
+    const z1 = p === A ? zP : zP + ph, z2 = q === C ? zP + ph : zP;
+    const e = [V(p, z1), V(q, z2), V(q2, z2), V(p2, z1)];
+    const ex = e[1][0] - e[0][0], ey = e[1][1] - e[0][1], ez = e[1][2] - e[0][2], fx = e[3][0] - e[0][0], fy = e[3][1] - e[0][1], fz = e[3][2] - e[0][2];
+    let nn = [ey * fz - ez * fy, ez * fx - ex * fz, ex * fy - ey * fx]; const l = Math.hypot(...nn); nn = nn.map((v) => v / l); if (nn[1] < 0) nn = nn.map((v) => -v);
+    tri(S, e[0], e[1], e[2], nn, shade, [0, 0], [1, 0], [1, 1], I0, ST); tri(S, e[0], e[2], e[3], nn, shade, [0, 0], [1, 1], [0, 1], I0, ST);
+  }
+  if (statue) { const p = at(0, depth - 0.3); limb(S, [p[0], zP + ph, -p[1]], [p[0], zP + ph + 2.4, -p[1]], 0.4, 0.3, 8, stone, ST); limb(S, [p[0], zP + ph + 2.4, -p[1]], [p[0], zP + ph + 2.9, -p[1]], 0.18, 0.16, 6, stone, ST); }
 }

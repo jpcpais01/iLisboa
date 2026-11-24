@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONE, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -348,10 +348,11 @@ function addBuilding_(p) {
   const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p));
   let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
-  const zone = BAIXA_ZONE.map(([la, lo]) => proj.fwd(la, lo));
-  const baixa = todo.filter((p) => !p.tags['building:part'] && pointInRing(p.c[0], p.c[1], zone) && !OVERRIDES[p.id]);
+  const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
+  const inZone = (x, y) => zones.some((z) => pointInRing(x, y, z));
+  const baixa = todo.filter((p) => !p.tags['building:part'] && inZone(p.c[0], p.c[1]) && !OVERRIDES[p.id] && !notBlock(p.tags) && Math.abs(p.area) >= 40);
   const baixaSet = new Set(baixa);
-  todo = todo.filter((p) => !baixaSet.has(p) && !(p.tags['building:part'] && pointInRing(p.c[0], p.c[1], zone)));
+  todo = todo.filter((p) => !baixaSet.has(p) && !(p.tags['building:part'] && inZone(p.c[0], p.c[1])));
   markPartyWalls(todo.filter((p) => !p.tags['building:part']));
   for (const p of todo) addBuilding(p);
   pombalineBlocks(baixa, {
@@ -369,6 +370,24 @@ function addBuilding_(p) {
     const g = groundAt(arco.c[0], arco.c[1]), [ti, tj] = tileOf(arco.c[0], arco.c[1]);
     arcoRuaAugusta(getTile(ti, tj).b, { cx: arco.c[0], cy: arco.c[1], ux: vy, uy: -vx, ground: g, lin, srgb }); stats.landmarks = (stats.landmarks || 0) + 1;
   }
+  const tileB = (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; };
+  const mark = () => { stats.landmarks = (stats.landmarks || 0) + 1; };
+  const col = byId.get('w663311597');
+  if (col) { pedroIVColumn(tileB(...col.c), { cx: col.c[0], cy: col.c[1], ground: groundAt(...col.c), lin, srgb }); mark(); }
+  for (const id of ['w663311514', 'w663311518']) {
+    const f = polysArea.find((p) => p.id === id); if (!f) continue;
+    const r = Math.sqrt(Math.abs(f.area) / Math.PI);
+    rossioFountain(tileB(...f.c), { cx: f.c[0], cy: f.c[1], r, ground: groundAt(...f.c), lin, srgb }); mark();
+  }
+  const joaoEl = els.find((e) => e.type === 'way' && e.id === 663318735 && e.geometry);
+  const joao = joaoEl && { c: proj.fwd(joaoEl.geometry.reduce((a, q) => a + q.lat, 0) / joaoEl.geometry.length, joaoEl.geometry.reduce((a, q) => a + q.lon, 0) / joaoEl.geometry.length) };
+  if (joao) { equestrianJose(tileB(...joao.c), { cx: joao.c[0], cy: joao.c[1], ground: groundAt(...joao.c), heading: Math.atan2(vx, vy), lin, srgb, plain: true }); mark(); }
+  const theatre = byId.get('w77473968');
+  if (theatre) {   // portico on the façade facing Rossio (outward normal closest to south, longest)
+    let best = null, bs = -1;
+    theatre.outer.forEach((a, i) => { const b = theatre.outer[(i + 1) % theatre.outer.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); const oy = -(b[0] - a[0]) / L; const sc = -oy * L; if (sc > bs) { bs = sc; best = [a, b]; } });
+    portico(tileB(...theatre.c), { a: best[0], b: best[1], ground: groundAt(...theatre.c), lin, srgb }); mark();
+  }
   const jose = byId.get('w663318739');
   if (jose) {
     const g = groundAt(jose.c[0], jose.c[1]), [ti, tj] = tileOf(jose.c[0], jose.c[1]);
@@ -377,7 +396,7 @@ function addBuilding_(p) {
 }
 
 // ─── statues, columns & historic walls ──────────────────────────────────
-const authoredSpots = polysB.filter((p) => DROP.has(p.id)).map((p) => p.c);
+const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
 {
   const bronze = lin(srgb('#55614f')), stoneC = lin(LIOZ), wallC = lin(srgb('#d3c6aa')), whiteC = lin(srgb('#ece6da'));
   const SI = [0, 0, 0, 0], ST = (seed) => [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = (seed) => [KIND.PLAIN / 8, 5 / 8, seed, 1];
@@ -521,6 +540,20 @@ for (const r of rails) { // two rails per track
       paint(Math.min(m1, m2) < HW ? band : base)(i);
     });
   }
+}
+// Rossio: the 'mar largo' — black-and-white basalt/limestone calçada in broad waves
+{
+  const sq = polysArea.find((p) => p.id === 'w1317749306');
+  if (sq) {
+    const lightC = srgb('#e6e1d5'), darkC = srgb('#5e5c58');
+    gm.fillRings([sq.outer, ...sq.holes], (i) => {
+      const x = minX + ((i % gm.w) + 0.5) * SS, y = maxY - (Math.floor(i / gm.w) + 0.5) * SS;
+      const w = y + 2.6 * Math.sin(x / 3.4);
+      paint(((w / 7) % 1 + 1) % 1 < 0.5 ? darkC : lightC)(i);
+    });
+  }
+  const fig = polysArea.find((p) => p.id === 'w1301226315');
+  if (fig) gm.fillRings([fig.outer, ...fig.holes], paint(srgb('#e4ded0')));
 }
 // water (from 1 m mask)
 for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
