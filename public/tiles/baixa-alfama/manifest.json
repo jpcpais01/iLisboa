@@ -23,7 +23,7 @@
     -391.61047827112156,
     -82.34729133504857
    ],
-   "bytes": 2394104,
+   "bytes": 2363800,
    "balconies": "bal_0_0.bin"
   },
   {
@@ -36,7 +36,7 @@
     608.3895217288784,
     -82.34729133504857
    ],
-   "bytes": 2265224,
+   "bytes": 2247048,
    "balconies": "bal_1_0.bin"
   },
   {
@@ -49,7 +49,7 @@
     1391.6104782711216,
     -82.34729133504857
    ],
-   "bytes": 359184,
+   "bytes": 352260,
    "balconies": "bal_2_0.bin"
   },
   {
@@ -62,7 +62,7 @@
     -391.61047827112156,
     917.6527086649514
    ],
-   "bytes": 3280868,
+   "bytes": 3206160,
    "balconies": "bal_0_1.bin"
   },
   {
@@ -75,7 +75,7 @@
     608.3895217288784,
     917.6527086649514
    ],
-   "bytes": 4371864,
+   "bytes": 4267200,
    "balconies": "bal_1_1.bin"
   },
   {
@@ -88,7 +88,7 @@
     1391.6104782711216,
     917.6527086649514
    ],
-   "bytes": 2428784,
+   "bytes": 2377416,
    "balconies": "bal_2_1.bin"
   },
   {
@@ -101,7 +101,7 @@
     -391.61047827112156,
     1082.3472913350486
    ],
-   "bytes": 431748,
+   "bytes": 421796,
    "balconies": "bal_0_2.bin"
   },
   {
@@ -114,7 +114,7 @@
     608.3895217288784,
     1082.3472913350486
    ],
-   "bytes": 541344,
+   "bytes": 525412,
    "balconies": "bal_1_2.bin"
   },
   {
@@ -127,24 +127,24 @@
     1391.6104782711216,
     1082.3472913350486
    ],
-   "bytes": 208048,
+   "bytes": 205152,
    "balconies": "bal_2_2.bin"
   }
  ],
  "stats": {
-  "authored": 530,
+  "authored": 531,
   "buildings": 9425,
   "height": 216,
   "levels": 2208,
-  "estimated": 6471,
-  "planar": 7477,
-  "skeleton": 914,
-  "flat": 530,
+  "estimated": 6470,
+  "planar": 7141,
+  "skeleton": 884,
+  "flat": 896,
   "skeletonFail": 2,
   "parts": 228,
   "skippedOutlines": 67,
   "partyEdges": 19404,
-  "balconies": 83185,
+  "balconies": 83701,
   "statues": 94,
   "wallsM": 26446.157846817794,
   "pillars": 0,
@@ -153,16 +153,16 @@
   "fireWalls": 605,
   "blocks": 62,
   "blockMembers": 433,
-  "landmarks": 16,
+  "landmarks": 17,
   "trams": 36,
   "ferries": 3,
   "miradouros": 7,
   "waterSource": "osm-coastline",
   "trees": 3907,
   "treesMapped": 2828,
-  "bytes": 18082033,
-  "triangles": 921099
+  "bytes": 17777429,
+  "triangles": 902576
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-24T17:52:17.934Z"
+ "built": "2026-11-24T17:58:27.698Z"
 }

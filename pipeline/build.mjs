@@ -15,7 +15,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, pelourinho, domedTower } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -244,6 +244,7 @@ function buildingSpec(p) {
     else if (roofLevels >= 1) shape = 'mansard';
     else if (p.area > 3000 || h > 34) shape = 'flat';
     else if (utility && p.area < 40) shape = 'flat';
+    else if ((variant === 1 || variant === 2) && p.area < 350) { const r = u('rs'); shape = r < 0.1 ? 'flat' : r < 0.3 ? 'gabled' : 'hipped'; }   // old-town mix: terraces (açoteias), gables, hips
     else shape = 'hipped';
   }
   if (['round', 'saltbox', 'double_saltbox', 'quadruple_saltbox', 'crosspitched'].includes(shape)) shape = 'hipped';
@@ -474,6 +475,12 @@ function addBuilding_(p) {
     const pel = els.find((e) => e.type === 'node' && e.id === 1120633222);
     if (pel) { const [x, y] = proj.fwd(pel.lat, pel.lon); pelourinho(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   }
+  const mercado = byId.get('w39729235');
+  if (mercado) {
+    const [a, b] = facing(mercado, 0.2, -1, 20), L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+    const sg = ringArea(mercado.outer) > 0 ? 1 : -1, x = (a[0] + b[0]) / 2 - sg * uy * 3.4, y = (a[1] + b[1]) / 2 + sg * ux * 3.4;   // inset from the front
+    domedTower(tileB(x, y), { cx: x, cy: y, ux, uy, ground: groundAt(x, y), h: 21, half: 3.2, lin, srgb }); mark();
+  }
   const jose = byId.get('w663318739');
   if (jose) {
     const g = groundAt(jose.c[0], jose.c[1]), [ti, tj] = tileOf(jose.c[0], jose.c[1]);
@@ -657,6 +664,11 @@ for (const r of rails) { // two rails per track
     });
     gm.strokeLine(off, 0.35, paint(C.rail));
   }
+}
+// Castelo de São Jorge: gravel of the Paço da Alcáçova grounds and the bare earth of the archaeological site
+{
+  const cas = extractPolygons(els, proj, (t) => !!(t.historic || t.tourism || t.castle_type));
+  for (const [id, hex] of [['w1382432568', '#cbbb98'], ['w244745550', '#bfa985']]) { const p = cas.find((q) => q.id === id); if (p) gm.fillRings([p.outer, ...p.holes], paint(srgb(hex))); }
 }
 // Praça do Comércio: pale lioz paving crossed by the darker diagonal bands (mapped as footways)
 {

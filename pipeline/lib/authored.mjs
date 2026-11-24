@@ -56,6 +56,10 @@ export const OVERRIDES = {
   w95417254: { variant: 4, wall: '#efe9dc', roofCol: '#a5644e', stone: false, h: 21, roofH: 3.5, floorH: 5, groundH: 6, bayW: 3.8, balconyFloors: [1], balconyChance: 0.6, parapet: 0 },
   // Palácio Foz (Restauradores): rose-pink palace
   w96188746: { variant: 4, wall: '#e9bfae', roofCol: '#9e5f4c', stone: false, h: 20, roofH: 3.5, floorH: 4.4, groundH: 5, bayW: 3.6, balconyFloors: [1], balconyChance: 0.8, parapet: 0 },
+  // Alfândega (Terreiro do Trigo): long four-storey Pombaline-era range under a tiled hip roof
+  w96595183: { variant: 0, wall: '#ede2c6', roofCol: '#a3604b', stone: false, shape: 'hipped', h: 18, roofH: 4, floorH: 3.4, groundH: 4.6, bayW: 3.2, balconyFloors: [1], balconyChance: 0.7, parapet: 0 },
+  // Cais do Sodré station (1928): white modernist-classical front
+  w285355889: { variant: 4, wall: '#eeeae0', roofCol: '#a5644e', stone: false, h: 14, roofH: 3, floorH: 5, groundH: 6.5, bayW: 4, balconyFloors: [], parapet: 0.6 },
   // Teatro Nacional D. Maria II: neoclassical, pale stone, low roof; portico modelled separately
   w77473968: { variant: 4, wall: '#ece5d4', stone: false, shape: 'hipped', pitch: 20, h: 21, roofH: 3.4, floorH: 5.2, groundH: 6, bayW: 4.2, balconyFloors: [], parapet: 0 },
 };
@@ -1131,4 +1135,22 @@ export function pelourinho(S, { cx, cy, ground, lin, srgb }) {
   for (let k = 0; k < 6; k++) limb(S, P(1.9 + k * 0.85), P(1.9 + (k + 1) * 0.85), 0.42 - k * 0.012, 0.36 - k * 0.012, 6, k % 2 ? shade : marble, ST);
   limb(S, P(7.0), P(7.5), 0.55, 0.7, 8, marble, ST);
   limb(S, P(7.5), P(8.6), 0.55, 0.06, 8, iron, PL);
+}
+
+// Mercado da Ribeira: the domed clock tower over the market's front on Avenida 24 de Julho.
+export function domedTower(S, { cx, cy, ux, uy, ground, h = 20, half = 3.2, lin, srgb }) {
+  const white = lin(srgb('#efe9dc')), trim = lin(srgb('#d6ccb7')), dome = lin(srgb('#8e9396')), dark = lin(srgb('#33363a'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.47, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.47, 1], I0 = [0, 0, 0, 0], P = (z) => [cx, ground + z, -cy];
+  box(S, cx, cy, ux, uy, half, half, ground - 1, ground + h, white, I0, PL);
+  for (const [a, b] of [[h * 0.55, h * 0.55 + 0.4], [h - 0.6, h]]) box(S, cx, cy, ux, uy, half + 0.25, half + 0.25, ground + a, ground + b, trim, I0, ST);
+  for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {           // clock faces and arched openings
+    const nx = ux * sx - uy * sy, ny = uy * sx + ux * sy, x = cx + nx * (half + 0.05), y = cy + ny * (half + 0.05);
+    limb(S, [x, ground + h * 0.78, -y], [x + nx * 0.08, ground + h * 0.78, -(y + ny * 0.08)], 1.1, 1.1, 14, white, ST);
+    limb(S, [x - nx * 0.02, ground + h * 0.78, -(y - ny * 0.02)], [x + nx * 0.02, ground + h * 0.78, -(y + ny * 0.02)], 1.25, 1.25, 14, dark, ST);
+    box(S, x, y, -ny, nx, 0.9, 0.06, ground + h * 0.2, ground + h * 0.45, dark, I0, ST);
+  }
+  limb(S, P(h), P(h + 1.2), half * 1.05, half * 1.05, 16, trim, ST);
+  for (let k = 0; k < 5; k++) { const a0 = (k / 5) * Math.PI / 2, a1 = ((k + 1) / 5) * Math.PI / 2; limb(S, P(h + 1.2 + Math.sin(a0) * half * 1.1), P(h + 1.2 + Math.sin(a1) * half * 1.1), Math.max(0.3, Math.cos(a0) * half), Math.max(0.5, Math.cos(a1) * half), 16, dome, ST, k === 4); }
+  limb(S, P(h + 1.2 + half * 1.1), P(h + 2.6 + half * 1.1), 0.5, 0.45, 8, white, PL);
+  limb(S, P(h + 2.6 + half * 1.1), P(h + 3.4 + half * 1.1), 0.55, 0.05, 8, dome, ST);
 }
