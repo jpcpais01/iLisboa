@@ -860,7 +860,7 @@ const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#e2dbcd'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
+  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 for (let i = 0; i < gm.w * gm.h; i++) paint(C.ground)(i);
@@ -898,15 +898,17 @@ for (const r of sorted) {
   gm.strokeLine(r.pts, w, paint(pedestrianish(k) ? C.calcada : C.asphalt));
 }
 for (const r of rails) if (r.tags.railway === 'rail' && !underground(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
+for (const r of rails) if (r.tags.railway === 'tram' && !underground(r.tags)) gm.strokeLine(r.pts, 2.3, paint(C.setts));   // granite setts between and beside the tram rails
 for (const r of rails) { // two rails per track
-  const g = r.tags.railway === 'tram' || r.tags.railway === 'funicular' ? 0.9 : (+r.tags.gauge || 1668) / 1000;
+  const tramish = r.tags.railway === 'tram' || r.tags.railway === 'funicular';
+  const g = tramish ? 0.9 : (+r.tags.gauge || 1668) / 1000;
   for (const side of [-1, 1]) {
     const off = r.pts.map((p, i) => {
       const a = r.pts[Math.max(0, i - 1)], b = r.pts[Math.min(r.pts.length - 1, i + 1)];
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       return [p[0] - ((b[1] - a[1]) / L) * g * side * 0.5, p[1] + ((b[0] - a[0]) / L) * g * side * 0.5];
     });
-    gm.strokeLine(off, 0.35, paint(C.rail));
+    gm.strokeLine(off, tramish ? 0.2 : 0.3, paint(tramish ? C.tramRail : C.rail));
   }
 }
 // Castelo de São Jorge: gravel of the Paço da Alcáçova grounds and the bare earth of the archaeological site
