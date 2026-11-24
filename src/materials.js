@@ -29,7 +29,8 @@ vWP = (modelMatrix * vec4(transformed, 1.)).xyz;`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', '#include <common>\n' + BUILDING_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
-float kind = floor(vStyle.x + .5), variant = floor(vStyle.y + .5), seed = vStyle.z, bw = max(vStyle.w, .5);
+float kind = floor(vStyle.x + .5), variant = floor(vStyle.y + .5), bw = max(vStyle.w, .5);
+float seed = floor(vStyle.z * 4096. + .5) / 4096.;   // snap: perspective interpolation wobbles a constant in the last bits, and the hashes amplify that into speckle up close
 vec3 base = diffuseColor.rgb;
 vec3 col = base;
 float rough = .9, glassAmt = 0., glow = 0., flood = 0.;
@@ -192,7 +193,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v6';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v7';
   return m;
 }
 
