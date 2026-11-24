@@ -65,7 +65,10 @@ controls.zoomToCursor = true;
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const texLoader = new THREE.TextureLoader();
 const progressEl = document.getElementById('progress');
-const manifest = await (await fetch(BASE + 'manifest.json')).json();
+const manifest = await (await fetch(BASE + 'manifest.json', { cache: 'no-cache' })).json();
+// every asset URL carries the build stamp, so a new deploy never mixes with cached tiles
+const url = (f) => `${BASE}${f}?v=${encodeURIComponent(manifest.built)}`;
+const ok = (r) => { if (!r.ok) throw new Error(`${r.status} ${r.url}`); return r; };
 const { minX, minY, maxX, maxY } = manifest.bounds;
 const center = new THREE.Vector3((minX + maxX) / 2, 0, -(minY + maxY) / 2);
 const size = Math.hypot(maxX - minX, maxY - minY);
@@ -82,6 +85,7 @@ function adopt(gltf) {
     if (!o.isMesh) return;
     if (o.name.startsWith('buildings')) {
       const g = o.geometry;
+      if (!g.attributes._info || !g.attributes._style) throw new Error(`stale tile ${o.name}`);
       g.setAttribute('surf', g.attributes.uv); g.deleteAttribute('uv');
       g.setAttribute('aInfo', g.attributes._info); g.deleteAttribute('_info');
       g.setAttribute('aStyle', g.attributes._style); g.deleteAttribute('_style');
@@ -100,12 +104,12 @@ function adopt(gltf) {
   tick();
 }
 
-const waterMask = await texLoader.loadAsync(BASE + 'water.png');
-const jobs = [...manifest.tiles.map((t) => t.file), 'base.glb'].map((f) => loader.loadAsync(BASE + f).then(adopt));
+const waterMask = await texLoader.loadAsync(url('water.png'));
+const jobs = [...manifest.tiles.map((t) => t.file), 'base.glb'].map((f) => loader.loadAsync(url(f)).then(adopt));
 
 // balconies: instanced per 250 m chunk, only drawn near the camera
 const balconyChunks = [];
-jobs.push(Promise.all(manifest.tiles.filter((t) => t.balconies).map((t) => fetch(BASE + t.balconies).then((r) => r.arrayBuffer())))
+jobs.push(Promise.all(manifest.tiles.filter((t) => t.balconies).map((t) => fetch(url(t.balconies)).then(ok).then((r) => r.arrayBuffer())))
   .then((bufs) => {
     const { slab, rail } = balconyGeometry();
     const railGeo = mergeGeometries(rail);
@@ -150,7 +154,7 @@ jobs.push(Promise.resolve(waterMask).then((mask) => {
 }));
 
 // trees: one instanced draw call
-jobs.push(fetch(BASE + 'trees.bin').then((r) => r.arrayBuffer()).then((buf) => {
+jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((buf) => {
   const d = new Float32Array(buf), n = d.length / 4;
   const paint = (g, hex) => { const c = new THREE.Color(hex); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3)); return g; };
   // clumped crown: three overlapping low-poly lobes, lighter on top
@@ -279,7 +283,12 @@ addEventListener('resize', () => {
 camera.aspect = innerWidth / innerHeight;
 camera.updateProjectionMatrix();
 
-await Promise.all(jobs);
-document.getElementById('loading').classList.add('done');
+try {
+  await Promise.all(jobs);
+  document.getElementById('loading').classList.add('done');
+} catch (err) {
+  console.error(err);
+  document.querySelector('#loading span').textContent = 'Lisboa não carregou. Recarregue a página.';
+}
 document.getElementById('subtitle').textContent = `Baixa · Alfama · ${manifest.stats.buildings.toLocaleString('pt-PT')} edifícios`;
 window.__ready = true;
