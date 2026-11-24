@@ -1,0 +1,26 @@
+name: fetch-data
+# Pulls raw open data (OSM via Overpass) into data/raw and commits it.
+# Runs on demand, or when the fetch script changes.
+on:
+  workflow_dispatch:
+  push:
+    paths: [pipeline/fetch_osm.sh, pipeline/areas.txt, .github/workflows/fetch-data.yml]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch OSM for each area
+        run: |
+          while read -r name s w n e; do
+            [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
+            pipeline/fetch_osm.sh $s $w $n $e data/raw/$name.osm.json.gz
+          done < pipeline/areas.txt
+      - name: Commit
+        run: |
+          git config user.name "ilisboa-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/raw
+          git diff --cached --quiet || (git commit -m "data: refresh OSM extracts [skip ci]" && git push)

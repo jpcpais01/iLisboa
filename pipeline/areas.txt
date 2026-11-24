@@ -1,0 +1,2 @@
+# name  south  west  north  east
+baixa-alfama 38.7030 -9.1520 38.7225 -9.1200
