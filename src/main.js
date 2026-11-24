@@ -252,6 +252,7 @@ function setTime(h) {
   sun.color.copy(noon).lerp(warm, golden);
   sun.intensity = 3.1 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);
   const night = cityUniforms.uNight.value;
+  document.body.classList.toggle('night', night > 0.5);
   // night: cool moonlit sky light, no warm ground bounce; the warmth comes from the windows
   hemi.color.set(0xdfeaff).lerp(moonSky, night); hemi.groundColor.set(0xb59a7c).lerp(moonGround, night);
   hemi.intensity = (0.3 + 0.35 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6)) * (1 - 0.5 * night);
@@ -372,5 +373,5 @@ try {
   console.error(err);
   document.querySelector('#loading span').textContent = 'Lisboa não carregou. Recarregue a página.';
 }
-document.getElementById('subtitle').textContent = `Baixa · Alfama · ${manifest.stats.buildings.toLocaleString('pt-PT')} edifícios`;
+document.getElementById('subtitle').textContent = `Centro histórico · ${manifest.stats.buildings.toLocaleString('pt-PT')} edifícios`;
 window.__ready = true;

@@ -46,3 +46,13 @@ html, body {
   position: fixed; left: 16px; bottom: 76px; font: 11px/1.4 ui-monospace, Menlo, monospace;
   background: var(--glass); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); white-space: pre;
 }
+@media (max-width: 600px) {
+  #attrib {
+    top: auto; right: 0; left: 0; max-width: none; text-align: center; font-size: 9.5px; padding: 0 16px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 50px);
+  }
+}
+.brand h1, .brand p, #attrib { text-shadow: 0 0 6px rgba(250, 246, 238, 0.95), 0 0 2px rgba(250, 246, 238, 0.9); }
+/* after dusk the sky turns navy: light ink */
+body.night { --ink: #f1ece3; --muted: #b9b2a6; --glass: rgba(28, 32, 44, 0.66); --line: rgba(255, 255, 255, 0.14); }
+body.night .brand h1, body.night .brand p, body.night #attrib { text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
