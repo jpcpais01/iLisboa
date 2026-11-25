@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
   push:
     paths: [pipeline/pbf_to_overpass.py, pipeline/areas.txt, .github/workflows/fetch-data.yml]
+concurrency: fetch-data
 permissions:
   contents: write
 jobs:
@@ -21,7 +22,10 @@ jobs:
           curl -sfL -o /tmp/pt.osm.pbf https://download.geofabrik.de/europe/portugal-latest.osm.pbf
           while read -r name s w n e; do
             [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
-            osmium extract -b $w,$s,$e,$n --strategy complete_ways -O -o /tmp/$name.osm.pbf /tmp/pt.osm.pbf
+            # 0.004° (~350 m) margin: neighbouring areas see the same buildings and roads near their shared edge,
+            # so the ground fill and the painted streets match across the seam (the build keeps only what it owns)
+            m=0.004; b=$(python3 -c "print(f'{$w-$m},{$s-$m},{$e+$m},{$n+$m}')")
+            osmium extract -b $b --strategy complete_ways -O -o /tmp/$name.osm.pbf /tmp/pt.osm.pbf
             python pipeline/pbf_to_overpass.py /tmp/$name.osm.pbf data/raw/$name.osm.json.gz
           done < pipeline/areas.txt
       - name: Commit
@@ -29,4 +33,4 @@ jobs:
           git config user.name "ilisboa-data-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data/raw
-          git diff --cached --quiet || (git commit -m "data: refresh OSM extracts [skip ci]" && git push)
+          git diff --cached --quiet || (git commit -m "data: refresh OSM extracts [skip ci]" && git pull --rebase -q && git push)
