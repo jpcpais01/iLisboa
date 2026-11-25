@@ -256,11 +256,11 @@ export function buildRoofAndWalls(S, ctx) {
       // fascia + soffit (white trim reads as the classic Lisbon cornice)
       const C2 = [C[0], C[1] - 0.22, C[2]], D2 = [D[0], D[1] - 0.22, D[2]];
       const nF = [ox, 0, -oy];
-      tri(S, D2, C2, C, nF, colTrim, [0, 0], [1, 0], [1, 1], info(0), style(KIND.PLAIN));
-      tri(S, D2, C, D, nF, colTrim, [0, 0], [1, 1], [0, 1], info(0), style(KIND.PLAIN));
+      tri(ctx.D || S, D2, C2, C, nF, colTrim, [0, 0], [1, 0], [1, 1], info(0), style(KIND.PLAIN));
+      tri(ctx.D || S, D2, C, D, nF, colTrim, [0, 0], [1, 1], [0, 1], info(0), style(KIND.PLAIN));
       const A2 = [A[0], wallTop - 0.2, A[2]], B2 = [B[0], wallTop - 0.2, B[2]];
-      tri(S, A2, C2, B2, [0, -1, 0], colTrim, [0, 0], [1, 1], [1, 0], info(0), style(KIND.PLAIN));
-      tri(S, A2, D2, C2, [0, -1, 0], colTrim, [0, 0], [0, 1], [1, 1], info(0), style(KIND.PLAIN));
+      tri(ctx.D || S, A2, C2, B2, [0, -1, 0], colTrim, [0, 0], [1, 1], [1, 0], info(0), style(KIND.PLAIN));
+      tri(ctx.D || S, A2, D2, C2, [0, -1, 0], colTrim, [0, 0], [0, 1], [1, 1], info(0), style(KIND.PLAIN));
     });
   } else if (shape !== 'skeleton-done') {
     // flat roof

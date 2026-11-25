@@ -397,15 +397,16 @@ export function pombalineBlocks(blds, env) {
       if (dEdge(mx, my) < 1.2) continue;                     // on the street: that's a façade
       const key = [Math.round(mx), Math.round(my)].join(','); if (seen.has(key)) continue; seen.add(key);
       const n = Math.max(1, Math.ceil(L / 1.5)), dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, nx = -dy * 0.16, ny = dx * 0.16;
+      const FD = env.getDetail ? env.getDetail(mx, my) : S;   // near-only: fire walls and chimneys are sub-pixel from afar
       for (let k = 0; k < n; k++) {
         const s0 = (k / n) * L, s1 = ((k + 1) / n) * L;
         const P0 = [a[0] + dx * s0, a[1] + dy * s0], P1 = [a[0] + dx * s1, a[1] + dy * s1];
         const z0 = roofZ(P0[0], P0[1]) + 0.4, z1 = roofZ(P1[0], P1[1]) + 0.4, zb = wallTop - 0.2;
         const q = [[P0[0] + nx, P0[1] + ny], [P1[0] + nx, P1[1] + ny], [P1[0] - nx, P1[1] - ny], [P0[0] - nx, P0[1] - ny]];
-        wallQuad(S, q[3], q[2], zb, zb, z0, z1, fw, 0, 1, ground, I0, fwStyle);
-        wallQuad(S, q[1], q[0], zb, zb, z1, z0, fw, 0, 1, ground, I0, fwStyle);
-        triUp(S, [q[0][0], z0 + 0.02, -q[0][1]], [q[1][0], z1 + 0.02, -q[1][1]], [q[2][0], z1 + 0.02, -q[2][1]], fw, [0, 0], [0, 0], [0, 0], I0, fwStyle);
-        triUp(S, [q[0][0], z0 + 0.02, -q[0][1]], [q[2][0], z1 + 0.02, -q[2][1]], [q[3][0], z0 + 0.02, -q[3][1]], fw, [0, 0], [0, 0], [0, 0], I0, fwStyle);
+        wallQuad(FD, q[3], q[2], zb, zb, z0, z1, fw, 0, 1, ground, I0, fwStyle);
+        wallQuad(FD, q[1], q[0], zb, zb, z1, z0, fw, 0, 1, ground, I0, fwStyle);
+        triUp(FD, [q[0][0], z0 + 0.02, -q[0][1]], [q[1][0], z1 + 0.02, -q[1][1]], [q[2][0], z1 + 0.02, -q[2][1]], fw, [0, 0], [0, 0], [0, 0], I0, fwStyle);
+        triUp(FD, [q[0][0], z0 + 0.02, -q[0][1]], [q[2][0], z1 + 0.02, -q[2][1]], [q[3][0], z0 + 0.02, -q[3][1]], fw, [0, 0], [0, 0], [0, 0], I0, fwStyle);
       }
       stats.fireWalls = (stats.fireWalls || 0) + 1;
     }
@@ -418,8 +419,9 @@ export function pombalineBlocks(blds, env) {
         const x = po.cx + po.ux * (u - 0.5) * po.hl * 1.2 + po.vx * (v - 0.5) * po.hw * 0.8, y = po.cy + po.uy * (u - 0.5) * po.hl * 1.2 + po.vy * (v - 0.5) * po.hw * 0.8;
         if (!pip(x, y, p.outer) || dEdge(x, y) < 3) continue;
         const z = roofZ(x, y);
-        box(S, x, y, po.ux, po.uy, 0.4, 0.3, z - 0.8, z + 1.3, fw, I0, fwStyle);
-        box(S, x, y, po.ux, po.uy, 0.5, 0.4, z + 1.3, z + 1.45, roofCol, I0, fwStyle);
+        const CD = env.getDetail ? env.getDetail(x, y) : S;
+        box(CD, x, y, po.ux, po.uy, 0.4, 0.3, z - 0.8, z + 1.3, fw, I0, fwStyle);
+        box(CD, x, y, po.ux, po.uy, 0.5, 0.4, z + 1.3, z + 1.45, roofCol, I0, fwStyle);
       }
     }
     stats.blocks = (stats.blocks || 0) + 1;
@@ -1217,55 +1219,69 @@ export function caisColunas(S, { a, b, ground, lin, srgb }) {
 // front corners (0, 1 or 2) with stone cupolas or tiled spires, a lower chancel and sacristies behind.
 // The façade is at u = -hl (callers flip the axis so it faces the open street or square).
 export function parishChurch(S, { cx, cy, ux, uy, hl, hw, ground, gmin, H, towers = 0, towerSide = 1, cap = 'cupola', wall, roofHex, lin, srgb, seed = 0.5 }) {
-  const white = lin(srgb(wall || '#f1ede4')), stone = lin(srgb('#d6cdb9')), dark = lin(srgb('#36373a')), roof = lin(srgb(roofHex || '#a85e47'));
+  const white = lin(srgb(wall || '#f1ede4')), stone = lin(srgb('#d6cdb9')), dark = lin(srgb('#2f3033')), roof = lin(srgb(roofHex || '#a85e47'));
   const ST = [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], TL = [KIND.TILES / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
   const zb = gmin - ground - 1.5;
   const K = kit(S, { cx, cy, ux, uy, ground, zb, wall: white, roof, ST: PL, TL });
-  const { W3, blk, block, gable } = K;
+  const { P2, W3, blk, block, gable } = K;
+  const { tbox, win } = openings(S, P2, W3, ux, uy, ground, stone, dark, ST);
+  const urn = (u, v, z, r = 0.32) => { sweep(S, W3, [[u, v, z, r * 0.7, r * 0.7], [u, v, z + r * 0.4, r * 0.45, r * 0.45], [u, v, z + r * 1.1, r, r], [u, v, z + r * 1.8, r * 0.55, r * 0.55], [u, v, z + r * 2.4, 0.04, 0.04]], stone, ST, 8); };
+  const cross = (u, v, z, h = 1.4) => { limb(S, W3(u, v, z), W3(u, v, z + h), 0.06, 0.06, 4, dark, ST); limb(S, W3(u, v - h * 0.3, z + h * 0.68), W3(u, v + h * 0.3, z + h * 0.68), 0.05, 0.05, 4, dark, ST); };
   const F = -hl, tw = Math.min(3.6, Math.max(2.2, hw * 0.42)), Tt = Math.min(11, Math.max(6, tw * 2.8));
   const chL = Math.min(hl * 0.32, hw * 1.1), hc = hw * 0.68, back = hl - chL;
-  // nave
+  // nave: plinth, pilaster strips, cornice, framed arched windows
   block(F, back, -hw, hw, H); gable(F, back, -hw - 0.3, hw + 0.3, H, H + hw * 0.55);
   blk(F - 0.12, back + 0.12, -hw - 0.15, hw + 0.15, H - 0.55, H, stone, ST);
+  blk(F - 0.08, back + 0.08, -hw - 0.1, hw + 0.1, zb, 0.6, stone, ST);
   for (const sv of [-1, 1]) {
     for (let u = F + 0.4; u <= back - 0.3; u += Math.max(4, (back - F - 0.8) / Math.max(1, Math.round((back - F) / 6)))) blk(u - 0.3, u + 0.3, sv * hw - 0.12, sv * hw + 0.12, zb, H - 0.55, stone, ST);
-    for (let u = F + 5; u < back - 2; u += 5.5) blk(u - 0.55, u + 0.55, sv * (hw + 0.04) - 0.02, sv * (hw + 0.04) + 0.02, H * 0.5, H * 0.5 + Math.min(3.2, H * 0.28), dark, ST);
+    for (let u = F + 5; u < back - 2; u += 5.5) win(u, sv * hw, 0, sv, H * 0.5, 1.1, Math.min(3.0, H * 0.26), 'arch', 0.12);
   }
   // chancel and sacristies
   block(back, hl, -hc, hc, H * 0.86); gable(back - 0.3, hl, -hc - 0.3, hc + 0.3, H * 0.86, H * 0.86 + hc * 0.55);
   for (const sv of [-1, 1]) { block(back, hl, sv > 0 ? hc : -hw, sv > 0 ? hw : -hc, H * 0.5); gable(back, hl + 0.2, sv > 0 ? hc : -hw - 0.2, sv > 0 ? hw + 0.2 : -hc, H * 0.5, H * 0.5 + (hw - hc) * 0.5); }
-  // front: pediment, portal, choir window
+  // front: giant pilasters, entablature, pediment with urns and cross, portal with hood, choir window, niche
   const fw = towers === 2 ? hw - 2 * tw + 0.2 : hw, fc = towers === 1 ? -towerSide * tw : 0;
   const pedH = H + Math.max(hw * 0.55, 2) + 1.0;
   tri(S, W3(F - 0.06, fc - fw, H - 0.6), W3(F - 0.06, fc + fw, H - 0.6), W3(F - 0.06, fc, pedH + 0.35), W3(-1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]), stone, [0, 0], [1, 0], [0, 1], I0, ST);
   tri(S, W3(F - 0.12, fc - fw + 0.7, H - 0.1), W3(F - 0.12, fc + fw - 0.7, H - 0.1), W3(F - 0.12, fc, pedH - 0.45), W3(-1, 0, 0).map((v, i) => v - W3(0, 0, 0)[i]), white, [0, 0], [1, 0], [0, 1], I0, PL);
-  blk(F - 0.1, F, fc - fw, fc + fw, H - 0.6, H - 0.1, stone, ST);
+  { const L = Math.hypot(fw, pedH - H + 0.95), dv = fw / L, dz = (pedH - H + 0.95) / L;   // raking cornices
+    for (const sg of [-1, 1]) slab4(S, [W3(F - 0.3, fc + sg * (fw + 0.2), H - 0.65), W3(F - 0.3, fc, pedH + 0.55), W3(F - 0.3, fc, pedH + 0.2), W3(F - 0.3, fc + sg * (fw + 0.2), H - 1.0)], 0.4, stone, ST); void dv; void dz; }
+  blk(F - 0.25, F, fc - fw - 0.1, fc + fw + 0.1, H - 1.2, H - 0.1, stone, ST);
+  for (const t of towers ? [-1, 1] : [-1, -0.35, 0.35, 1]) blk(F - 0.22, F, fc + t * (fw - 0.45) - 0.4, fc + t * (fw - 0.45) + 0.4, 0, H - 1.2, stone, ST);
+  for (const sg of [-1, 1]) urn(F - 0.2, fc + sg * (fw - 0.3), H - 0.1);
+  if (towers) { urn(F - 0.2, fc, pedH + 0.45, 0.25); cross(F - 0.2, fc, pedH + 1.05, 1.5); }
   const dw = Math.min(1.3, hw * 0.2), dh = Math.min(5, H * 0.38);
-  blk(F - 0.12, F, fc - dw - 0.45, fc + dw + 0.45, 0, dh + 0.7, stone, ST);
-  blk(F - 0.18, F - 0.1, fc - dw, fc + dw, 0, dh, dark, ST);
-  if (H > 10) { blk(F - 0.1, F, fc - 0.95, fc + 0.95, dh + 2.0, dh + 4.6, stone, ST); blk(F - 0.16, F - 0.08, fc - 0.65, fc + 0.65, dh + 2.3, dh + 4.3, dark, ST); }
-  // bell towers
+  win(F, fc, -1, 0, 0, dw * 2, dh, 'pediment', 0.3);
+  if (H > 10) { win(F, fc, -1, 0, dh + 2.3, 1.3, 2.0, 'cornice', 0.15); if (fw > 3.5 && !towers) for (const sg of [-1, 1]) win(F, fc + sg * fw * 0.62, -1, 0, dh + 2.3, 0.9, 1.6, 'arch', 0.12); }
+  ell(S, W3, [F - 0.15, fc, (H - 1.2 + pedH) / 2 - 0.2], [0.12, 0.7, 0.7], dark, ST, 8);   // oculus in the tympanum
+  // bell towers: corner pilasters, cornices, arched belfry on every face, balustrade with urns, ribbed cupola or spire
   const tv = towers === 2 ? [-1, 1] : towers === 1 ? [towerSide] : [];
   for (const sv of tv) {
-    const vc = sv * (hw - tw), u0 = F, u1 = F + 2 * tw, top = H + Tt;
+    const vc = sv * (hw - tw), u0 = F, u1 = F + 2 * tw, top = H + Tt, um = (u0 + u1) / 2;
     blk(u0, u1, vc - tw, vc + tw, zb, top, white);
     for (const [a, b] of [[u0, vc - tw], [u1, vc - tw], [u0, vc + tw], [u1, vc + tw]]) blk(a - 0.25, a + 0.25, b - 0.25, b + 0.25, zb, top, stone, ST);
     for (const z of [H - 0.55, top - 0.5]) blk(u0 - 0.2, u1 + 0.2, vc - tw - 0.2, vc + tw + 0.2, z, z + 0.55, stone, ST);
-    const bz0 = top - 4.2, bz1 = top - 1.0, bo = Math.min(0.7, tw * 0.3);
-    blk(u0 - 0.06, u0 - 0.02, vc - bo, vc + bo, bz0, bz1, dark, ST); blk(u1 + 0.02, u1 + 0.06, vc - bo, vc + bo, bz0, bz1, dark, ST);
-    blk((u0 + u1) / 2 - bo, (u0 + u1) / 2 + bo, vc - tw - 0.06, vc - tw - 0.02, bz0, bz1, dark, ST); blk((u0 + u1) / 2 - bo, (u0 + u1) / 2 + bo, vc + tw + 0.02, vc + tw + 0.06, bz0, bz1, dark, ST);
-    const c = W3((u0 + u1) / 2, vc, 0), at = (z) => [c[0], ground + z, c[2]];
-    if (cap === 'spire') limb(S, at(top), at(top + tw * 2.2), tw * 1.25, 0.08, 4, roof, TL);
+    const bo = Math.min(0.75, tw * 0.32), bz0 = top - 4.4, bh = 3.0;
+    win(u0, vc, -1, 0, bz0, bo * 2, bh, 'arch', 0.15); win(u1, vc, 1, 0, bz0, bo * 2, bh, 'arch', 0.15);
+    win(um, vc - tw, 0, -1, bz0, bo * 2, bh, 'arch', 0.15); win(um, vc + tw, 0, 1, bz0, bo * 2, bh, 'arch', 0.15);
+    win(u0, vc, -1, 0, H + 1.2, 0.6, 1.4, 'cornice', 0.1);
+    for (const [a, b] of [[u0, vc - tw], [u1, vc - tw], [u0, vc + tw], [u1, vc + tw]]) urn(a, b, top + 0.05, 0.28);
+    const c = W3(um, vc, 0), at = (z) => [c[0], ground + z, c[2]];
+    let tip = top;
+    if (cap === 'spire') { limb(S, at(top), at(top + tw * 2.2), tw * 1.25, 0.08, 4, roof, TL); tip = top + tw * 2.2; }
     else {
-      limb(S, at(top), at(top + 0.7), tw * 0.95, tw * 0.95, 8, stone, ST);
-      limb(S, at(top + 0.7), at(top + 0.7 + tw * 0.8), tw * 0.95, tw * 0.45, 8, white, PL);
-      limb(S, at(top + 0.7 + tw * 0.8), at(top + 0.7 + tw * 1.4), tw * 0.45, 0.1, 8, stone, ST);
+      const T = (a, b, z) => W3(um + a, vc + b, z), r = tw * 0.92;
+      sweep(S, T, [[0, 0, top, r, r], [0, 0, top + 0.7, r, r], [0, 0, top + 0.7, r * 0.96, r * 0.96], [0, 0, top + 0.7 + tw * 0.45, r * 0.85, r * 0.85], [0, 0, top + 0.7 + tw * 0.85, r * 0.5, r * 0.5], [0, 0, top + 0.7 + tw * 1.05, r * 0.2, r * 0.2], [0, 0, top + 0.7 + tw * 1.25, r * 0.16, r * 0.16], [0, 0, top + 0.7 + tw * 1.5, 0.03, 0.03]], white, PL, 12, true);
+      for (let k = 0; k < 8; k++) { const t = (k / 8) * Math.PI * 2, cc = Math.cos(t), ss = Math.sin(t); sweep(S, T, [[cc * r, ss * r, top + 0.7, 0.08, 0.08], [cc * r * 0.86, ss * r * 0.86, top + 0.7 + tw * 0.45, 0.08, 0.08], [cc * r * 0.5, ss * r * 0.5, top + 0.7 + tw * 0.85, 0.07, 0.07], [cc * r * 0.2, ss * r * 0.2, top + 0.7 + tw * 1.05, 0.05, 0.05]], stone, ST, 4); }
+      tip = top + 0.7 + tw * 1.5;
     }
-    limb(S, at(top + (cap === 'spire' ? tw * 2.2 : 0.7 + tw * 1.4)), at(top + (cap === 'spire' ? tw * 2.2 : 0.7 + tw * 1.4) + 1.2), 0.06, 0.06, 4, dark, ST);
+    cross(um, vc, tip, 1.3);
   }
   if (!tv.length) {   // bell gable over the pediment
     blk(F - 0.05, F + 0.5, fc - 0.9, fc + 0.9, pedH - 0.6, pedH + 2.0, white);
-    blk(F - 0.1, F, fc - 0.45, fc + 0.45, pedH + 0.3, pedH + 1.6, dark, ST);
+    win(F - 0.05, fc, -1, 0, pedH + 0.2, 0.9, 1.2, 'arch', 0.1);
+    cross(F + 0.2, fc, pedH + 2.0, 1.2);
   }
 }
 
@@ -1958,4 +1974,141 @@ export function horse(S, W0, sc, col, st, pose = {}) {
     leg([[s * 0.19, -0.78, 1.05, 0.15, 0.18], [s * 0.19, -0.6, 0.75, 0.1, 0.11], [s * 0.18, -0.86, 0.5, 0.065, 0.07], [s * 0.18, -0.8, 0.18, 0.055, 0.055], [s * 0.18, -0.78, 0.03, 0.07, 0.07]]);
   }
   return { saddle: W(0, -0.05, 1.62) };
+}
+
+// Aqueduto das Águas Livres (1731–1748): the 941 m run of arches over the Alcântara valley, on the
+// line OSM maps for it (way 675995512, with its 30° bend). 35 arches; the 14 big ones in the middle
+// are pointed, the rest round; the Arco Grande spans 28.9 m and rises 65 m. Tall piers carry stepped
+// buttresses on both faces; above the cornice runs the public walk between parapets, with the covered
+// water gallery down the middle and ventilation turrets along it. Deck level is a straight grade
+// between the two valley rims, the arch sizes follow the valley depth under each bay.
+export const AQUEDUTO_LINE = [[38.733613, -9.172395], [38.732580, -9.172063], [38.730652, -9.171430], [38.726796, -9.166663]];
+export function aqueduto(S, { fwd, groundAt, lin, srgb, log = () => {} }) {
+  const stone = lin(srgb('#d4cbb5')), stone2 = lin(srgb('#c4b99f')), stoneD = lin(srgb('#b2a78e')), cap = lin(srgb('#bfb5a0')), dark = lin(srgb('#45423b'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.37, 0.9], I0 = [0, 0, 0, 0];
+  const pts = AQUEDUTO_LINE.map(([la, lo]) => fwd(la, lo));
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const L = cum[cum.length - 1];
+  const seg = (i) => { const [ax, ay] = pts[i], [bx, by] = pts[i + 1], d = Math.hypot(bx - ax, by - ay); return [(bx - ax) / d, (by - ay) / d]; };
+  // centreline point and a direction blended over ±10 m around each bend, so strips stay continuous
+  const at = (u) => {
+    let i = 0; while (i < pts.length - 2 && cum[i + 1] < u) i++;
+    const t = (u - cum[i]) / (cum[i + 1] - cum[i]), x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t;
+    let [dx, dy] = seg(i);
+    for (let k = 1; k < pts.length - 1; k++) {
+      const w = 1 - Math.min(1, Math.abs(u - cum[k]) / 10);
+      if (w > 0) { const a = seg(k - 1), b = seg(k), m = [a[0] + b[0], a[1] + b[1]], l = Math.hypot(...m); const f = u < cum[k] ? m.map((q, j) => (q / l) * w + a[j] * (1 - w)) : m.map((q, j) => (q / l) * w + b[j] * (1 - w)); const lf = Math.hypot(...f); dx = f[0] / lf; dy = f[1] / lf; }
+    }
+    return { x, y, dx, dy };
+  };
+  const P = (u, v, z) => { const a = at(u); return [a.x - a.dy * v, z, -(a.y + a.dx * v)]; };
+  const P2 = (u, v) => { const a = at(u); return [a.x - a.dy * v, a.y + a.dx * v]; };
+  const N = (u, nu, nv, nz) => { const a = at(u); return [a.dx * nu - a.dy * nv, nz, -(a.dy * nu + a.dx * nv)]; };
+  const g = (u) => groundAt(...P2(u, 0));
+  const quad = (A, B, C, D, n, sa, sb, sc, sd, col) => { tri(S, A, B, C, n, col, sa, sb, sc, I0, ST); tri(S, A, C, D, n, col, sa, sc, sd, I0, ST); };
+  const wall = (u0, u1, v, s, zb0, zb1, zt0, zt1, col = stone) => quad(P(u0, v, zb0), P(u1, v, zb1), P(u1, v, zt1), P(u0, v, zt0), N((u0 + u1) / 2, 0, s, 0), [u0, zb0], [u1, zb1], [u1, zt1], [u0, zt0], col);
+  const endw = (u, s, v0, v1, z0, z1, col = stone) => quad(P(u, v0, z0), P(u, v1, z0), P(u, v1, z1), P(u, v0, z1), N(u, s, 0, 0), [v0, z0], [v1, z0], [v1, z1], [v0, z1], col);
+  const flat = (u0, u1, v0, v1, z0, z1, col = stone, s = 1) => quad(P(u0, v0, z0), P(u1, v0, z1), P(u1, v1, z1), P(u0, v1, z0), N((u0 + u1) / 2, 0, 0, s), [u0, v0], [u1, v0], [u1, v1], [u0, v1], col);
+  const blk = (u0, u1, v0, v1, z0, z1, col = stone) => { wall(u0, u1, v1, 1, z0, z0, z1, z1, col); wall(u0, u1, v0, -1, z0, z0, z1, z1, col); endw(u0, -1, v0, v1, z0, z1, col); endw(u1, 1, v0, v1, z0, z1, col); flat(u0, u1, v0, v1, z1, z1, col); };
+  // a long run along u, cut into ≤ 6 m pieces so it follows the bend
+  const run = (u0, u1, f) => { const n = Math.max(1, Math.ceil((u1 - u0) / 6)); for (let k = 0; k < n; k++) f(u0 + ((u1 - u0) * k) / n, u0 + ((u1 - u0) * (k + 1)) / n); };
+
+  // deck grade between the two rims (highest ground within 25 m beyond each end)
+  const rim = (u0, u1) => { let m = -Infinity; for (let u = u0; u <= u1; u += 2.5) m = Math.max(m, g(u)); return m; };
+  const zA = rim(-25, 0) + 1.5, zB = rim(L, L + 25) + 1.5, zD = (u) => zA + ((zB - zA) * u) / L;   // walkway level
+  const W = 6.4, hw = W / 2, zCo = (u) => zD(u) - 2.6;   // body width; cornice under the walk
+  const depth = (u) => zCo(u) - g(u);
+  // where arches are needed: depth over 4 m
+  let uS = 0, uE = L; while (uS < L && depth(uS) < 4) uS += 1; while (uE > 0 && depth(uE) < 4) uE -= 1;
+  // lay out bays on each straight run (a pier sits on every bend): pitch from the valley depth, then fit
+  const piers = [];   // { c, w }
+  const pierW = (d) => Math.min(7.2, Math.max(2.6, 2.2 + 0.078 * d)), spanOf = (d) => Math.min(28.9, Math.max(7.5, 5.5 + 0.37 * d));
+  const dmax = (u0, u1) => { let m = 0; for (let u = u0; u <= u1; u += 2) m = Math.max(m, depth(u)); return m; };
+  const marks = [uS, ...cum.slice(1, -1).filter((c) => c > uS && c < uE), uE];
+  for (let r = 0; r + 1 < marks.length; r++) {
+    const a = marks[r], b = marks[r + 1], seq = [a];
+    while (seq[seq.length - 1] < b) { const c = seq[seq.length - 1], d = dmax(c, c + 30); seq.push(c + spanOf(d) + pierW(d)); }
+    // land the last pier on b: squeeze to the overshoot or stretch to the step before, whichever is gentler
+    const E = seq[seq.length - 1], Pv = seq[seq.length - 2], kE = (b - a) / (E - a), kP = Pv > a ? (b - a) / (Pv - a) : Infinity;
+    const use = Math.abs(Math.log(kE)) <= Math.abs(Math.log(kP)) ? seq : seq.slice(0, -1), k = use === seq ? kE : kP;
+    const fit = use.map((c) => a + (c - a) * k);
+    for (const c of fit) if (!piers.length || Math.abs(piers[piers.length - 1].c - c) > 1) piers.push({ c, w: pierW(dmax(c - 12, c + 12)) });
+  }
+  let nPointed = 0, nRound = 0, tallest = 0;
+  // solid wall over the rims, down into the slope
+  const solid = (u0, u1) => run(u0, u1, (p, q) => { const zb0 = g(p) - 1.5, zb1 = g(q) - 1.5; for (const [v, s] of [[hw, 1], [-hw, -1]]) wall(p, q, v, s, zb0, zb1, zCo(p), zCo(q)); });
+  solid(-14, piers[0].c - piers[0].w / 2); solid(piers[piers.length - 1].c + piers[piers.length - 1].w / 2, L + 14);
+  // piers: core, plinth, stepped buttresses, impost band
+  const springs = [];
+  for (let i = 0; i + 1 < piers.length; i++) {
+    const u0 = piers[i].c + piers[i].w / 2, u1 = piers[i + 1].c - piers[i + 1].w / 2, w = u1 - u0, crown = Math.min(zCo(u0), zCo(u1)) - 1.4;
+    const pointed = w > 16.5, rise = pointed ? w * 0.74 : w / 2;
+    let gmax = -Infinity; for (let u = u0; u <= u1; u += 1) gmax = Math.max(gmax, g(u));
+    springs.push(Math.max(gmax + 0.4, crown - rise));
+  }
+  piers.forEach((p, i) => {
+    const u0 = p.c - p.w / 2, u1 = p.c + p.w / 2, gb = Math.min(g(u0), g(u1), g(p.c)) - 1.5, top = zCo(p.c);
+    const zs = Math.min(springs[i - 1] ?? Infinity, springs[i] ?? Infinity), h = zs - gb;
+    blk(u0, u1, -hw, hw, gb, top);
+    blk(u0 - 0.35, u1 + 0.35, -hw - 0.35, hw + 0.35, gb, Math.min(top, gb + 3.2), stone2);
+    if (h > 6) blk(u0 - 0.18, u1 + 0.18, -hw - 0.18, hw + 0.18, zs - 0.5, zs, stone2);   // impost
+    if (h > 14) {   // buttresses, stepping back three times
+      const bw = Math.min(3.6, 0.055 * h + 0.6), lv = [gb, gb + h * 0.38, gb + h * 0.66, gb + h * 0.88];
+      for (const s of [1, -1]) for (let k = 0; k < 3; k++) {
+        const pr = bw * (1 - k / 3), hu = (p.w / 2) * (0.82 - k * 0.06);
+        const v0 = s > 0 ? hw : -hw - pr, v1 = s > 0 ? hw + pr : -hw;
+        blk(p.c - hu, p.c + hu, v0, v1, lv[k], lv[k + 1], k % 2 ? stone : stoneD);
+        blk(p.c - hu - 0.12, p.c + hu + 0.12, s > 0 ? hw : -hw - pr - 0.15, s > 0 ? hw + pr + 0.15 : -hw, lv[k + 1] - 0.3, lv[k + 1], cap);   // coping
+      }
+    }
+  });
+  // arches: spandrel strips over a round or two-centred pointed intrados, soffit, and a projecting archivolt
+  for (let i = 0; i + 1 < piers.length; i++) {
+    const u0 = piers[i].c + piers[i].w / 2, u1 = piers[i + 1].c - piers[i + 1].w / 2, w = u1 - u0, zs = springs[i];
+    const pointed = w > 16.5, R = pointed ? w * 0.8 : w / 2, off = R - w / 2, rise = Math.sqrt(R * R - off * off);
+    if (pointed) nPointed++; else nRound++;
+    tallest = Math.max(tallest, zs + rise - Math.min(g((u0 + u1) / 2), g(u0 + w * 0.3), g(u1 - w * 0.3)));
+    const n = Math.max(10, Math.min(28, Math.round(w * 0.9)));
+    const curve = (k) => {   // point on the intrados at parameter k/n, and its inward normal (towards the opening)
+      const t = k / n, um = (u0 + u1) / 2;
+      if (!pointed) { const a = Math.PI * (1 - t); return { u: um + Math.cos(a) * R, z: zs + Math.sin(a) * R, nu: -Math.cos(a), nz: -Math.sin(a) }; }
+      const left = t <= 0.5, cu = left ? um + off : um - off, a0 = left ? Math.PI : 0, a1 = left ? Math.acos(-off / R) : Math.acos(off / R);
+      const a = left ? a0 + (a1 - a0) * (t / 0.5) : a1 + (a0 - a1) * ((t - 0.5) / 0.5);
+      return { u: cu + Math.cos(a) * R, z: zs + Math.sin(a) * R, nu: -Math.cos(a), nz: -Math.sin(a) };
+    };
+    for (let k = 0; k < n; k++) {
+      const A = curve(k), B = curve(k + 1), topA = zCo(A.u), topB = zCo(B.u), nm = [(A.nu + B.nu) / 2, (A.nz + B.nz) / 2];
+      for (const [v, s] of [[hw, 1], [-hw, -1]]) wall(A.u, B.u, v, s, A.z, B.z, topA, topB);
+      quad(P(A.u, -hw, A.z), P(B.u, -hw, B.z), P(B.u, hw, B.z), P(A.u, hw, A.z), N((A.u + B.u) / 2, nm[0], 0, nm[1]), [A.u, -hw], [B.u, -hw], [B.u, hw], [A.u, hw], stoneD);
+      // archivolt: 0.9 m ring of voussoirs standing 0.16 m proud of both faces
+      const Ao = { u: A.u - A.nu * 0.9, z: A.z - A.nz * 0.9 }, Bo = { u: B.u - B.nu * 0.9, z: B.z - B.nz * 0.9 };
+      for (const [v, s] of [[hw + 0.16, 1], [-hw - 0.16, -1]]) {
+        quad(P(A.u, v, A.z), P(B.u, v, B.z), P(Bo.u, v, Bo.z), P(Ao.u, v, Ao.z), N(A.u, 0, s, 0), [A.u, A.z], [B.u, B.z], [Bo.u, Bo.z], [Ao.u, Ao.z], stone2);
+        const vi = s > 0 ? hw : -hw;
+        quad(P(Ao.u, vi, Ao.z), P(Bo.u, vi, Bo.z), P(Bo.u, v, Bo.z), P(Ao.u, v, Ao.z), N(A.u, -nm[0], 0, -nm[1]), [Ao.u, 0], [Bo.u, 0], [Bo.u, 0.16], [Ao.u, 0.16], stone2);
+        quad(P(A.u, vi, A.z), P(B.u, vi, B.z), P(B.u, v, B.z), P(A.u, v, A.z), N(A.u, nm[0], 0, nm[1]), [A.u, 0], [B.u, 0], [B.u, 0.16], [A.u, 0.16], stone2);
+      }
+    }
+  }
+  // cornice, walk, parapets, the covered water gallery, turrets
+  const u0 = -14, u1 = L + 14;
+  run(u0, u1, (p, q) => {
+    for (const [v, s] of [[hw + 0.4, 1], [-hw - 0.4, -1]]) wall(p, q, v, s, zCo(p), zCo(q), zCo(p) + 0.55, zCo(q) + 0.55, stone2);
+    flat(p, q, -hw - 0.4, hw + 0.4, zCo(p), zCo(q), stone2, -1);
+    for (const [v, s] of [[hw, 1], [-hw, -1]]) wall(p, q, v, s, zCo(p) + 0.55, zCo(q) + 0.55, zD(p) + 1.1, zD(q) + 1.1);
+    for (const [v, s] of [[hw - 0.45, -1], [-hw + 0.45, 1]]) wall(p, q, v, s, zD(p), zD(q), zD(p) + 1.1, zD(q) + 1.1);
+    flat(p, q, hw - 0.45, hw + 0.05, zD(p) + 1.1, zD(q) + 1.18, cap); flat(p, q, -hw - 0.05, -hw + 0.45, zD(p) + 1.1, zD(q) + 1.18, cap);
+    flat(p, q, -hw + 0.45, -1.45, zD(p), zD(q), stoneD); flat(p, q, 1.45, hw - 0.45, zD(p), zD(q), stoneD);
+    for (const [v, s] of [[1.45, 1], [-1.45, -1]]) wall(p, q, v, s, zD(p), zD(q), zD(p) + 2.5, zD(q) + 2.5);
+    for (const s of [1, -1]) quad(P(p, s * 1.65, zD(p) + 2.45), P(q, s * 1.65, zD(q) + 2.45), P(q, 0, zD(q) + 3.25), P(p, 0, zD(p) + 3.25), N((p + q) / 2, 0, s * 0.8, 0.6), [p, 0], [q, 0], [q, 1.8], [p, 1.8], cap);
+  });
+  for (const u of [u0, u1]) { const s = u === u0 ? -1 : 1; endw(u, s, -hw - 0.4, hw + 0.4, zCo(u) - 6, zD(u) + 1.1); }
+  for (let u = 60; u < L - 30; u += 115) {   // respiradouros
+    const z = zD(u);
+    blk(u - 1.8, u + 1.8, -1.8, 1.8, z, z + 4.6); blk(u - 2.05, u + 2.05, -2.05, 2.05, z + 4.6, z + 5.0, stone2);
+    const [x, y] = P2(u, 0), a = at(u);
+    frustum(S, x, y, a.dx, a.dy, 1.9, 0.05, z + 5.0, z + 7.4, cap, ST, false);
+    for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const o = 1.81; blk(u + nu * o - (nv ? 0.35 : 0.02), u + nu * o + (nv ? 0.35 : 0.02), nv * o - (nu ? 0.35 : 0.02), nv * o + (nu ? 0.35 : 0.02), z + 2.6, z + 3.8, dark); }
+  }
+  log(`Aqueduto: ${L.toFixed(0)} m, deck ${zA.toFixed(1)} → ${zB.toFixed(1)}, ${nPointed} pointed + ${nRound} round arches, tallest ${tallest.toFixed(1)} m`);
 }

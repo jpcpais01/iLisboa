@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -448,13 +448,24 @@ function addBuilding_(p) {
   const res = buildRoofAndWalls(S, ctx);
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
-  if (!s.stone && s.h > 5) { roofExtras(S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
   if (s.crenel) { // merlons along every edge (castle walls and towers)
     const cs = [KIND.STONE / 8, 5 / 8, seed, 0.9];
-    for (const r of rings) for (let i = 0; i < r.length; i++) {
-      const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
-      const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, n = Math.max(1, Math.floor(L / 1.8));
-      for (let k = 0; k < n; k++) { const t = (k + 0.5) / n * L; box(S, a[0] + dx * t - dy * 0.3, a[1] + dy * t + dx * 0.3, dx, dy, 0.42, 0.3, wallTop - 0.05, wallTop + 1.15, colWall, [0, 0, 0, 0], cs); }
+    const slit = colWall.map((c) => c * 0.18), D = T.d;
+    for (const r of rings) {
+      const out = ringArea(r) > 0 ? -1 : 1;   // left normal points inside a counter-clockwise ring
+      for (let i = 0; i < r.length; i++) {
+        const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+        const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, n = Math.max(1, Math.floor(L / 1.8)), ox = -dy * out, oy = dx * out;
+        for (let k = 0; k < n; k++) { const t = (k + 0.5) / n * L; box(S, a[0] + dx * t - dy * 0.3, a[1] + dy * t + dx * 0.3, dx, dy, 0.42, 0.3, wallTop - 0.05, wallTop + 1.15, colWall, [0, 0, 0, 0], cs); }
+        // corbelled parapet course under the merlons, and arrow slits down tall towers and curtain walls (near-only detail)
+        box(D, (a[0] + b[0]) / 2 + ox * 0.12, (a[1] + b[1]) / 2 + oy * 0.12, dx, dy, L / 2 + 0.1, 0.2, wallTop - 0.75, wallTop - 0.05, colWall, [0, 0, 0, 0], cs);
+        for (let k = 0; k < Math.floor(L / 1.2); k++) { const t = (k + 0.5) * L / Math.floor(L / 1.2); box(D, a[0] + dx * t + ox * 0.3, a[1] + dy * t + oy * 0.3, dx, dy, 0.16, 0.12, wallTop - 1.15, wallTop - 0.75, colWall, [0, 0, 0, 0], cs, false); }
+        if (s.h - (s.minH || 0) > 7 && L > 3) for (let t = 2.2; t < L - 1.5; t += 4.4) for (const zf of s.h > 14 ? [0.35, 0.65] : [0.55]) {
+          const z = ground + (wallTop - ground) * zf;
+          box(D, a[0] + dx * t + ox * 0.04, a[1] + dy * t + oy * 0.04, dx, dy, 0.09, 0.05, z - 0.8, z + 0.8, slit, [0, 0, 0, 0], cs);
+        }
+      }
     }
   }
   for (const b of res.balconies) T.balconies.push(...b);
@@ -814,6 +825,11 @@ function distribute(T) {
   ponte25Abril(T, { fwd: proj.fwd, ground: (x, y) => Math.max(LAND_MIN, dem.ground(x, y)), lin, srgb });
   stats.ponte = distribute(T);
 }
+if (AQUEDUTO_LINE.some(([la, lo]) => { const [x, y] = proj.fwd(la, lo); return x >= minX - 50 && x < maxX + 50 && y >= minY - 50 && y < maxY + 50; })) {
+  const T = makeSink();
+  aqueduto(T, { fwd: proj.fwd, groundAt: (x, y) => Math.max(LAND_MIN, dem.ground(x, y)), lin, srgb, log });
+  stats.aqueduto = distribute(T);
+}
 // ─── statues, columns & historic walls ──────────────────────────────────
 const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
 {
@@ -894,12 +910,29 @@ if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); p
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
-  ground: srgb('#d0c8b9'), calcada: srgb('#e2dbcd'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
+  ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
   parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
-for (let i = 0; i < gm.w * gm.h; i++) paint(C.ground)(i);
+// land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
+// earth and cement drifting into each other over ~20 m, with plot-sized (≈6 m) shifts in value — not one pale fill, not camouflage
+{
+  const GREEN = srgb('#99a07c'), EARTH = srgb('#a99c84'), CEMENT = srgb('#aba79e');
+  const hh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    return (hh(i, j) * (1 - fx) + hh(i + 1, j) * fx) * (1 - fy) + (hh(i, j + 1) * (1 - fx) + hh(i + 1, j + 1) * fx) * fy; };
+  for (let r = 0; r < gm.h; r++) {
+    const y = maxY - (r + 0.5) * SS;
+    for (let c = 0; c < gm.w; c++) {
+      const x = minX + (c + 0.5) * SS, xw = x + 2.2 * Math.sin(y / 5.3), yw = y + 2.2 * Math.sin(x / 4.7);
+      const g = Math.min(1, Math.max(0, (vn(x / 21, y / 21) - 0.35) * 2.2)), e = vn(x / 13 + 17, y / 13 + 5);
+      const k = (0.95 + 0.08 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.97 + 0.06 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
+      const i = (r * gm.w + c) * 3;
+      for (let q = 0; q < 3; q++) gm.data[i + q] = Math.min(255, ((EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + GREEN[q] * g) * k);
+    }
+  }
+}
 const areaColor = (t) => {
   if (t.leisure === 'park' || t.leisure === 'garden' || t.landuse === 'recreation_ground' || t.landuse === 'village_green') return C.park;
   if (t.landuse === 'grass' || t.landuse === 'meadow' || t.natural === 'grassland' || t.landuse === 'flowerbed') return C.grass;
@@ -1106,6 +1139,7 @@ async function writeDoc(doc, file) {
 const ni = Math.ceil((maxX - minX) / TILE), nj = Math.ceil((maxY - minY) / TILE);
 // street lamps: wall brackets every ~28 m along streets, alternating sides; one point each (night glow sprites)
 const lamps = [];
+const asphaltAt = (x, y) => { const i = groundPx(x, y); if (i < 0) return false; const r = ground1[i * 3], g = ground1[i * 3 + 1], b = ground1[i * 3 + 2]; return Math.max(r, g, b) - Math.min(r, g, b) < 18 && r + g + b < 3 * 165; };
 {
   // open squares (Praça do Comércio, Rossio…) are lit from their edges, not along the paths that cross them
   const squares = polysArea.filter((p) => p.tags.place === 'square' || p.tags.highway === 'pedestrian' || p.tags['area:highway'] === 'pedestrian')
@@ -1121,7 +1155,11 @@ const lamps = [];
       const nx = -(by - ay) / L, ny = (bx - ax) / L;
       for (let t = carry; t < L; t += sp) {
         const off = pedestrianish(k) && k !== 'pedestrian' ? 0 : w / 2 + 0.6;
-        const x = ax + ((bx - ax) * t) / L + nx * off * side, y = ay + ((by - ay) * t) / L + ny * off * side; side = -side;
+        // walk outwards off the carriageway (the mapped width is often narrower than the painted road): posts stand on the pavement or a median, never in traffic
+        const sd = side; side = -side;
+        let x = 0, y = 0, okP = false;
+        for (let e = 0; e <= 7 && !okP; e += 0.75) { x = ax + ((bx - ax) * t) / L + nx * (off + e) * sd; y = ay + ((by - ay) * t) / L + ny * (off + e) * sd; okP = !asphaltAt(x, y); if (off === 0) break; }
+        if (!okP) continue;
         if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y) || (k === 'pedestrian' && inSquare(x, y))) continue;
         const key = Math.round(x / 9) + ',' + Math.round(y / 9); if (seen.has(key)) continue; seen.add(key);
         lamps.push(x, meshAt(x, y) + 4.6, -y);

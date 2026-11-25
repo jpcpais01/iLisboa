@@ -12,13 +12,14 @@ const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 // ─── renderer ───────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-let pixelRatio = Math.min(devicePixelRatio, isMobile ? 2 : 2);
+let pixelRatio = Math.min(devicePixelRatio, isMobile ? 1.5 : 2);   // phones: 1.5 is sharp at arm's length and costs half the pixels of 2
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;   // re-rendered only when needed (see fitShadow)
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
@@ -205,7 +206,7 @@ function detail(t, d) {
   }).catch(() => { t.dstate = 0; });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
-const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.8 + 1100, 1500, 2800);   // beyond this the far level of detail stands in
+const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.55 + 700, 1000, 2000);   // beyond this the far level of detail stands in
 const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - y, 0, y - b[3]));
 let inflight = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 function stream(force) {
@@ -436,10 +437,42 @@ function addLamps(buf) {
   });
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 2;
   scene.add(pts); lampPoints.push(pts);
+  // the posts themselves (Lisbon's dark-green cast-iron candelabra with a four-sided lantern), drawn near the camera
+  if (!LAMP) LAMP = lampPost();
+  const d = new Float32Array(buf), n = d.length / 3, CH = 300, cells = new Map(), m = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) { const k = Math.floor(d[i * 3] / CH) + ',' + Math.floor(d[i * 3 + 2] / CH); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); }
+  for (const ids of cells.values()) {
+    const mesh = new THREE.InstancedMesh(LAMP.geo, LAMP.mat, ids.length);
+    ids.forEach((i, j) => mesh.setMatrixAt(j, m.makeRotationY((i * 2.399) % 6.283).setPosition(d[i * 3], d[i * 3 + 1] - 4.6, d[i * 3 + 2])));
+    mesh.castShadow = false; mesh.computeBoundingSphere(); mesh.visible = false; scene.add(mesh);
+    lampPosts.push({ mesh, c: mesh.boundingSphere.center.clone(), r: mesh.boundingSphere.radius });
+  }
+}
+const lampPosts = [];
+let LAMP = null;
+function lampPost() {
+  const tint = (g, r, gg = r, b = r) => { g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [r, gg, b]).flat(), 3)); return g; };
+  const iron = [0.11, 0.15, 0.12], lat = (r0, r1, h, y, sides = 8) => tint(new THREE.CylinderGeometry(r1, r0, h, sides).translate(0, y + h / 2, 0), ...iron);
+  const parts = [lat(0.2, 0.16, 0.5, 0), lat(0.16, 0.12, 0.25, 0.5), lat(0.1, 0.065, 3.2, 0.75), lat(0.09, 0.09, 0.12, 1.5), lat(0.08, 0.08, 0.1, 3.0), lat(0.065, 0.11, 0.25, 3.95),
+    tint(new THREE.CylinderGeometry(0.2, 0.13, 0.55, 4, 1).rotateY(Math.PI / 4).translate(0, 4.5, 0), 0.95, 0.86, 0.6),            // lantern glass
+    tint(new THREE.CylinderGeometry(0.02, 0.27, 0.22, 4, 1).rotateY(Math.PI / 4).translate(0, 4.89, 0), ...iron),                     // cap
+    tint(new THREE.CylinderGeometry(0.14, 0.14, 0.06, 4, 1).rotateY(Math.PI / 4).translate(0, 4.2, 0), ...iron),
+    tint(new THREE.SphereGeometry(0.05, 6, 4).translate(0, 5.03, 0), ...iron)];
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; parts.push(tint(new THREE.CylinderGeometry(0.012, 0.012, 0.56, 3).translate(Math.cos(a) * 0.17, 4.5, Math.sin(a) * 0.17), ...iron)); }
+  const geo = mergeGeometries(parts); geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.3 });
+  mat.onBeforeCompile = (s) => {   // the lantern glows after dusk
+    s.uniforms.uNight = cityUniforms.uNight;
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (vColor.r > 0.8) totalEmissiveRadiance += vec3(1., .72, .4) * 1.6 * uNight;');
+  };
+  mat.customProgramCacheKey = () => 'lamppost-v1';
+  return { geo, mat };
 }
 
 
 // ─── sun / time of day ──────────────────────────────────────────────────
+const haze = new THREE.FogExp2(0xdde3e6, 0.00011); scene.fog = haze;
 const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
 const sunDir = new THREE.Vector3();
 const warm = new THREE.Color(0xffb36b), noon = new THREE.Color(0xfff4e4), moonSky = new THREE.Color(0x5a6d9c), moonGround = new THREE.Color(0x24222c);
@@ -461,27 +494,41 @@ function setTime(h) {
   clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
   const sky = (day, dusk, nite, g) => new THREE.Color(day).lerp(new THREE.Color(dusk), golden * g).lerp(new THREE.Color(nite), night).getStyle();
   document.body.style.background = `radial-gradient(120% 90% at 50% 0%, ${sky(0xf7f1e6, 0xf6c99a, 0x2a3350, 0.8)} 0%, ${sky(0xe9dfcf, 0xc9a58c, 0x1b2238, 0.7)} 60%, ${sky(0xd9cbb6, 0x8f7d8c, 0x10141f, 0.6)} 100%)`;
+  // aerial perspective: a light haze in the horizon's colour, so distance reads as distance (≈1 % at 1 km, 10 % at 3 km, 35 % at 6 km)
+  haze.color.set(0xdde3e6).lerp(new THREE.Color(0xe8c2a0), golden * 0.7).lerp(new THREE.Color(0x1a2133), night);
 }
-timeEl.addEventListener('input', () => setTime(+timeEl.value));
+
+timeEl.addEventListener('input', () => { setTime(+timeEl.value); invalidate(true); });
+{ const t0 = +new URLSearchParams(location.search).get('t'); if (t0) timeEl.value = t0; }   // ?t=hour, for checks
 setTime(+timeEl.value);
 
 // Shadow frustum follows the view so close-ups get crisp shadows; snapped to texels to avoid shimmer.
 const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3();
+// The shadow map is the costliest pass, so it is cached: its frustum snaps to coarse steps (size in ×1.2 levels, position
+// in tenths of its width) and it is only re-rendered when that snapped frustum, the sun, or the scene's contents change.
+let shadowKey = '', shadowDirty = true;
 function fitShadow() {
-  const dist = camera.position.distanceTo(controls.target);
-  const R = THREE.MathUtils.clamp(dist * 0.85, 140, size * 0.6);
+  const dist = camera.position.distanceTo(controls.target), lim = size * 0.6;
+  const R0 = THREE.MathUtils.clamp(dist * 0.85, 140, lim);
+  const R = Math.min(lim, 140 * 1.2 ** Math.ceil(Math.log(R0 / 140) / Math.log(1.2))) * 1.15;
   const sc = sun.shadow.camera;
   lightRight.crossVectors(sunDir, THREE.Object3D.DEFAULT_UP).normalize();
   lightUp.crossVectors(lightRight, sunDir).normalize();
-  const texel = (2 * R) / sun.shadow.mapSize.x;
-  const t = controls.target.clone();
-  const a = Math.round(t.dot(lightRight) / texel) * texel - t.dot(lightRight);
-  const b = Math.round(t.dot(lightUp) / texel) * texel - t.dot(lightUp);
-  t.addScaledVector(lightRight, a).addScaledVector(lightUp, b);
-  sun.target.position.copy(t);
-  sun.position.copy(t).addScaledVector(sunDir, 3000);
+  const texel = (2 * R) / sun.shadow.mapSize.x, step = texel * Math.round(sun.shadow.mapSize.x / 10);
+  const t = controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
+  const key = `${R.toFixed(2)}|${ka}|${kb}|${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)}`;
+  if (key === shadowKey && !shadowDirty) return;
+  shadowKey = key; shadowDirty = false; renderer.shadowMap.needsUpdate = true;
+  const c = lightRight.clone().multiplyScalar(ka * step).addScaledVector(lightUp, kb * step);
+  const along = t.dot(sunDir); c.addScaledVector(sunDir, along);
+  sun.target.position.copy(c); sun.target.updateMatrixWorld();
+  sun.position.copy(c).addScaledVector(sunDir, 3000);
   if (sc.right !== R) { sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 100; sc.far = 6000; sc.updateProjectionMatrix(); }
 }
+
+let needRender = 3;
+const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = true; };
+{ const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
 // ─── camera: shareable view in the URL hash, else a postcard intro from the river ───
 const ll = (lat, lon) => { // same local tangent plane as the pipeline
@@ -514,13 +561,13 @@ controls.addEventListener('end', () => {
   const v = [...camera.position.toArray(), ...controls.target.toArray()].map((n) => Math.round(n));
   history.replaceState(null, '', '#' + v.join(','));
 });
-window.__scene = scene; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
+window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
-let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false;
+let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false;
 renderer.setAnimationLoop((now) => {
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
   if (introT < 1 && ready) {
@@ -528,7 +575,12 @@ renderer.setAnimationLoop((now) => {
     const e = 1 - (1 - introT) ** 3;
     camera.position.lerpVectors(startPos, endPos, e);
   }
-  controls.update(dt);
+  const moved = controls.update(dt);
+  // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
+  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS;
+  if (needRender > 0) needRender--;
+  idleN = active ? 0 : idleN + 1;
+  if (!active && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
@@ -542,10 +594,12 @@ renderer.setAnimationLoop((now) => {
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
+  for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   renderer.render(scene, camera);
 
-  // adaptive resolution: hold 60 fps on phones
+  // adaptive resolution: hold 60 fps on phones (timed on consecutive moving frames only)
+  if (!active || !wasActive) { wasActive = active; return; }
   frames++; acc += raw;
   if (acc > 1) {
     const fps = frames / acc;
@@ -560,6 +614,7 @@ renderer.setAnimationLoop((now) => {
   }
 });
 addEventListener('resize', () => {
+  invalidate();
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight, false);

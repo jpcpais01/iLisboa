@@ -52,6 +52,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     float pxm = max(fwidth(bx) * bw, fwidth(y)) + 1e-4;
     float aa = pxm * .7;
     float far = smoothstep(.38, 1.05, pxm);   // windows hold until a bay is ~1 px wide
+    if (far > .995) { col = mix(col, vec3(.16, .18, .2), .22); glow = .035; } else {   // far façades: skip the window work entirely
     float isG = step(y, gh);
     float fi = isG > .5 ? 0. : 1. + floor((y - gh) / fh);
     float fy = isG > .5 ? y : mod(y - gh, fh);
@@ -166,6 +167,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     vec3 avg = mix(wallC, vec3(.16, .18, .2), .22);
     col = mix(col, avg, far);
     glassAmt *= 1. - far; glow = mix(glow, .035, far);   // lit windows averaged over the wall: a faint warm wash, not a lit wall
+    }
   }
 } else if (kind < 3.5 || kind > 4.5 && kind < 5.5) {      // roof tiles (3) and mansard (5)
   vec2 t = vSurf;
@@ -209,7 +211,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v9';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v10';
   return m;
 }
 
@@ -247,37 +249,91 @@ export function railingMaterial() {
 
 export const waterUniformTime = { value: 0 };
 
-// River: mask-clipped plane, sky reflections, animated multi-octave ripples.
+// River: one mask-clipped plane. Everything is analytic, no textures beyond the mask:
+//  · waves: 9 directional trains, each faded out once it falls below ~2 pixels; the slope energy it
+//    loses goes into roughness, so the far river widens the sun's glitter instead of aliasing;
+//  · depth: the mask's own mipmaps measure distance to the shore (≈4 m, 25 m, 150 m), giving silty
+//    shallows at the quays, a teal middle and a deep slate channel;
+//  · body light: crests glow green where the sun shines through them; lapping foam on the shore;
+//  · night: the lit city smears into long warm streaks on the water near the banks.
 export function waterMaterial(mask) {
-  const m = new THREE.MeshStandardMaterial({ color: 0x2c5d6b, roughness: 0.12, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });   // Tagus: deep slate teal
-  m.envMapIntensity = 1.15;
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = waterUniformTime;
+    s.uniforms.uNight = cityUniforms.uNight;
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform float uTime;')
+      .replace('#include <common>', `#include <common>
+varying vec3 vWPos; uniform float uTime; uniform float uNight;
+float wh(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(wh(i), wh(i + vec2(1, 0)), f.x), mix(wh(i + vec2(0, 1)), wh(i + vec2(1, 1)), f.x), f.y); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 {
-  vec2 p = vWPos.xz;
-  float t = uTime;
-  vec2 g = vec2(0.0);
-  // six short, irregular wave trains with a slow domain warp: chop, not stripes
-  vec2 w = p + 7.0 * vec2(sin(p.y * 0.013 + t * 0.07), sin(p.x * 0.011 - t * 0.05));
-  vec2 dirs[6] = vec2[6](vec2(0.8, 0.6), vec2(-0.5, 0.86), vec2(0.97, -0.24), vec2(-0.2, -0.98), vec2(0.42, 0.91), vec2(-0.93, 0.37));
-  float fr[6] = float[6](0.085, 0.13, 0.21, 0.34, 0.55, 0.9);
-  for (int i = 0; i < 6; i++) {
-    float ph = dot(dirs[i], w) * fr[i] + t * (0.7 + float(i) * 0.33) + float(i) * 1.7;
-    g += dirs[i] * cos(ph) * (0.11 / (1.0 + float(i) * 0.55));
+  vec2 p = vec2(vWPos.x, -vWPos.z);
+  float t = uTime, dist = length(cameraPosition - vWPos);
+  float fw = length(fwidth(p)) + 1e-4;                       // metres per pixel here
+  vec2 w = p + 6.0 * vec2(sin(p.y * 0.013 + t * 0.07), sin(p.x * 0.011 - t * 0.05));   // slow warp: chop, not stripes
+  const vec2 D[9] = vec2[9](vec2(.8,.6), vec2(-.5,.86), vec2(.97,-.24), vec2(-.2,-.98), vec2(.42,.91), vec2(-.93,.37), vec2(.6,-.8), vec2(.1,.99), vec2(-.7,-.71));
+  const float K[9] = float[9](.06, .095, .15, .24, .38, .6, .95, 1.5, 2.4);   // rad/m: 105 m … 2.6 m wavelengths
+  const float A[9] = float[9](.014, .02, .03, .042, .055, .065, .068, .064, .058);   // slope amplitude: long swell is gentle, wind chop is steep
+  float grpL = .35 + 1.3 * wn(p / 140. + vec2(t * .01, 0.)), grpS = .3 + 1.4 * wn(p / 31. - vec2(0., t * .03));   // wave groups, not an endless corrugation
+  float nL = wn(p / 60. + 11.3), nM = wn(p / 19. + 3.1), nS = wn(p / 6. + 7.7);
+  vec2 g = vec2(0.); float h = 0., lost = 0.;   // h: crest height of the short trains, ≈ -1…1
+  for (int i = 0; i < 9; i++) {
+    float k = K[i], a = A[i] * (i < 4 ? grpL : grpS);
+    float keep = 1. - smoothstep(.12, .45, fw * k / 6.2832);   // cycles per pixel → fade before it aliases
+    // short-crested sea: each train's phase is bent by a noise field ~7 wavelengths across, so crests break up instead of running on forever
+    float nz = i < 3 ? nL : i < 6 ? nM : nS;
+    float ph = dot(D[i], w) * k + t * sqrt(9.81 * k) * .9 + float(i) * 1.7 + nz * (4.5 + float(i) * .9);   // deep-water dispersion
+    float c = cos(ph);
+    g += D[i] * c * a * keep; h += sin(ph) * keep * step(2.5, float(i)) * .3;
+    lost += a * a * (1. - keep);
   }
-  float dist = length(cameraPosition - vWPos);
-  g *= 1.0 - smoothstep(150.0, 1400.0, dist) * 0.93;   // fade the chop out before it aliases into a checkerboard
-  vec3 nW = normalize(vec3(-g.x, 1.0, -g.y));
+  vec3 nW = normalize(vec3(-g.x, 1.0, g.y));
   normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
-}`);
+  roughnessFactor = clamp(.045 + sqrt(lost) * 1.6 + smoothstep(600., 6000., dist) * .08, .04, .34);
+
+  // shore field from the mask's mipmaps (1 = open water at that scale)
+  float s1 = textureLod(alphaMap, vAlphaMapUv, 1.2).g, s2 = textureLod(alphaMap, vAlphaMapUv, 3.8).g, s3 = textureLod(alphaMap, vAlphaMapUv, 6.3).g;
+  float deep = smoothstep(.55, 1., s3) * smoothstep(.7, 1., s2);
+  vec3 shallow = vec3(.105, .135, .105), mid = vec3(.045, .095, .105), abyss = vec3(.022, .05, .068);
+  vec3 body = mix(shallow, mid, smoothstep(.75, 1., s2));
+  body = mix(body, abyss, deep);
+  body *= .92 + .16 * wn(p / 60. + t * .01);                  // slow turbidity patches
+  diffuseColor.rgb = body;
+
+  // light through the crests: green-teal, strongest looking towards the sun at low angles
+  vec3 V = normalize(cameraPosition - vWPos);
+#if NUM_DIR_LIGHTS > 0
+  vec3 L = normalize((vec4(directionalLights[0].direction, 0.) * viewMatrix).xyz);   // view → world
+  float back = pow(max(0., dot(-V.xz, L.xz) / max(1e-3, length(V.xz) * length(L.xz))), 3.);
+  float sss = clamp(h * .6 + .35, 0., 1.) * (.25 + .75 * back) * (1. - V.y * .6);
+  totalEmissiveRadiance += vec3(.05, .16, .13) * sss * directionalLights[0].color * .3 * (1. - smoothstep(1500., 5000., dist));
+#endif
+
+  // foam: lapping against quays and banks, broken up and drifting
+  float edge = 1. - smoothstep(.5, .97, s1);
+  float fn = wn(p * .9 + vec2(t * .25, -t * .18)) * .6 + wn(p * 2.7 - vec2(t * .4, t * .3)) * .4;
+  float foam = edge * smoothstep(.62, .78, fn + edge * .45 + h * .15) * (1. - smoothstep(30., 140., fw * 400.));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .8, .78), foam);
+  roughnessFactor = mix(roughnessFactor, .8, foam);
+
+  // night: lit banks smear into vertical streaks of warm light near the shore
+  if (uNight > .01) {
+    vec2 vd = normalize(vWPos.xz - cameraPosition.xz + 1e-4), vp = vec2(-vd.y, vd.x);
+    float across = dot(vWPos.xz, vp), along = dot(vWPos.xz, vd);
+    float streak = smoothstep(.55, .95, wn(vec2(across / 2.2, along / 35. + t * .05))) * (.6 + .8 * wn(vec2(across * 1.7, along * .6 - t * 1.3)));
+    float bank = 1. - smoothstep(.35, 1., s3 * .5 + s2 * .5);
+    totalEmissiveRadiance += vec3(1., .62, .3) * streak * bank * uNight * .35;
+  }
+}`)
+      // the scene's environment intensity is tuned for matte stone; water mirrors the sky at full strength
+      .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\nradiance *= 2.1;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-water-v2';
+  m.customProgramCacheKey = () => 'ilisboa-water-v3';
   return m;
 }
 
