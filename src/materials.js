@@ -285,6 +285,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   for (int i = 0; i < 9; i++) {
     float k = K[i], a = A[i] * (i < 4 ? grpL : grpS);
     float keep = 1. - smoothstep(.12, .45, fw * k / 6.2832);   // cycles per pixel → fade before it aliases
+    if (keep <= 0.) { lost += a * a; continue; }               // far water: the short trains cost nothing
     // short-crested sea: each train's phase is bent by a noise field ~7 wavelengths across, so crests break up instead of running on forever
     float nz = i < 3 ? nL : i < 6 ? nM : nS;
     float ph = dot(D[i], w) * k + t * sqrt(9.81 * k) * .9 + float(i) * 1.7 + nz * (4.5 + float(i) * .9);   // deep-water dispersion
@@ -358,13 +359,16 @@ export function terrainMaterial(map, mask, bounds) {
     float fw = max(fwidth(p.x), fwidth(p.y)) + 1e-5;
     vec3 c = diffuseColor.rgb; float L = dot(c, vec3(.3, .59, .11)), sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
     float grey = 1. - smoothstep(.04, .09, sat);
-    {   // crisp kerbs: the filtered map blurs road/pavement edges over a metre; re-threshold the transition band to a sub-pixel edge up close
-      float t = clamp((L - .27) / .31, 0., 1.), band = step(.27, L) * step(L, .58) * grey * (1. - smoothstep(.12, .35, fw)) * smoothstep(.15, .3, fwidth(L) / fw);
+    float dL = fwidth(L);   // derivatives stay outside the distance branches below
+    if (fw < .35) {   // crisp kerbs: the filtered map blurs road/pavement edges over a metre; re-threshold the transition band to a sub-pixel edge up close
+      float t = clamp((L - .27) / .31, 0., 1.), band = step(.27, L) * step(L, .58) * grey * (1. - smoothstep(.12, .35, fw)) * smoothstep(.15, .3, dL / fw);
       float L2 = mix(.27, .58, smoothstep(.42, .58, t));
       c *= mix(1., L2 / max(L, 1e-3), band); L = mix(L, L2, band);
     }
     float near = 1. - smoothstep(.02, .06, fw);                    // fine patterns only while a few cm still span a pixel
     float macro = .96 + .08 * tvn(p / 9.) + .04 * tvn(p / 2.3);
+    float k = 1.;
+    if (fw < .15) {   // beyond ~15 cm a pixel none of this shows: skip it (most of the screen in a city view)
     // calçada portuguesa: small limestone setts with dark joints
     float wPave = smoothstep(.5, .62, L) * grey;
     vec2 q = p / .085; q.x += .5 * mod(floor(q.y), 2.); vec2 cf = fract(q) - .5, ci = floor(q);
@@ -380,7 +384,9 @@ export function terrainMaterial(map, mask, bounds) {
     // grass
     float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
     float blades = .88 + .2 * tvn(p / .35) + .08 * th(floor(p / .06));
-    float k = mix(1., stone, wPave * near) * mix(1., grain, wAsph * near) * mix(1., sett, wSett * near) * mix(1., blades, wGrass * (1. - smoothstep(.04, .15, fw)));
+    k = mix(1., stone, wPave * near) * mix(1., grain, wAsph * near) * mix(1., sett, wSett * near) * mix(1., blades, wGrass * (1. - smoothstep(.04, .15, fw)));
+    }
+    float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
     diffuseColor.rgb = c * k * macro;
     // steep banks (the ground map smears there): Lisbon's retaining walls, coursed limestone with dark joints and rain streaks
     vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
@@ -400,6 +406,6 @@ export function terrainMaterial(map, mask, bounds) {
 float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-terrain-v5';
+  m.customProgramCacheKey = () => 'ilisboa-terrain-v6';
   return m;
 }
