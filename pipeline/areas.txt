@@ -1,2 +1,8 @@
 # name  south  west  north  east
+# All areas share one projection origin (the centre of baixa-alfama), so their tiles line up into one city.
 baixa-alfama 38.7010 -9.1615 38.7265 -9.1180
+oeste 38.7010 -9.2050 38.7265 -9.1615
+noroeste 38.7265 -9.2050 38.7520 -9.1615
+norte 38.7265 -9.1615 38.7520 -9.1180
+nordeste 38.7265 -9.1180 38.7520 -9.0745
+leste 38.7010 -9.1180 38.7265 -9.0745
