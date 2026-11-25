@@ -87,8 +87,12 @@ if (kind < .5) {                                  // plain trims, chimneys
     // window geometry per variant
     float ww, y0, y1; float door = 0., shop = 0., balc = 0., shutters = 0.;
     float jit = variant > .5 && variant < 2.5 ? (rB - .5) * .25 * bw : 0.;
+    float ms = fract(seed * 23.17);                             // modern sub-style: curtain wall, ribbons or punched windows
     if (variant > 2.5 && variant < 3.5) {                       // modern: ribbons / curtain wall
-      ww = bw * .86; y0 = isG > .5 ? .1 : flH * .22; y1 = flH * .9; shop = isG;
+      if (ms < .28) { ww = bw * .97; y0 = .05; y1 = flH * .96; }
+      else if (ms < .7) { ww = bw * .86; y0 = isG > .5 ? .1 : flH * .22; y1 = flH * .9; }
+      else { ww = bw * .5; y0 = isG > .5 ? .1 : flH * .27; y1 = flH * .84; }
+      shop = isG;
     } else if (variant > 3.5) {                                 // palatial
       ww = min(1.45, bw * .45); y0 = isG > .5 ? .45 : (fi < 1.5 ? .08 : flH * .26); y1 = flH * (isG > .5 ? .72 : .84);
       balc = step(.5, fi) * step(fi, 1.5);
@@ -130,6 +134,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     float rev = smoothstep(y1 - fr - .28, y1 - fr, fy) * .55 + smoothstep(-ww * .5 + fr + .14, -ww * .5 + fr, p.x) * .3;
     vec3 sky = mix(vec3(.30, .38, .46), vec3(.62, .70, .78), h21(vec2(bi, fi) + 3.1 + floor(vWP.y)));
     vec3 glass = mix(vec3(.07, .085, .10), sky, .28 + .3 * rW) * (1. - rev);
+    if (variant > 2.5 && variant < 3.5 && ms < .28) glass = glass * (fract(seed * 5.9) < .5 ? vec3(.8, 1.06, 1.08) : vec3(1.08, 1., .86)) + vec3(.02, .04, .045) * (1. - rev);   // tinted curtain glass, teal or bronze
     float bars = (variant > 2.5 && variant < 3.5) ? box1(-.025, .025, fract(bx * 2.) - .5, aa) : max(box1(-.03, .03, p.x, aa), box1(-.03, .03, fy - mix(y0, y1, .62), aa));
     glass = mix(glass, frameC * .9, bars * (1. - shop) * .85);
     if (shutters > .5) {                                       // closed wooden shutters (portadas)
@@ -212,7 +217,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v11';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v12';
   return m;
 }
 

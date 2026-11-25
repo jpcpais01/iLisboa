@@ -129,7 +129,7 @@ export const AREAS = [
     [38.71192, -9.13330], [38.71176, -9.13370], [38.71176, -9.13415], [38.71223, -9.13445], [38.71282, -9.13453], [38.71332, -9.13443]]],
 ];
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
+export const DROP = new Set(['w821784760', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
   'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633', 'r9159876_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
@@ -2695,4 +2695,62 @@ export function alvaladeStadium(S, { ring, hole, ground, lin, srgb, H = 36 }) {
     limb(S, P(k, rm, H + 8), P(k, rIn(k) - 0.5, H + 3.8), 0.35, 0.3, 6, yellow, PL, false);
   }
   for (let k = 0; k < N; k++) limb(S, P(k, (Ro[k] + rIn(k)) / 2, H + 8), P(k + 1, (Ro[(k + 1) % N] + rIn((k + 1) % N)) / 2, H + 8), 0.3, 0.3, 5, yellow, PL, false);
+}
+
+// Jerónimos monastery range (the long south wing, drawn by the generic builder at OVERRIDES h): Manueline dress on top of it —
+// a cornice band, buttresses with crocketed pinnacles along the south front, and a crest of small pinnacles round the parapet
+export function jeronimosWing(S, { ring, ground, H, lin, srgb }) {
+  const stone = lin(srgb('#ddd0b1')), stone2 = lin(srgb('#cbbd9b')), dark = lin(srgb('#3a372f'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.61, 0.9];
+  const P2 = (u, v) => [u, v], W3 = (u, v, z) => [u, ground + z, -v];
+  const O = openings(S, P2, W3, 1, 0, ground, stone2, dark, ST);
+  const sgn = polyArea(ring) > 0 ? 1 : -1, n = ring.length, yS = Math.min(...ring.map((p) => p[1]));
+  for (let i = 0; i < n; i++) {
+    const p = ring[i], q = ring[(i + 1) % n], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 1.5) continue;
+    const eu = (q[0] - p[0]) / l, ev = (q[1] - p[1]) / l, nu = sgn * ev, nv = -sgn * eu, mu = (p[0] + q[0]) / 2, mv = (p[1] + q[1]) / 2;
+    O.tbox(mu + nu * 0.12, mv + nv * 0.12, eu, ev, l / 2 + 0.12, 0.26, H - 1.0, H - 0.65, stone2);   // cornice
+    O.tbox(mu + nu * 0.08, mv + nv * 0.08, eu, ev, l / 2 + 0.08, 0.18, 1.0, 1.3, stone2);            // plinth band
+    const m = Math.max(1, Math.round(l / 2.2));
+    for (let k = 0; k <= m; k++) { const t = k / m, x = p[0] + (q[0] - p[0]) * t - nu * 0.12, y = p[1] + (q[1] - p[1]) * t - nv * 0.12;
+      frustum(S, x, y, eu, ev, 0.17, 0.17, ground + H + 0.9, ground + H + 1.5, stone2, ST, false);
+      frustum(S, x, y, eu, ev, 0.17, 0.02, ground + H + 1.5, ground + H + 2.4, stone2, ST, false); }
+    if (nv > -0.55 || l < 14 || mv > yS + 25) continue;   // buttresses only on the south front (the range's back walls face a yard)
+    const nb = Math.round(l / 8.8);
+    for (let k = 0; k <= nb; k++) {
+      const t = k / nb, x = p[0] + (q[0] - p[0]) * t + nu * 0.55, y = p[1] + (q[1] - p[1]) * t + nv * 0.55;
+      O.tbox(x, y, eu, ev, 0.65, 0.6, -1, H - 1.6, stone);
+      O.tbox(x + nu * 0.08, y + nv * 0.08, eu, ev, 0.8, 0.7, -1, 1.4, stone2);
+      for (const z of [6.2, 11.4]) O.tbox(x + nu * 0.05, y + nv * 0.05, eu, ev, 0.75, 0.66, z, z + 0.3, stone2);
+      frustum(S, x, y, eu, ev, 0.62, 0.62, ground + H - 1.6, ground + H + 1.8, stone, ST, false);
+      frustum(S, x, y, eu, ev, 0.7, 0.7, ground + H + 1.8, ground + H + 2.1, stone2, ST, false);
+      frustum(S, x, y, eu, ev, 0.55, 0.04, ground + H + 2.1, ground + H + 6.2, stone2, ST, false);
+    }
+  }
+}
+
+// Altice Arena (Pavilhão Atlântico): the zinc hull over the bowl — one smooth elliptic shell on the mapped roof outline,
+// rising from the drum's roof (z0) to the crown (z1), standing-seam strips running crown to rim
+export function arenaShell(S, { ring, ground, z0, z1, lin, srgb }) {
+  const zinc = lin(srgb('#a9adae')), zinc2 = lin(srgb('#9a9fa1')), rimC = lin(srgb('#d9dbd8'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1], I0 = [0, 0, 0, 0];
+  const per = ring.reduce((a, p, i) => a + Math.hypot(ring[(i + 1) % ring.length][0] - p[0], ring[(i + 1) % ring.length][1] - p[1]), 0);
+  const N = 120, pts = [];   // resample the outline evenly
+  for (let k = 0, i = 0, acc = 0; k < N; k++) {
+    const want = (k / N) * per;
+    while (true) { const p = ring[i % ring.length], q = ring[(i + 1) % ring.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (acc + l >= want || i > 4 * ring.length) { const t = l ? (want - acc) / l : 0; pts.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); break; } acc += l; i++; }
+  }
+  const c = [pts.reduce((a, p) => a + p[0], 0) / N, pts.reduce((a, p) => a + p[1], 0) / N];
+  const M = 16, at = (k, j) => { const s = 1 - j / M, p = pts[k % N]; return [c[0] + (p[0] - c[0]) * s, ground + z0 + (z1 - z0) * Math.pow(1 - s * s, 0.62), -(c[1] + (p[1] - c[1]) * s)]; };
+  for (let k = 0; k < N; k++) for (let j = 0; j < M; j++) {
+    const a = at(k, j), b = at(k + 1, j), d = at(k, j + 1), e = at(k + 1, j + 1);
+    for (const [A, B, C] of [[a, b, e], [a, e, d]]) {
+      const e1 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], e2 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+      let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; n = n.map((q) => q / l); if (n[1] < 0) n = n.map((q) => -q);
+      tri(S, A, B, C, n, k & 1 ? zinc : zinc2, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+  }
+  // a pale rim beam where the shell meets the drum
+  for (let k = 0; k < N; k++) { const p = pts[k], q = pts[(k + 1) % N], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 0.05) continue;
+    box(S, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (q[0] - p[0]) / l, (q[1] - p[1]) / l, l / 2 + 0.1, 0.5, ground + z0 - 0.6, ground + z0 + 0.5, rimC, I0, PL); }
 }

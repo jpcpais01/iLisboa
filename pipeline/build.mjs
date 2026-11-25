@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -645,6 +645,10 @@ function addBuilding_(p) {
   const inArea = (c) => c[0] >= minX && c[0] < maxX && c[1] >= minY && c[1] < maxY;
   { const ch = els.find((e) => e.type === 'relation' && e.id === 11318402), r = ch && byId.get('r11318402_0');   // Jerónimos church
     if (r && inArea(r.c)) { jeronimosChurch(tileB(...r.c), { ring: r.outer, fwd: proj.fwd, ground: r.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark(); } }
+  { const r = byId.get('w821784760'), body = byId.get('w821784762');   // Altice Arena: smooth zinc hull on the drum
+    if (r && body && inArea(r.c)) { arenaShell(tileB(...r.c), { ring: r.outer, ground: body.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), z0: 20, z1: 38, lin, srgb }); mark(); } }
+  { const r = byId.get('r11318401_0');   // Jerónimos monastery range: Manueline cornice, buttresses and pinnacles over the generic walls
+    if (r && inArea(r.c)) { jeronimosWing(tileB(...r.c), { ring: r.outer, ground: r.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H: OVERRIDES['r11318401_0'].h, lin, srgb }); } }
   for (const id of ['w683006891', 'w1268291335', 'w1268291336', 'w1268291337']) {   // Campo Pequeno's four gate towers
     const t = byId.get(id); if (!t || !inArea(t.c)) continue; const ob = obb(t.outer);
     campoPequenoTower(tileB(...t.c), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, hw: Math.min(ob.hl, ob.hw), ground: t.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark();
@@ -1117,10 +1121,33 @@ for (const r of rails) { // two rails per track
   const fig = polysArea.find((p) => p.id === 'w1301226315');
   if (fig) gm.fillRings([fig.outer, ...fig.holes], paint(srgb('#e4ded0')));
 }
+// land cut off in the river with nothing built on it is a breakwater or a mole (off Cacilhas, the Mutela harbour wall):
+// rock and concrete, not a grassy sandbar
+const islet = new Uint8Array(water.length);
+{
+  const comp = new Int32Array(water.length).fill(-1), info = [], q = new Int32Array(water.length);
+  for (let s = 0; s < water.length; s++) {
+    if (water[s] === 2 || comp[s] >= 0) continue;
+    const id = info.length; let qh = 0, qt = 0, n = 0, edge = false; q[qt++] = s; comp[s] = id;
+    while (qh < qt) {
+      const i = q[qh++], x = i % wr.w, y = (i / wr.w) | 0; n++;
+      if (x === 0 || y === 0 || x === wr.w - 1 || y === wr.h - 1) edge = true;
+      for (const j of [x > 0 ? i - 1 : -1, x < wr.w - 1 ? i + 1 : -1, y > 0 ? i - wr.w : -1, y < wr.h - 1 ? i + wr.w : -1])
+        if (j >= 0 && comp[j] < 0 && water[j] !== 2) { comp[j] = id; q[qt++] = j; }
+    }
+    info.push({ n, edge, built: false });
+  }
+  for (const p of polysB) { const c = Math.floor((p.c[0] - wr.minX) / WM), r = Math.floor((wr.maxY - p.c[1]) / WM); if (c >= 0 && r >= 0 && c < wr.w && r < wr.h && comp[r * wr.w + c] >= 0) info[comp[r * wr.w + c]].built = true; }
+  let nI = 0;
+  for (let i = 0; i < water.length; i++) { const k = comp[i]; if (k >= 0 && !info[k].edge && !info[k].built && info[k].n * WM * WM < 60000) { islet[i] = 1; nI++; } }
+  if (nI) log(`breakwaters/moles: ${nI} m²`);
+}
+const ROCK1 = srgb('#a7a196'), ROCK2 = srgb('#8c867b');
 // water (from 1 m mask)
 for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
   const wi = Math.floor((r * SS + WMG) / WM) * wr.w + Math.floor((c * SS + WMG) / WM);
-  if (water[wi] === 2) paint(C.water)(r * gm.w + c);
+  if (islet[wi] && water[wi] !== 3) { const x = c * SS, y = r * SS, h = Math.sin(Math.floor(x / 1.4) * 127.1 + Math.floor(y / 1.4) * 311.7) * 43758.5; paint(h - Math.floor(h) < 0.5 ? ROCK1 : ROCK2)(r * gm.w + c); }
+  else if (water[wi] === 2) paint(C.water)(r * gm.w + c);
   else if (water[wi] === 3) paint(C.pond)(r * gm.w + c);
 }
 log(`ground map painted ${gm.w}×${gm.h}`);
