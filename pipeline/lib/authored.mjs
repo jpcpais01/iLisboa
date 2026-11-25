@@ -59,6 +59,8 @@ export const OVERRIDES = {
   w679256558: { shape: 'flat', wall: '#cfd3d4', flatCol: [176, 180, 182], variant: 3 },   // plant room on the terminal roof (no terracotta hip)
   w42645796: { h: 18, shape: 'flat', wall: '#c98f7f', flatCol: [200, 200, 196], variant: 3, parapet: 1 },   // Centro Colombo: one mass, its parts only where they rise above it
   // Colombo's twin office towers: salmon-brick slabs, each with a blue-glass drum at its corner (mapped as building=roof) under a pale disc
+  w193025303: { h: 100, shape: 'flat', variant: 3, msBand: [0.02, 0.26], wall: '#4b6577', parapet: 0, floorH: 5.6, groundH: 7 },   // Torre de Monsanto: blue glass, slanted top (slopedCrown)
+  w1054302774: { variant: 8, sub8: 1, wall: '#f2f1ed', shape: 'flat' },   // Infinity: white wrap-around balcony slabs
   ...Object.fromEntries(['w495968848', 'w495968849'].map((id) => [id, { h: 58, shape: 'flat', wall: '#b86a5c', flatCol: [176, 172, 166], variant: 3, floorH: 3.7, groundH: 5, parapet: 1.2 }])),
   ...Object.fromEntries(['w1453809581', 'w1453809582'].map((id) => [id, { h: 61, minH: 0, shape: 'flat', wall: '#3f6c86', flatCol: [214, 216, 214], variant: 3, floorH: 3.7, groundH: 5, parapet: 0.6 }])),
   ...Object.fromEntries(['w240817325', 'w1015870543'].map((id) => [id, { h: 96, shape: 'flat', wall: '#c9d6db', flatCol: [200, 205, 205], variant: 3, floorH: 3.6, parapet: 0 }])),   // São Rafael / São Gabriel (crowns authored)
@@ -137,7 +139,7 @@ export const AREAS = [
     [38.71192, -9.13330], [38.71176, -9.13370], [38.71176, -9.13415], [38.71223, -9.13445], [38.71282, -9.13453], [38.71332, -9.13443]]],
 ];
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w821784760', 'w297727868', 'w297727871', 'w39735031', 'w496232838', 'w1257751599', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
+export const DROP = new Set(['w151780623', 'w821784760', 'w297727868', 'w297727871', 'w39735031', 'w496232838', 'w1257751599', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
   'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633', 'r9159876_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
@@ -2975,4 +2977,50 @@ export function ponteVascoGama(S, { fwd, ground, lin, srgb }) {
       limb(S, P3(sp, v * 0.92, zp), P3(sd, vd, deckZ(sd) + 0.6), 0.16, 0.16, 3, cable, PL, false);
     }
   }
+}
+
+// A tower top cut on a slope (Torre de Monsanto): the façade runs on up to a plane rising `rise` metres toward `up`
+// (unit vector in plan), and that plane is glazed over. Walls are dark glass, the cut edge a bright metal rim.
+export function slopedCrown(S, { ring, z0, rise, up, col, rim = '#c9d0d4', lin, srgb }) {
+  const PL = [KIND.PLAIN / 8, 3 / 8, 0.2, 1], I0 = [0, 0, 0, 0], c = lin(srgb(col)), cr = lin(srgb(rim));
+  const pr = ring.map((q) => q[0] * up[0] + q[1] * up[1]), lo = Math.min(...pr), hi = Math.max(...pr);
+  const zt = (i) => z0 + rise * (pr[i] - lo) / (hi - lo || 1);
+  const ccw = polyArea(ring) > 0;
+  for (let i = 0; i < ring.length; i++) {
+    const j = (i + 1) % ring.length, p = ring[i], q = ring[j];
+    let n = [q[1] - p[1], 0, q[0] - p[0]]; if (!ccw) n = n.map((x) => -x);
+    const l = Math.hypot(n[0], n[2]) || 1; n = [n[0] / l, 0, n[2] / l];
+    const a = [p[0], z0 - 0.2, -p[1]], b = [q[0], z0 - 0.2, -q[1]], cc = [q[0], zt(j), -q[1]], d = [p[0], zt(i), -p[1]];
+    tri(S, a, b, cc, n, c, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, cc, d, n, c, [0, 0], [0, 0], [0, 0], I0, PL);
+    const e = [q[0], zt(j) + 0.9, -q[1]], f = [p[0], zt(i) + 0.9, -p[1]];   // rim fin standing proud of the glazed cut
+    tri(S, d, cc, e, n, cr, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, d, e, f, n, cr, [0, 0], [0, 0], [0, 0], I0, PL);
+  }
+  const flat = ring.flat(), idx = earcut(flat);
+  const nz = [-up[0] * rise, hi - lo, up[1] * rise]; const nl = Math.hypot(...nz); const N = nz.map((x) => x / nl);
+  for (let k = 0; k < idx.length; k += 3) {
+    const [A, B, C] = [idx[k], idx[k + 1], idx[k + 2]].map((i) => [ring[i][0], zt(i), -ring[i][1]]);
+    tri(S, A, B, C, N, c.map((x) => x * 0.8), [0, 0], [0, 0], [0, 0], I0, PL); tri(S, A, C, B, N, c.map((x) => x * 0.8), [0, 0], [0, 0], [0, 0], I0, PL);
+  }
+}
+
+// Torre da Galp (the old Sacor refinery flare tower, kept in Parque Tejo): a square steel lattice, four legs braced in
+// X panels between ring girders, a gallery near the top and the flare stack rising out of it.
+export function flareTower(S, { c, ground, H = 90, half = 5.4, top = 2.2, col = '#d8d9d6', stack = '#b8402f', lin, srgb }) {
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], st = lin(srgb(col)), sk = lin(srgb(stack));
+  const zTop = ground + H - 8, lvls = 9;
+  const leg = (sx, sy, z) => { const t = (z - ground) / (zTop - ground), h = half + (top - half) * t; return [c[0] + sx * h, z, -(c[1] + sy * h)]; };
+  const S4 = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  for (const [sx, sy] of S4) limb(S, leg(sx, sy, ground), leg(sx, sy, zTop), 0.38, 0.26, 6, st, PL);
+  for (let k = 0; k < lvls; k++) {
+    const z0 = ground + (zTop - ground) * k / lvls, z1 = ground + (zTop - ground) * (k + 1) / lvls;
+    for (let i = 0; i < 4; i++) {
+      const [ax, ay] = S4[i], [bx, by] = S4[(i + 1) % 4];
+      limb(S, leg(ax, ay, z1), leg(bx, by, z1), 0.16, 0.16, 4, st, PL, false);
+      limb(S, leg(ax, ay, z0), leg(bx, by, z1), 0.11, 0.11, 4, st, PL, false);
+      limb(S, leg(bx, by, z0), leg(ax, ay, z1), 0.11, 0.11, 4, st, PL, false);
+    }
+  }
+  box(S, c[0], c[1], 1, 0, top + 1.4, top + 1.4, zTop - 0.3, zTop + 0.2, st, [0, 0, 0, 0], PL);   // gallery deck
+  limb(S, [c[0], ground, -c[1]], [c[0], ground + H, -c[1]], 0.75, 0.6, 10, sk, PL);   // the stack
+  limb(S, [c[0], ground + H, -c[1]], [c[0], ground + H + 1.2, -c[1]], 0.95, 0.95, 10, lin(srgb('#3a3a38')), PL);
 }

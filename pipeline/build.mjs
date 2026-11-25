@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -395,7 +395,8 @@ function buildingSpec(p) {
   // residential block is a post-war estate block (Olivais, Benfica, Telheiras, Odivelas): cream render, flat roof, shutters
   const newTown = inModernZone(p.c);   // Parque das Nações (built from 1995): flat roofs, white render and glass throughout
   const core = Math.hypot(p.c[0], p.c[1] * 1.15) < 2500 || Math.hypot(p.c[0] - BELEM_C[0], p.c[1] - BELEM_C[1]) < 650;
-  const resiTall = !modern && !palace && !church && !castle && RESI_KINDS.has(kind) && h < 75 && p.area > 120 &&
+  const resiTall = !(t['building:material'] || '').match(/glass/) && !palace && !church && !castle && RESI_KINDS.has(kind) && h < 130 && p.area > 120 &&   // (levels ≥ 9 alone used to make a 26-storey tower 'modern' and drop it into the old-town palette)
+   
     ((isFinite(levels) ? levels >= 8 : h >= 25) || (!core && (isFinite(levels) ? levels >= 4 : h >= 13.5)));
   const officeTall = !resiTall && (levels >= 9) && !RESI_KINDS.has(kind);
   // post-war institutions outside the core (schools, hospitals, faculties, ministries): white punched-window blocks, flat roofs;
@@ -441,8 +442,19 @@ function buildingSpec(p) {
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
+  if (variant === 8) {   // era of the block, by district: 0 punched + shutters, 1 balcony bands (60s–70s), 2 Português Suave (40s–50s), 3 aluminium + marquises (80s–90s)
+    const [x, y] = p.c, w = instOut ? [0.6, 0.4, 0, 0]
+      : x > -880 && x < 1030 && y > 2690 && y < 4800 ? [0.35, 0.1, 0.55, 0]     // Alvalade, Areeiro, Av. de Roma
+      : x > 1280 && x < 3450 && y > 4800 && y < 7900 && !newTown ? [0.45, 0.45, 0, 0.1]   // Olivais Norte / Sul
+      : newTown ? [0.3, 0.45, 0, 0.25]
+      : core ? [0.45, 0.3, 0.15, 0.1]
+      : y > 5500 || x < -4000 ? [0.35, 0.2, 0, 0.45]                         // Telheiras, Lumiar, Carnide, Amadora, Odivelas: 80s onward
+      : [0.45, 0.3, 0.05, 0.2];
+    let r = u('era'), k = 0; while (k < 3 && r >= w[k]) r -= w[k++];
+    spec.sub8 = k;
+  }
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
-  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); }
+  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); if (spec.variant === 2 || spec.variant === 0) spec.variant = 1; spec.balconyFloors = []; }   // dressed stone: no azulejo, no iron balconies
   const o = OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
@@ -460,7 +472,15 @@ function addBuilding(p) {
 function addBuilding_(p) {
   const s = buildingSpec(p);
   stats.buildings++; stats[s.src]++;
-  const seed = hash(p.id + 'seed');
+  let seed = hash(p.id + 'seed');
+  if (s.sub8 !== undefined || s.msBand) {   // the shader reads the sub-style from fract(seed·23.17) of the 12-bit seed it receives
+    const [lo, hi] = s.msBand || [[0, 0.4], [0.4, 0.6], [0.6, 0.8], [0.8, 1]][s.sub8];
+    for (let k = 0; k < 200; k++) {
+      const q = Math.round(seed * 4095) / 4095, sn = Math.round(q * 4096) / 4096, ms = (sn * 23.17) % 1;
+      if (ms > lo + 0.01 && ms < hi - 0.01) { seed = q; break; }
+      seed = hash(p.id + 'seed' + k);
+    }
+  }
   const rng = (k) => hash(p.id + k);
   const rings = [p.outer, ...p.holes];
   let tmin = Infinity, tsum = 0, n = 0;
@@ -762,6 +782,10 @@ function addBuilding_(p) {
     if (pl && inArea(pl.c)) { palaSiza(tileB(...pl.c), { ring: pl.outer, ground: groundAt(...pl.c), lin, srgb }); mark(); } }
   for (const id of ['w240817325', 'w1015870543']) { const tw = byId.get(id);   // São Rafael / São Gabriel crowns
     if (tw && inArea(tw.c)) { const o = obb(tw.outer); sailCrown(tileB(...tw.c), { ring: tw.outer, z0: groundAt(...tw.c) + OVERRIDES[id].h, rise: 18, toward: o.ux > 0 ? 1 : -1, col: '#b9cdd6', lin, srgb }); mark(); } }
+  { const tm = byId.get('w193025303');   // Torre de Monsanto: the slanted glass top, rising 20 m to the north
+    if (tm && inArea(tm.c)) { slopedCrown(tileB(...tm.c), { ring: tm.outer, z0: groundAt(...tm.c) + OVERRIDES['w193025303'].h, rise: 20, up: [0, 1], col: '#4b6577', lin, srgb }); mark(); } }
+  { const gt = byId.get('w151780623');   // Torre da Galp: refinery flare tower
+    if (gt && inArea(gt.c)) { flareTower(tileB(...gt.c), { c: gt.c, ground: groundAt(...gt.c), H: parseMeters(gt.tags.height) || 90, lin, srgb }); mark(); } }
   { const vg = byId.get('w240816973');   // Centro Vasco da Gama: the long glass vault (with water running over it) down its spine
     if (vg && inArea(vg.c)) { const o = obb(vg.outer), gl = lin(srgb('#6f9db0')); barrelRoof(tileB(...vg.c), { ob: { ...o, hl: o.hl * 0.82, hw: o.hw * 0.26 }, z0: groundAt(...vg.c) + OVERRIDES['w240816973'].h + 0.6, rise: 4, col: gl, under: gl }); mark(); } }
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms

@@ -37,6 +37,12 @@ float rough = .9, glassAmt = 0., glow = 0., flood = 0.;
 float grime = vnoise(vWP.xz * .35 + vWP.y * .2) * .5 + vnoise(vWP.xz * 1.7 + vWP.y) * .5;
 vec3 stoneC = vec3(.80, .76, .68);
 vec3 frameC = mix(vec3(.93, .92, .88), stoneC, step(.5, fract(seed * 7.3)));
+float ms = fract(seed * 23.17);                             // sub-style: modern (curtain wall, ribbons, punched) and apartment blocks (below)
+// apartment blocks by era: 0 punched windows + roller shutters, 1 1960s–70s continuous balcony bands,
+// 2 Estado Novo 'Português Suave' (stone-framed windows, stone ground floor), 3 1980s–90s aluminium windows and glazed marquises
+float sub8 = variant > 7.5 ? (ms < .4 ? 0. : ms < .6 ? 1. : ms < .8 ? 2. : 3.) : -1.;
+if (sub8 > 1.5 && sub8 < 2.5) frameC = stoneC * 1.04;
+if (sub8 > 2.5) frameC = fract(seed * 7.3) < .62 ? vec3(.27, .2, .16) : vec3(.9, .9, .88);
 
 if (kind < .5) {                                  // plain trims, chimneys
   col = base * (.94 + .08 * grime);
@@ -70,7 +76,7 @@ if (kind < .5) {                                  // plain trims, chimneys
       rough = .35;
     }
     // Casa dos Bicos: diamond-point ashlar, every stone a little pyramid catching the light
-    if (variant > 6.5 && y > .5) {
+    if (variant > 6.5 && variant < 7.5 && y > .5) {
       vec2 dp = vec2(bx * bw / .62, y / .4); dp.x += mod(floor(dp.y), 2.) * .5;
       vec2 f = fract(dp) - .5; float side = step(abs(f.y), abs(f.x));
       float shade = mix(f.y > 0. ? .13 : -.16, f.x > 0. ? -.05 : .06, side) * (1. - far);
@@ -80,19 +86,21 @@ if (kind < .5) {                                  // plain trims, chimneys
     }
     col = wallC;
     // stone plinth, string course, cornice band, corner pilasters (Pombaline / palatial)
-    float formal = (step(variant, .5) + step(3.5, variant)) * step(variant, 7.5);
+    float formal = (step(variant, .5) + step(3.5, variant)) * step(variant, 7.5) + step(1.5, sub8) * step(sub8, 2.5);
     float dEnd = min(bx, bays - bx) * bw;
-    col = mix(col, stoneC * (.95 + .05 * grime), formal * (box1(-9., .85, y, aa) + box1(gh - .22, gh, y, aa) + box1(top - .45, top, y, aa) * .8 + step(dEnd, .42) * step(.9, y)));
+    col = mix(col, stoneC * (.95 + .05 * grime), formal * (box1(-9., sub8 > 1.5 && sub8 < 2.5 ? gh : .85, y, aa) + box1(gh - .22, gh, y, aa) + box1(top - .45, top, y, aa) * .8 + step(dEnd, .42) * step(.9, y)));
     col = mix(col, base * .78, box1(top - .6, top - .45, y, aa) * formal);     // cornice shadow line
     // window geometry per variant
     float ww, y0, y1; float door = 0., shop = 0., balc = 0., shutters = 0.;
     float jit = variant > .5 && variant < 2.5 ? (rB - .5) * .25 * bw : 0.;
-    float ms = fract(seed * 23.17);                             // modern sub-style: curtain wall, ribbons or punched windows
     float balc8 = 0.;
     if (variant > 7.5) {                                        // apartment block: punched windows with roller shutters, balcony columns
       ww = min(1.5, bw * .5); y0 = isG > .5 ? .1 : flH * .3; y1 = flH * .86; shop = isG;
       balc8 = step(h21(vec2(floor(bi / (1. + step(.5, ms))), seed * 13.)), .4 + .25 * ms) * (1. - isG);
-      if (balc8 > .5) { ww = bw * .78; y0 = .06; y1 = flH * .86; shutters = 0.; }
+      if (sub8 > .5 && sub8 < 1.5) balc8 = (1. - isG) * step(.2, h21(vec2(floor(bi / 3.), seed * 5.)));   // bands run across most bays
+      if (sub8 > 1.5 && sub8 < 2.5) { ww = min(1.2, bw * .42); y0 = isG > .5 ? .1 : flH * .2; balc8 = (1. - isG) * step(abs(bx - bays * .5), 1.) * step(.5, fi) * step(fi, 3.5); }
+      if (sub8 > 2.5) { ww = min(2.1, bw * .68); y0 = isG > .5 ? .1 : flH * .34; balc8 = (1. - isG) * step(h21(vec2(floor(bi / 2.), seed * 13.)), .5); }
+      if (balc8 > .5) { ww = bw * (sub8 > .5 && sub8 < 1.5 || sub8 > 2.5 ? .92 : .78); y0 = .06; y1 = flH * .86; shutters = 0.; }
     } else if (variant > 2.5 && variant < 3.5) {                       // modern: ribbons / curtain wall
       if (ms < .28) { ww = bw * .97; y0 = .05; y1 = flH * .96; }
       else if (ms < .7) { ww = bw * .86; y0 = isG > .5 ? .1 : flH * .22; y1 = flH * .9; }
@@ -168,8 +176,14 @@ if (kind < .5) {                                  // plain trims, chimneys
     glassAmt = inGlass * (1. - shutters);
     glow = glassAmt * step(h21(vec2(bi * 1.7, fi) + seed * 5.), .42) * (1. - shop * .3);
     if (balc8 > .5) {                                          // the balcony: a solid parapet to 1.05 m, its slab edge, the shadow it casts
-      float bxw = bw * .47, inB = box1(-bxw, bxw, ux, aa);
+      float bxw = bw * (sub8 > .5 && sub8 < 1.5 ? .51 : .47), inB = box1(-bxw, bxw, ux, aa);
       vec3 parC = fract(seed * 3.3) < .6 ? wallC * 1.04 : mix(wallC, vec3(.92, .91, .88), .6);
+      if (sub8 > .5 && sub8 < 1.5) parC = fract(seed * 3.3) < .5 ? vec3(.93, .92, .9) : wallC * 1.06;   // white concrete bands
+      if (sub8 > 2.5) {                                          // marquise: the balcony glazed in, aluminium mullions every ~80 cm
+        float mul = box1(-.035, .035, fract(ux / .8) - .5, aa * 2.) + box1(1.0, 1.08, fy, aa) + box1(y1 - .08, y1, fy, aa);
+        col = mix(col, mix(glass, frameC, .25), inB * box1(1.05, y1, fy, aa));
+        col = mix(col, frameC, inB * clamp(mul, 0., 1.) * box1(-.05, y1, fy, aa));
+      }
       col = mix(col, parC, inB * box1(-.05, 1.05, fy, aa));
       col = mix(col, parC * .82, inB * box1(-.2, -.05, fy, aa));
       col *= 1. - .25 * inB * box1(1.05, 1.3, fy, aa) * step(.5, glassAmt);
@@ -235,7 +249,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v13';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v14';
   return m;
 }
 
