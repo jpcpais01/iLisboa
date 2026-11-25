@@ -487,17 +487,18 @@ function addBuilding_(p) {
   const multiOuter = new Set(polysB.filter((p) => /^r\d+_[1-9]/.test(p.id)).map((p) => p.id.split('_')[0]));
   const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && !multiOuter.has(p.id.split('_')[0]) &&
     (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
+  const WHOLE = new Set(['w42645796', 'r17651166_0']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1)
   const parts = polysB.filter((p) => p.tags['building:part']), thinDrop = new Set();
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
     // …but only when the parts actually fill it: a lone mapped sliver (a lift shaft, a roof stair) must not stand in for a whole tower
     const inside = parts.filter((pt) => pt.area > 4 && Math.abs(pt.c[0] - o.c[0]) < 400 && pointInRing(pt.c[0], pt.c[1], o.outer));
     const special = OVERRIDES[o.id] || DROP.has(o.id) || o.tags.historic || o.tags.amenity === 'place_of_worship' || ['church', 'cathedral', 'chapel', 'basilica', 'castle', 'palace'].includes(o.tags.building);
-    o.skip = inside.length > 0 && (special || inside.reduce((a, pt) => a + Math.abs(pt.area), 0) >= 0.45 * Math.abs(o.area));
+    o.skip = !WHOLE.has(o.id) && inside.length > 0 && (special || inside.reduce((a, pt) => a + Math.abs(pt.area), 0) >= 0.45 * Math.abs(o.area));
     if (inside.length && !o.skip) {   // the outline stands for the building; parts that do not rise clear of it are redundant (and would z-fight its walls)
       stats.thinParts = (stats.thinParts || 0) + 1;
       const top = (t) => parseMeters(t.height) ?? (isFinite(parseFloat(t['building:levels'])) ? parseFloat(t['building:levels']) * LEVEL_H + 1.2 : null);
-      const oTop = top(o.tags) ?? 14;
+      const oTop = OVERRIDES[o.id]?.h ?? top(o.tags) ?? 14;
       for (const pt of inside) if ((top(pt.tags) ?? 0) <= oTop + 4) thinDrop.add(pt);
     }
     if (o.skip && churchy(o) && !['r19372558_0', 'w9253917'].includes(o.id)) { o.skip = false; o.ownParts = true; }   // churches: the outline is modelled whole
@@ -970,6 +971,23 @@ const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = co
   const hh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
   const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
     return (hh(i, j) * (1 - fx) + hh(i + 1, j) * fx) * (1 - fy) + (hh(i, j + 1) * (1 - fx) + hh(i + 1, j + 1) * fx) * fy; };
+  // open land: undescribed ground well away from any building or built-up landuse is not a back yard but rough grass and
+  // scrub (Monsanto's edges, motorway verges, the empty lots of the outskirts). A 4 m chamfer distance field finds it.
+  const DG = 4, dr = new Raster(minX - 80, minY - 80, maxX + 80, maxY + 80, DG), dist = new Float32Array(dr.w * dr.h).fill(1e4);
+  for (const p of polysB) dr.fillRings([p.outer, ...p.holes], (i) => { dist[i] = 0; });
+  for (const p of polysArea) if (/^(industrial|commercial|retail|construction|garages|railway|military)$/.test(p.tags.landuse) || p.tags.amenity === 'parking') dr.fillRings([p.outer, ...p.holes], (i) => { dist[i] = 0; });
+  for (let pass = 0; pass < 2; pass++) for (let k = 0; k < dist.length; k++) {   // forward then backward sweep
+    const i = pass ? dist.length - 1 - k : k, r = Math.floor(i / dr.w), c = i % dr.w, s = pass ? 1 : -1;
+    let d = dist[i];
+    for (const [dc, drow, w] of [[s, 0, DG], [0, s, DG], [s, s, DG * 1.414], [-s, s, DG * 1.414]]) {
+      const cc = c + dc, rr = r + drow; if (cc >= 0 && rr >= 0 && cc < dr.w && rr < dr.h) d = Math.min(d, dist[rr * dr.w + cc] + w);
+    }
+    dist[i] = d;
+  }
+  const openAt = (x, y) => { const fx = (x - dr.minX) / DG - 0.5, fy = (dr.maxY - y) / DG - 0.5, c = Math.max(0, Math.min(dr.w - 2, Math.floor(fx))), r = Math.max(0, Math.min(dr.h - 2, Math.floor(fy))), u = fx - c, v = fy - r, i = r * dr.w + c;
+    const d = (dist[i] * (1 - u) + dist[i + 1] * u) * (1 - v) + (dist[i + dr.w] * (1 - u) + dist[i + dr.w + 1] * u) * v;
+    const t = Math.min(1, Math.max(0, (d - 16) / 26)); return t * t * (3 - 2 * t); };
+  const DRY = srgb('#b4ad84'), MEAD = srgb('#9ea472'), SCRUB = srgb('#8a9463');
   for (let r = 0; r < gm.h; r++) {
     const y = maxY - (r + 0.5) * SS;
     for (let c = 0; c < gm.w; c++) {
@@ -977,7 +995,11 @@ const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = co
       const g = Math.min(1, Math.max(0, (vn(x / 21, y / 21) - 0.35) * 2.2)), e = vn(x / 13 + 17, y / 13 + 5);
       const k = (0.95 + 0.08 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.97 + 0.06 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
       const i = (r * gm.w + c) * 3;
-      for (let q = 0; q < 3; q++) gm.data[i + q] = Math.min(255, ((EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + GREEN[q] * g) * k);
+      const o = openAt(x, y), m = vn(x / 31 + 3, y / 31 + 9), sc = Math.min(1, Math.max(0, (vn(xw / 7 + 41, yw / 7) - 0.66) * 3));
+      for (let q = 0; q < 3; q++) {
+        const yard = (EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + GREEN[q] * g, wild = (DRY[q] * m + MEAD[q] * (1 - m)) * (1 - sc) + SCRUB[q] * sc;
+        gm.data[i + q] = Math.min(255, (yard * (1 - o) + wild * o) * k);
+      }
     }
   }
 }
@@ -1110,7 +1132,7 @@ gm.data = null;
 {
   const bm = new Raster(minX, minY, maxX, maxY, (maxX - minX) / GW);
   const mask = new Float32Array(bm.w * bm.h);
-  for (const p of polysB) if (!p.tags['building:part'] || true) bm.fillRings([p.outer, ...p.holes], (i) => { if (i < mask.length) mask[i] = 1; });
+  for (const p of polysB) if (!p.skip) bm.fillRings([p.outer, ...p.holes], (i) => { if (i < mask.length) mask[i] = 1; });
   const ao = boxBlur(mask, bm.w, bm.h, 6, 3);
   for (let i = 0; i < GW * GH; i++) {
     const k = 1 - Math.min(1, ao[i] * 1.15) * 0.42;
@@ -1203,7 +1225,7 @@ function addMesh(doc, scene, name, attrs, material) {
   scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)));
 }
 async function writeDoc(doc, file) {
-  await doc.transform(weld(), meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizePosition: 16, quantizeNormal: 10, quantizeTexcoord: 16, quantizeColor: 8 }));
+  await doc.transform(weld(), meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizePosition: 16, quantizeNormal: 8, quantizeTexcoord: 16, quantizeColor: 8 }));
   await io.write(file, doc);
   return fs.statSync(file).size;
 }

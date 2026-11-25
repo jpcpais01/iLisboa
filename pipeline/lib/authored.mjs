@@ -55,6 +55,9 @@ export const OVERRIDES = {
   w188143627: { shape: 'flat', wall: '#c4c0b6', flatCol: [208, 208, 204], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.6 },
   w174189905: { shape: 'flat', wall: '#d9dcd9', variant: 3, parapet: 0.8 },   // Sporting's multisports pavilion
   // modern institutions with courtyards that the rules read as old (tiled hips): flat-roofed, as built
+  r17651166_0: { shape: 'flat', wall: '#dfe2e1', flatCol: [196, 199, 200], variant: 3, parapet: 0.8 },   // Aeroporto Terminal 1: light cladding and glass, metal roof
+  w679256558: { shape: 'flat', wall: '#cfd3d4', flatCol: [176, 180, 182], variant: 3 },   // plant room on the terminal roof (no terracotta hip)
+  w42645796: { h: 18, shape: 'flat', wall: '#e6e2d9', flatCol: [200, 200, 196], variant: 3, parapet: 1 },   // Centro Colombo: one mass, its parts only where they rise above it
   w155331041: { shape: 'flat', wall: '#efefeb', flatCol: [222, 222, 218], variant: 3, parapet: 0.8 },   // Fundação Champalimaud (Charles Correa)
   r3232954_0: { shape: 'flat', wall: '#ebebe6', flatCol: [214, 214, 210], variant: 3, parapet: 0.6 },   // Pavilhão do Conhecimento (Carrilho da Graça)
   r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
