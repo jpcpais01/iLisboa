@@ -38,6 +38,8 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
+  r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
   // Mosteiro dos Jerónimos: the monastery ranges in golden lioz under crested parapets (the church is authored)
   r11318401_0: { stone: false, wall: '#ddd0b1', shape: 'flat', h: 17, floorH: 5.2, groundH: 6.2, bayW: 4.4, variant: 4, parapet: 1.1, balconyFloors: [] },
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
@@ -2353,4 +2355,40 @@ export function jeronimosChurch(S, { ring, fwd, ground, lin, srgb }) {
     sweep(S, F, [[tu, tv, zt + 9, 0.35, 0.35], [tu, tv, zt + 10.6, 0.06, 0.06]], stone2, ST, 6);
   }
   function k2(z) { return z < 0; }
+}
+
+// Estádio da Luz (2003): the bowl of red seats under a pale roof that hangs from four steel arches,
+// one along each side. Seats are lofted from the edge of the roof's opening (round the pitch) out and up
+// under the roof; the arches spring from the roof's corners.
+export function estadioLuz(S, { roof, hole, ground, lin, srgb }) {
+  const red = lin(srgb('#b3272e')), red2 = lin(srgb('#9c2128')), steel = lin(srgb('#dcdedf')), conc = lin(srgb('#a9a7a2'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.7, 1], I0 = [0, 0, 0, 0];
+  const c = hole.reduce((a, p) => [a[0] + p[0] / hole.length, a[1] + p[1] / hole.length], [0, 0]);
+  const ring = (k, z) => hole.map((p) => [c[0] + (p[0] - c[0]) * k, ground + z, -(c[1] + (p[1] - c[1]) * k)]);
+  const tiers = [[0.86, 1.5], [1.13, 15], [1.17, 17.5], [1.42, 35]];   // lower tier, gangway, upper tier
+  for (let t = 0; t + 1 < tiers.length; t++) {
+    const A = ring(...tiers[t]), B = ring(...tiers[t + 1]), col = t === 1 ? conc : t ? red2 : red;
+    for (let i = 0; i < A.length; i++) {
+      const j = (i + 1) % A.length, n = norm(A[i], A[j], B[j]);
+      const up = n[1] < 0 ? n.map((q) => -q) : n;   // seats face up and in
+      tri(S, A[i], A[j], B[j], up, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, A[i], B[j], B[i], up, col, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+  }
+  // the façade: the roof's outline carried down to the podium in bands of glass and grey cladding
+  const sg = polyArea(roof) > 0 ? 1 : -1;
+  for (let i = 0; i < roof.length; i++) {
+    const a = roof[i], b = roof[(i + 1) % roof.length]; if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.2) continue;
+    const [p, q] = sg > 0 ? [a, b] : [b, a];
+    for (let k = 0; k < 8; k++) { const z0 = ground + 5.5 + k * 4.25; wallQuad(S, p, q, z0, z0, z0 + 4.25, z0 + 4.25, k % 2 ? lin(srgb('#8e9aa1')) : lin(srgb('#d2d4d4')), 0, 1, ground, I0, PL); }
+  }
+  const o = obb(roof), zr = 41;
+  const P = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+  const arch = (a, b, rise) => {   // parabolic tube from a to b (local u, v)
+    const pts = Array.from({ length: 17 }, (_, k) => { const t = k / 16, u = a[0] + (b[0] - a[0]) * t, v = a[1] + (b[1] - a[1]) * t; return [u, v, zr - 2 + 4 * rise * t * (1 - t)]; });
+    for (let k = 0; k + 1 < pts.length; k++) limb(S, P(...pts[k]), P(...pts[k + 1]), 1.25, 1.25, 8, steel, PL, false);
+    for (let k = 2; k < 15; k += 2) { const [u, v, z] = pts[k]; limb(S, P(u, v, z), P(u * 0.93, v * 0.93, zr + 0.3), 0.12, 0.12, 4, steel, PL, false); }   // hangers
+  };
+  const hl = o.hl * 0.94, hw = o.hw * 0.94;
+  arch([-hl, hw], [hl, hw], 26); arch([-hl, -hw], [hl, -hw], 26); arch([-hl, -hw], [-hl, hw], 19); arch([hl, -hw], [hl, hw], 19);
+  for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) limb(S, P(su * hl, sv * hw, -1), P(su * hl, sv * hw, zr - 1), 2.2, 1.6, 8, conc, PL, true);   // corner masts
 }
