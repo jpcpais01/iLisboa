@@ -45,6 +45,10 @@ export const OVERRIDES = {
   w709779005: { shape: 'flat', h: 3, wall: '#cfccc4', flatCol: [196, 193, 186], variant: 3, floorH: 0, parapet: 0.9 },   // the tower's pier
   w1388115274: { shape: 'flat', h: 1.6, wall: '#cfccc4', flatCol: [200, 197, 190], variant: 3, floorH: 0, parapet: 0.9 },   // the hotel's river terrace
   ...Object.fromEntries(['w96502765', 'w96502767', 'w96502775'].map((id) => [id, { h: 58, shape: 'flat', wall: '#d99a93', variant: 3, floorH: 3.6, groundH: 4.4, parapet: 0 }])),   // Amoreiras towers: pink shafts (crowns authored)
+  // Palácio de Belém (presidency): pink walls, white trims, tiled hip roofs
+  ...Object.fromEntries(['r15475183_0', 'r15482569_0', 'r15482569_1'].map((id) => [id, { wall: '#e3a69c', roofCol: '#a9644e', variant: 4, stone: false }])),
+  // Museu Nacional dos Coches (Paulo Mendes da Rocha, 2015): blank white concrete-and-metal boxes
+  ...Object.fromEntries(['r5363219_0', 'r5363219_1', 'r5363219_2', 'r5363219_3', 'r15475185_0'].map((id) => [id, { wall: '#ebeae6', shape: 'flat', flatCol: [206, 206, 202], variant: 3, floorH: 0, parapet: 0.4 }])),
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
