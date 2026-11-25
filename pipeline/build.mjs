@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -623,6 +623,13 @@ function addBuilding_(p) {
   }
   { const cr = byId.get('w87891338');   // Cristo Rei: pedestal and statue on the OSM footprint, facing Lisbon
     if (cr && cr.c[0] >= minX && cr.c[0] < maxX && cr.c[1] >= minY && cr.c[1] < maxY) { const ob = obb(cr.outer); cristoRei(tileB(...cr.c), { cx: cr.c[0], cy: cr.c[1], ux: ob.ux, uy: ob.uy, hl: ob.hl, hw: ob.hw, ground: cr.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark(); } }
+  const inArea = (c) => c[0] >= minX && c[0] < maxX && c[1] >= minY && c[1] < maxY;
+  { const ch = els.find((e) => e.type === 'relation' && e.id === 11318402), r = ch && byId.get('r11318402_0');   // Jerónimos church
+    if (r && inArea(r.c)) { jeronimosChurch(tileB(...r.c), { ring: r.outer, fwd: proj.fwd, ground: r.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark(); } }
+  { const tb = byId.get('w24341353');   // Torre de Belém on its mapped outline
+    if (tb && inArea(tb.c)) { torreBelem(tileB(...tb.c), { fwd: proj.fwd, ring: tb.outer, ground: Math.max(LAND_MIN, tb.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity)), lin, srgb }); mark(); } }
+  { const hull = byId.get('w152327819'), sl = byId.get('w259346570');   // Padrão dos Descobrimentos
+    if (hull && sl && inArea(hull.c)) { padraoDescobrimentos(tileB(...hull.c), { slab: sl.outer, hull: hull.outer, ground: Math.max(LAND_MIN, groundAt(...hull.c)), lin, srgb }); mark(); } }
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); trellisCedar(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   const camara = byId.get('w95417254');
   if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }

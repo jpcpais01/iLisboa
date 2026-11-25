@@ -38,6 +38,8 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  // Mosteiro dos Jerónimos: the monastery ranges in golden lioz under crested parapets (the church is authored)
+  r11318401_0: { stone: false, wall: '#ddd0b1', shape: 'flat', h: 17, floorH: 5.2, groundH: 6.2, bayW: 4.4, variant: 4, parapet: 1.1, balconyFloors: [] },
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
   w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
   w481570880: { shape: 'flat', variant: 3, wall: '#6f6b65', flatCol: [139, 160, 104], h: 10 },   // Lisbon cruise terminal (2017): dark concrete block under a planted roof terrace
@@ -98,7 +100,9 @@ export const AREAS = [
 ];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338']);   // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+   // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
@@ -2111,4 +2115,242 @@ export function aqueduto(S, { fwd, groundAt, lin, srgb, log = () => {} }) {
     for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const o = 1.81; blk(u + nu * o - (nv ? 0.35 : 0.02), u + nu * o + (nv ? 0.35 : 0.02), nv * o - (nu ? 0.35 : 0.02), nv * o + (nu ? 0.35 : 0.02), z + 2.6, z + 3.8, dark); }
   }
   log(`Aqueduto: ${L.toFixed(0)} m, deck ${zA.toFixed(1)} → ${zB.toFixed(1)}, ${nPointed} pointed + ${nRound} round arches, tallest ${tallest.toFixed(1)} m`);
+}
+
+// Torre de Belém (1514–1520): Manueline bastion-tower in lioz. The tower stands at the landward (north)
+// end; the hexagonal bastion runs out into the river with shield-shaped merlons and corbelled sentry
+// turrets under ribbed domes. Tower: four floors, the King's balcony and the Renaissance loggia on the
+// river face, side balconies, a crenellated terrace with corner turrets. Frame from its mapped north edge.
+const TORRE_SQ = [[38.691784, -9.215957], [38.691766, -9.215820], [38.691659, -9.215843], [38.691677, -9.215980]];   // NW, NE, SE, SW of the mapped tower part
+export function torreBelem(S, { fwd, ring, ground, lin, srgb }) {
+  const stone = lin(srgb('#e6dcc5')), stone2 = lin(srgb('#d5c9ae')), dark = lin(srgb('#36342f')), dome = lin(srgb('#d9cfb8'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.27, 0.9], TL = [KIND.TILES / 8, 5 / 8, 0.27, 1], I0 = [0, 0, 0, 0];
+  const Q = TORRE_SQ.map((p) => fwd(...p)), a = Q[0], b = Q[1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+  const cx = Q.reduce((s, p) => s + p[0], 0) / 4, cy = Q.reduce((s, p) => s + p[1], 0) / 4;   // tower centre; v points inland (north)
+  const K = kit(S, { cx, cy, ux, uy, ground, zb: -2, wall: stone, roof: stone2, ST, TL }), { P2, W3, blk } = K;
+  const O = openings(S, P2, W3, ux, uy, ground, stone2, dark, ST);
+  const toUV = ([x, y]) => { const dx = x - cx, dy = y - cy; return [dx * ux + dy * uy, -dx * uy + dy * ux]; };
+  const T0 = -6, T1 = 6, V0 = -6, V1 = 6, ZB = 8, ZT = 25.6;   // tower box (u, v) and the bastion terrace / tower roof levels
+  const inTower = (u, v) => u > T0 - 0.3 && u < T1 + 0.3 && v > V0 - 0.3 && v < V1 + 0.3;
+  // bastion: the mapped outline raised to the terrace, a parapet and shield merlons on every edge clear of the tower
+  const R = ring.map(toUV), n = R.length, sgn = polyArea(ring) > 0 ? 1 : -1;
+  const flat = earcut(R.flat());
+  for (let i = 0; i < flat.length; i += 3) triUp(S, ...[flat[i], flat[i + 1], flat[i + 2]].map((k) => W3(R[k][0], R[k][1], ZB)), stone2, [0, 0], [0, 0], [0, 0], I0, ST);
+  const turrets = [];
+  for (let i = 0; i < n; i++) {
+    const p = R[i], q = R[(i + 1) % n], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 0.3) continue;
+    const eu = (q[0] - p[0]) / l, ev = (q[1] - p[1]) / l, nu = sgn * ev, nv = -sgn * eu;   // outward normal
+    const [x0, y0] = P2(...p), [x1, y1] = P2(...q);
+    wallQuad(S, sgn > 0 ? [x0, y0] : [x1, y1], sgn > 0 ? [x1, y1] : [x0, y0], ground - 2, ground - 2, ground + ZB, ground + ZB, stone, 0, l, ground, I0, ST);
+    // a plinth course at the waterline and a cable moulding under the parapet
+    for (const [z0, z1, o] of [[-2, 1.2, 0.35], [ZB - 0.45, ZB - 0.15, 0.18]]) O.tbox(p[0] / 2 + q[0] / 2 + nu * o / 2, p[1] / 2 + q[1] / 2 + nv * o / 2, eu, ev, l / 2 + o, o / 2, z0, z1, stone2);
+    const mu = (p[0] + q[0]) / 2, mv = (p[1] + q[1]) / 2;
+    if (inTower(mu, mv)) continue;
+    O.tbox(mu - nu * 0.3, mv - nv * 0.3, eu, ev, l / 2, 0.3, ZB, ZB + 0.95, stone);
+    const m = Math.max(1, Math.floor(l / 1.85));
+    for (let k = 0; k < m; k++) {
+      const t = (k + 0.5) / m, u = p[0] + (q[0] - p[0]) * t - nu * 0.3, v = p[1] + (q[1] - p[1]) * t - nv * 0.3;
+      O.tbox(u, v, eu, ev, 0.42, 0.28, ZB + 0.95, ZB + 1.75, stone);
+      const A = W3(u - eu * 0.42, v - ev * 0.42, ZB + 1.75), B = W3(u + eu * 0.42, v + ev * 0.42, ZB + 1.75), C = W3(u, v, ZB + 2.3);
+      slab4(S, [A, B, C, C], 0.5, stone, ST);   // the shield's point
+    }
+    // sentry turrets on the bastion's corners
+    const r = R[(i + 2) % n], l2 = Math.hypot(r[0] - q[0], r[1] - q[1]);
+    if (l2 > 0.3 && !inTower(...q)) { const turn = Math.abs(eu * (r[1] - q[1]) / l2 - ev * (r[0] - q[0]) / l2); if (turn > 0.45) turrets.push([q[0] + (nu + sgn * (r[1] - q[1]) / l2) * 0.45, q[1] + (nv - sgn * (r[0] - q[0]) / l2) * 0.45, ZB - 1.6]); }
+  }
+  const guarita = (u, v, z0, r = 1.05) => {
+    sweep(S, W3, [[u, v, z0 - 1.1, 0.2, 0.2], [u, v, z0 - 0.5, r * 0.75, r * 0.75], [u, v, z0, r, r]], stone2, ST, 12, false);   // corbel
+    sweep(S, W3, [[u, v, z0, r, r], [u, v, z0 + 3.1, r, r], [u, v, z0 + 3.3, r + 0.12, r + 0.12], [u, v, z0 + 3.45, r, r]], stone, ST, 12, false);
+    for (let k = 0; k < 4; k++) { const t = (k / 4) * Math.PI * 2 + 0.4; O.tbox(u + Math.cos(t) * (r + 0.01), v + Math.sin(t) * (r + 0.01), -Math.sin(t), Math.cos(t), 0.14, 0.04, z0 + 1.4, z0 + 2.4, dark); }
+    const D = Array.from({ length: 7 }, (_, k) => { const t = (k / 6) * Math.PI / 2; return [u, v, z0 + 3.45 + Math.sin(t) * r * 1.35, Math.max(0.05, Math.cos(t) * r), Math.max(0.05, Math.cos(t) * r)]; });
+    sweep(S, W3, D, dome, ST, 8);   // ribbed (8 facets) Moorish dome
+    sweep(S, W3, [[u, v, z0 + 3.45 + r * 1.35, 0.1, 0.1], [u, v, z0 + 3.45 + r * 1.35 + 0.5, 0.03, 0.03]], stone2, ST, 5);
+  };
+  for (const [u, v, z] of turrets) guarita(u, v, z);
+  // tower body, string courses at each floor, cable moulding at the terrace
+  blk(T0, T1, V0, V1, -2, ZT);
+  for (const z of [ZB + 0.2, 12.2, 16.6, 21.3, ZT - 0.6]) blk(T0 - 0.22, T1 + 0.22, V0 - 0.22, V1 + 0.22, z, z + 0.32, stone2);
+  // top terrace: parapet, shield merlons, corner turrets
+  K.crenel(T0 + 0.5, T1 - 0.5, V0 + 0.5, V1 - 0.5, ZT, 1.75, stone);
+  for (const [u, v] of [[T0, V0], [T1, V0], [T1, V1], [T0, V1]]) guarita(u + Math.sign(u) * 0.3, v + Math.sign(v) * 0.3, ZT - 1.3, 1.1);
+  // river face (v = V0): the King's balcony (floor 1) and the Renaissance loggia (floor 2)
+  blk(T0 + 2.2, T1 - 2.2, V0 - 1.3, V0, 12.2, 12.6, stone2);
+  for (let k = 0; k < 13; k++) { const u = T0 + 2.4 + (k / 12) * (T1 - T0 - 4.8); blk(u - 0.08, u + 0.08, V0 - 1.25, V0 - 1.05, 12.6, 13.5, stone); }
+  blk(T0 + 2.2, T1 - 2.2, V0 - 1.3, V0 - 1.0, 13.5, 13.7, stone2);
+  for (const u of [-2.6, 0, 2.6]) O.win(u, V0, 0, -1, 12.6, 1.6, 2.6, 'arch');
+  blk(T0 + 0.6, T1 - 0.6, V0 - 2.0, V0, 16.6, 17.0, stone2);   // loggia floor
+  blk(T0 + 0.6, T1 - 0.6, V0 - 0.06, V0, 17.0, 20.6, dark);
+  for (let k = 0; k <= 6; k++) { const u = T0 + 0.8 + (k / 6) * (T1 - T0 - 1.6); limb(S, W3(u, V0 - 1.8, 17.0), W3(u, V0 - 1.8, 19.4), 0.17, 0.15, 8, stone, ST); if (k < 6) O.arc(u + (T1 - T0 - 1.6) / 12, V0 - 1.8, 1, 0, 19.4, (T1 - T0 - 1.6) / 12, 0.16, 0.2, stone2, 9); }
+  blk(T0 + 0.6, T1 - 0.6, V0 - 2.0, V0, 20.7, 21.2, stone2);   // loggia roof
+  for (let k = 0; k < 15; k++) { const u = T0 + 0.8 + (k / 14) * (T1 - T0 - 1.6); blk(u - 0.07, u + 0.07, V0 - 1.95, V0 - 1.75, 17.0, 17.9, stone); }
+  blk(T0 + 0.6, T1 - 0.6, V0 - 2.0, V0 - 1.7, 17.9, 18.1, stone2);
+  // royal arms between armillary spheres above the loggia
+  blk(-1.3, 1.3, V0 - 0.25, V0, 22.0, 24.6, stone2); blk(-1.1, 1.1, V0 - 0.35, V0 - 0.2, 22.3, 24.3, stone);
+  for (const u of [-3.6, 3.6]) { sweep(S, W3, [[u, V0 - 0.6, 22.6, 0.05, 0.05], [u, V0 - 0.6, 23.0, 0.62, 0.62], [u, V0 - 0.6, 23.6, 0.7, 0.7], [u, V0 - 0.6, 24.2, 0.62, 0.62], [u, V0 - 0.6, 24.6, 0.05, 0.05]], stone2, ST, 8); }
+  // side faces: balconies with three arches on floor 2, twin windows above and below
+  for (const [u, nu] of [[T0, -1], [T1, 1]]) {
+    blk(nu < 0 ? u - 1.3 : u, nu < 0 ? u : u + 1.3, V0 + 3.2, V1 - 3.2, 16.6, 17.0, stone2);
+    for (let k = 0; k < 11; k++) { const v = V0 + 3.4 + (k / 10) * (V1 - V0 - 6.8); blk(u + nu * 1.15 - 0.08, u + nu * 1.15 + 0.08, v - 0.08, v + 0.08, 17.0, 17.9, stone); }
+    blk(nu < 0 ? u - 1.3 : u, nu < 0 ? u : u + 1.3, V0 + 3.2, V1 - 3.2, 17.9, 18.1, stone2);
+    for (const v of [-2.6, 0, 2.6]) O.win(u, v, nu, 0, 17.0, 1.5, 2.7, 'arch');
+    for (const v of [-1.2, 1.2]) { O.win(u, v, nu, 0, 12.9, 1.0, 2.3, 'round'); O.win(u, v, nu, 0, 22.2, 1.0, 2.2, 'round'); }
+  }
+  // landward face: door from the drawbridge, twin windows on every floor
+  O.win(0, V1, 0, 1, 0.2, 2.0, 3.4, 'arch');
+  for (const z of [12.9, 17.4, 22.2]) for (const u of [-2.2, 2.2]) O.win(u, V1, 0, 1, z, 1.1, 2.5, 'round');
+}
+
+// Padrão dos Descobrimentos (1960, Cottinelli Telmo and Leopoldo de Almeida): a 52 m slab carrying three
+// stylised sails, a caravel's prow running out towards the river with the Infante D. Henrique at its head
+// and 32 figures of the Discoveries climbing behind him on both flanks; the great sword on the landward face.
+// Built on the mapped slab (u along it, + towards the river) and the mapped hull outline.
+export function padraoDescobrimentos(S, { slab, hull, ground, lin, srgb }) {
+  const stone = lin(srgb('#ece4d2')), stone2 = lin(srgb('#ddd3bd')), shade = lin(srgb('#c9bea6'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.53, 0.9], I0 = [0, 0, 0, 0];
+  const o = obb(slab), [sx, sy] = [o.cx, o.cy];
+  // orient u towards the hull's far point (the prow)
+  let far = hull[0], fd = -1; for (const p of hull) { const d = Math.hypot(p[0] - sx, p[1] - sy); if (d > fd) { fd = d; far = p; } }
+  let ux = o.ux, uy = o.uy; if ((far[0] - sx) * ux + (far[1] - sy) * uy < 0) { ux = -ux; uy = -uy; }
+  const P2 = (u, v) => [sx + ux * u - uy * v, sy + uy * u + ux * v], W3 = (u, v, z) => { const [x, y] = P2(u, v); return [x, ground + z, -y]; };
+  const toUV = ([x, y]) => { const dx = x - sx, dy = y - sy; return [dx * ux + dy * uy, -dx * uy + dy * ux]; };
+  const H = hull.map(toUV), hl = o.hl, hw = Math.max(1.8, o.hw);
+  const uN = Math.min(...H.map((p) => p[0])), uP = Math.max(...H.map((p) => p[0]));
+  const deck = (u) => 1.2 + 15.5 * Math.max(0, Math.min(1, (u - uN) / (uP - uN))) ** 1.25;   // the hull rises to the prow
+  // hull: mapped outline, walls up to the sloping deck, deck surface
+  const sgn = polyArea(hull) > 0 ? 1 : -1;
+  for (let i = 0; i < H.length; i++) {
+    const p = H[i], q = H[(i + 1) % H.length]; if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.2) continue;
+    const [A, B] = sgn > 0 ? [p, q] : [q, p];
+    wallQuad(S, P2(...A), P2(...B), ground - 1, ground - 1, ground + deck(A[0]), ground + deck(B[0]), stone, A[0], B[0], ground, I0, ST);
+  }
+  const tr = earcut(H.flat());
+  for (let i = 0; i < tr.length; i += 3) triUp(S, ...[tr[i], tr[i + 1], tr[i + 2]].map((k) => W3(H[k][0], H[k][1], deck(H[k][0]))), stone2, [0, 0], [0, 0], [0, 0], I0, ST);
+  // the slab and its sails: three swelling sail-forms stepped down towards the prow on both faces
+  box(S, sx, sy, ux, uy, hl, hw, ground - 1, ground + 52, stone, I0, ST);
+  for (const s of [1, -1]) for (let k = 0; k < 3; k++) {
+    const u0 = -hl + 1.5 + k * 4.4, u1 = u0 + 9, z0 = 51.5 - k * 9.5, z1 = z0 - 16 + k * 1.5, bulge = 2.9 - k * 0.5;
+    const sec = Array.from({ length: 6 }, (_, j) => { const t = j / 5, w = Math.sin(Math.PI * t) * bulge + 0.1; return [(u0 + u1) / 2, s * (hw + w / 2), z0 - (z0 - z1) * t, (u1 - u0) / 2 * (0.75 + 0.25 * Math.sin(Math.PI * t)), w / 2]; });
+    sweep(S, W3, sec, k % 2 ? stone2 : stone, ST, 8);
+  }
+  // the sword on the landward face: blade down the slab, cross-guard with the Avis cross
+  const uS = -hl - 0.35;
+  box(S, ...P2(uS + 0.15, 0), ux, uy, 0.2, 0.55, ground + 3, ground + 38, stone2, I0, ST);
+  box(S, ...P2(uS + 0.15, 0), ux, uy, 0.25, hw + 1.6, ground + 37.2, ground + 38.6, stone2, I0, ST);
+  box(S, ...P2(uS + 0.15, 0), ux, uy, 0.25, 0.75, ground + 38.6, ground + 44.5, stone2, I0, ST);
+  for (const z of [39.6, 42.4]) box(S, ...P2(uS + 0.05, 0), ux, uy, 0.12, 1.35, ground + z, ground + z + 0.55, stone, I0, ST);
+  // the Infante at the prow, with a caravel in his hands, and the figures climbing behind him
+  const fig = (u, v, sc, facing, pose, col = stone) => {
+    const z = deck(u), fx = Math.cos(facing), fy = Math.sin(facing);   // facing in (u, v)
+    figure(S, (a, b, zz) => W3(u + fx * b + fy * a, v + fy * b - fx * a, z + zz), sc, col, ST, pose);
+  };
+  const prowU = uP - 4.2;
+  fig(prowU, 0, 4.6, 0, { robe: true, cloak: true, arms: [[-0.15, 0.3, -0.25], [0.15, 0.3, -0.25]] });
+  sweep(S, W3, [[prowU + 1.6, -0.6, deck(prowU) + 4.6, 0.4, 0.25], [prowU + 1.6, 0, deck(prowU) + 4.9, 0.7, 0.3], [prowU + 1.6, 0.6, deck(prowU) + 4.6, 0.4, 0.25]], stone2, ST, 6);
+  const poses = [{ robe: true, cloak: true }, { stride: 0.4, arms: [[-0.1, 0.35, 0.35], [0.05, 0.05, -0.6]] }, { robe: true, arms: [[-0.12, 0.3, -0.1], [0.1, 0.3, -0.1]] }, { stride: 0.3, cloak: true, arms: [[-0.05, 0.4, 0.05], [0.12, 0.2, -0.3]] }, { robe: true, crown: true }];
+  for (const s of [1, -1]) for (let k = 0; k < 16; k++) {
+    const u = prowU - 4.4 - k * ((prowU - 4.4 - uN - 3) / 15), [lo, hi] = halfWidth(H, u), half = Math.max(hw + 0.9, (s > 0 ? hi : -lo) - 1.1);
+    fig(u, s * half, 3.0 - k * 0.04, s * 0.5, poses[(k + (s > 0 ? 0 : 2)) % poses.length], k % 3 ? stone : shade);
+  }
+}
+function halfWidth(H, u) {   // half the hull's width at station u (from its outline)
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < H.length; i++) {
+    const p = H[i], q = H[(i + 1) % H.length];
+    if ((p[0] - u) * (q[0] - u) > 0 || p[0] === q[0]) continue;
+    const v = p[1] + (q[1] - p[1]) * (u - p[0]) / (q[0] - p[0]); lo = Math.min(lo, v); hi = Math.max(hi, v);
+  }
+  return isFinite(lo) ? [lo, hi] : [-2, 2];
+}
+
+// Mosteiro dos Jerónimos: the monastery's mapped outline is raised as one lioz range (build.mjs), and the
+// church of Santa Maria de Belém is modelled over its own outline: walls of golden lioz with buttresses
+// and pinnacles along the river side, tall Manueline windows, a crested parapet over a low tiled roof,
+// João de Castilho's south portal rising above the roofline, and the domed bell tower at the south-west corner.
+const JERONIMOS_PORTAL = [38.697660, -9.205299], JERONIMOS_TOWER = [38.697556, -9.205840];
+export function jeronimosChurch(S, { ring, fwd, ground, lin, srgb }) {
+  const stone = lin(srgb('#ddd0b1')), stone2 = lin(srgb('#cbbd9b')), dark = lin(srgb('#3a372f')), roofC = lin(srgb('#a7735c')), cap = lin(srgb('#d3c6a6'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.61, 0.9], TL = [KIND.TILES / 8, 5 / 8, 0.61, 1], I0 = [0, 0, 0, 0];
+  const o = obb(ring); let ux = o.ux, uy = o.uy; if (ux < 0) { ux = -ux; uy = -uy; }   // u runs west → east (to the chancel)
+  const cx = o.cx, cy = o.cy, H = 24.5;
+  const K = kit(S, { cx, cy, ux, uy, ground, zb: -1, wall: stone, roof: roofC, ST, TL }), { P2, W3, blk } = K;
+  const O = openings(S, P2, W3, ux, uy, ground, stone2, dark, ST);
+  const toUV = ([x, y]) => { const dx = x - cx, dy = y - cy; return [dx * ux + dy * uy, -dx * uy + dy * ux]; };
+  // walls stand 0.15 m proud of the mapped outline, so they never fight the monastery range under them
+  const c0 = ring.reduce((a, p) => [a[0] + p[0] / ring.length, a[1] + p[1] / ring.length], [0, 0]);
+  const R = ring.map((p) => toUV([c0[0] + (p[0] - c0[0]) * 1.003, c0[1] + (p[1] - c0[1]) * 1.003])), n = R.length, sgn = polyArea(ring) > 0 ? 1 : -1;
+  const uMin = Math.min(...R.map((p) => p[0])), uMax = Math.max(...R.map((p) => p[0]));
+  for (let i = 0; i < n; i++) {
+    const p = R[i], q = R[(i + 1) % n], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 0.3) continue;
+    const [A, B] = sgn > 0 ? [p, q] : [q, p];
+    wallQuad(S, P2(...A), P2(...B), ground - 1, ground - 1, ground + H, ground + H, stone, 0, l, ground, I0, ST);
+    // crested parapet: a low wall and little pinnacles all round the roof
+    const eu = (q[0] - p[0]) / l, ev = (q[1] - p[1]) / l, nu = sgn * ev, nv = -sgn * eu, mu = (p[0] + q[0]) / 2, mv = (p[1] + q[1]) / 2;
+    O.tbox(mu - nu * 0.2, mv - nv * 0.2, eu, ev, l / 2, 0.22, H, H + 0.9, stone2);
+    O.tbox(mu + nu * 0.1, mv + nv * 0.1, eu, ev, l / 2 + 0.1, 0.22, H - 1.0, H - 0.7, stone2);   // cornice
+    const m = Math.floor(l / 2.2);
+    for (let k = 1; k < m; k++) { const t = k / m, [x, y] = P2(p[0] + (q[0] - p[0]) * t - nu * 0.2, p[1] + (q[1] - p[1]) * t - nv * 0.2); frustum(S, x, y, ux, uy, 0.2, 0.02, ground + H + 0.9, ground + H + 2.0, stone2, ST, false); }
+  }
+  const tr = earcut(R.flat());
+  for (let i = 0; i < tr.length; i += 3) triUp(S, ...[tr[i], tr[i + 1], tr[i + 2]].map((k) => W3(R[k][0], R[k][1], H)), cap, [0, 0], [0, 0], [0, 0], I0, ST);
+  // the outline's width at each station: south wall (lo) and north wall (hi)
+  const side = (u) => halfWidth(R, u);
+  const widths = []; for (let u = uMin + 4; u < uMax - 4; u += 2) { const [lo, hi] = side(u); widths.push([u, lo, hi]); }
+  const nave = widths.slice().sort((a, b) => (a[2] - a[1]) - (b[2] - b[1]))[Math.floor(widths.length * 0.3)];
+  const vL = nave[1] + 1.2, vH = nave[2] - 1.2;
+  K.gable(uMin + 1.5, uMax - 1.5, vL, vH, H - 0.3, H + 4.2, true, stone);
+  // south side: buttresses with pinnacles, and tall windows between them
+  const [px, py] = fwd(...JERONIMOS_PORTAL), [pu] = toUV([px, py]);
+  const [tx, ty] = fwd(...JERONIMOS_TOWER), [tu, tv] = toUV([tx, ty]);
+  const bays = []; for (let u = uMin + 9; u < uMax - 6; u += 9.6) if (Math.abs(u - pu) > 8.5 && Math.abs(u - tu) > 7) bays.push(u);
+  for (const u of bays) {
+    const lo = side(u)[0];
+    blk(u - 0.85, u + 0.85, lo - 1.7, lo, -1, H - 3, stone);
+    blk(u - 1.0, u + 1.0, lo - 1.9, lo, -1, 1.2, stone2);
+    for (const z of [8, 15]) blk(u - 0.95, u + 0.95, lo - 1.8, lo - 1.6, z, z + 0.35, stone2);
+    const [x, y] = P2(u, lo - 0.85);
+    frustum(S, x, y, ux, uy, 0.75, 0.75, ground + H - 3, ground + H + 1.2, stone, ST, false);
+    frustum(S, x, y, ux, uy, 0.75, 0.04, ground + H + 1.2, ground + H + 6.5, stone2, ST, false);
+  }
+  for (let k = 0; k + 1 < bays.length; k++) {
+    const u = (bays[k] + bays[k + 1]) / 2; if (bays[k + 1] - bays[k] > 12 || Math.abs(u - pu) < 7) continue;
+    O.win(u, side(u)[0], 0, -1, 10.5, 3.0, 8.6, 'arch', 0.25);
+  }
+  // South portal: deep doorway, tiers of canopied niches with statues, pinnacled buttresses, a crowning spire
+  {
+    const lo = side(pu)[0] - 0.2, F = (du, dv, z) => W3(pu + du, lo + dv, z);
+    blk(pu - 6.2, pu + 6.2, lo - 1.4, lo + 0.2, -1, 25.5, stone);
+    blk(pu - 2.6, pu + 2.6, lo - 1.46, lo - 1.4, 0, 8.4, dark);                       // twin doors under one arch
+    blk(pu - 0.25, pu + 0.25, lo - 1.9, lo - 1.4, 0, 8.4, stone2);                    // trumeau (with the Infante's statue)
+    figure(S, (a, b, z) => F(a, -1.95 - b, 8.6 + z), 1.25, stone2, ST, { robe: true, cloak: true });
+    for (let k = 0; k < 4; k++) O.arc(pu, lo - 1.45 - k * 0.12, 1, 0, 8.4, 2.6 + k * 0.35, 0.18, 0.12, stone2, 11);
+    for (const s of [-1, 1]) {   // buttress-towers flanking the portal
+      for (const [z0, z1, w] of [[-1, 12, 1.25], [12, 21, 1.05], [21, 27.5, 0.8]]) blk(pu + s * 5.4 - w, pu + s * 5.4 + w, lo - 2.4, lo - 1.4, z0, z1, k2(z0) ? stone : stone2);
+      const [x, y] = P2(pu + s * 5.4, lo - 1.9); frustum(S, x, y, ux, uy, 0.8, 0.05, ground + 27.5, ground + 33, stone2, ST, false);
+    }
+    // niches with statues of apostles and prophets, three tiers
+    for (const [z, nn] of [[10.2, 5], [14.8, 4], [19.4, 3]]) for (let k = 0; k < nn; k++) {
+      const du = (k - (nn - 1) / 2) * 1.75;
+      blk(pu + du - 0.6, pu + du + 0.6, lo - 1.55, lo - 1.4, z, z + 3.1, dark);
+      figure(S, (a, b, zz) => F(du + a, -1.6 - b * 0.4, z + 0.25 + zz), 1.35, stone, ST, { robe: true, arms: [[-0.08, 0.2, -0.35], [0.08, 0.2, -0.35]] });
+      blk(pu + du - 0.72, pu + du + 0.72, lo - 1.9, lo - 1.4, z + 3.1, z + 3.4, stone2);   // canopy
+      const [x, y] = P2(pu + du, lo - 1.65); frustum(S, x, y, ux, uy, 0.42, 0.03, ground + z + 3.4, ground + z + 4.6, stone2, ST, false);
+    }
+    // the Virgin of Belém in the top niche and the spire over the roofline
+    blk(pu - 1.1, pu + 1.1, lo - 1.6, lo - 1.4, 24.2, 27.6, dark);
+    figure(S, (a, b, zz) => F(a, -1.7 - b * 0.4, 24.4 + zz), 1.6, stone, ST, { robe: true, crown: true });
+    const [x, y] = P2(pu, lo - 0.7); frustum(S, x, y, ux, uy, 1.6, 0.6, ground + 25.5, ground + 30.5, stone, ST, false); frustum(S, x, y, ux, uy, 0.6, 0.04, ground + 30.5, ground + 36, stone2, ST, false);
+    sweep(S, F, [[0, -0.7, 36, 0.06, 0.06], [0, -0.7, 37.4, 0.04, 0.04]], stone2, ST, 4);
+  }
+  // bell tower at the south-west corner: square shaft, belfry with paired openings, balustrade, ribbed dome
+  {
+    const hw = 4.6, zt = 33, F = W3;
+    blk(tu - hw, tu + hw, tv - hw, tv + hw, -1, zt);
+    for (const z of [H - 1.0, zt - 0.6]) blk(tu - hw - 0.25, tu + hw + 0.25, tv - hw - 0.25, tv + hw + 0.25, z, z + 0.4, stone2);
+    for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const d of [-1.5, 1.5]) O.win(tu + nu * hw + nv * d, tv + nv * hw - nu * d, nu, nv, H + 1.6, 1.8, 4.6, 'arch', 0.2);
+    for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const [x, y] = P2(tu + su * (hw - 0.3), tv + sv * (hw - 0.3)); frustum(S, x, y, ux, uy, 0.35, 0.03, ground + zt, ground + zt + 3.2, stone2, ST, false); }
+    const D = Array.from({ length: 8 }, (_, k) => { const t = (k / 7) * Math.PI / 2, r = Math.max(0.1, Math.cos(t) * (hw - 0.6)); return [tu, tv, zt + Math.sin(t) * 7.5 + (1 - Math.cos(t)) * 1.5, r, r]; });
+    sweep(S, F, [[tu, tv, zt, hw - 0.6, hw - 0.6], ...D], cap, ST, 8);
+    sweep(S, F, [[tu, tv, zt + 9, 0.35, 0.35], [tu, tv, zt + 10.6, 0.06, 0.06]], stone2, ST, 6);
+  }
+  function k2(z) { return z < 0; }
 }

@@ -580,7 +580,7 @@ renderer.setAnimationLoop((now) => {
   }
   const moved = controls.update(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
-  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS;
+  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
   idleN = active ? 0 : idleN + 1;
   if (!active && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
@@ -596,6 +596,7 @@ renderer.setAnimationLoop((now) => {
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
+  haze.density = 0.00011 * THREE.MathUtils.clamp(2200 / Math.max(1, camera.position.y), 0.3, 1);   // a high view looks down through less of the hazy low air
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
