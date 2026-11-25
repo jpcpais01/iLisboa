@@ -650,28 +650,72 @@ export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb, plain = 
 
 // Column of D. Pedro IV, Rossio (Davioud & Robert, 1870): 27.5 m. Stepped base, pedestal with four
 // seated virtues, Corinthian shaft, bronze emperor on top.
-export function pedroIVColumn(S, { cx, cy, ground, lin, srgb }) {
-  const stone = lin(srgb('#e8e1d1')), shade = lin(srgb('#d0c7b3')), bronze = lin(srgb('#4e5a4b'));
-  const ST = [KIND.STONE / 8, 5 / 8, 0.23, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.23, 1], I0 = [0, 0, 0, 0];
-  const g = ground, P = (z) => [cx, g + z, -cy];
-  box(S, cx, cy, 1, 0, 5.2, 5.2, g - 0.5, g + 0.5, shade, I0, ST);
-  box(S, cx, cy, 1, 0, 4.5, 4.5, g + 0.5, g + 1.0, stone, I0, ST);
-  box(S, cx, cy, 1, 0, 3.0, 3.0, g + 1.0, g + 6.2, stone, I0, ST);
-  box(S, cx, cy, 1, 0, 3.3, 3.3, g + 6.2, g + 6.8, shade, I0, ST);
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {              // the four virtues at the corners of the base
-    const x = cx + dx * 3.6, y = cy + dy * 3.6;
-    box(S, x, y, 1, 0, 0.9, 0.9, g + 1.0, g + 1.8, stone, I0, ST);
-    limb(S, [x, g + 1.8, -y], [x, g + 3.0, -y], 0.55, 0.42, 8, bronze, PL);
-    limb(S, [x, g + 3.0, -y], [x, g + 3.5, -y], 0.2, 0.18, 6, bronze, PL);
+// Corinthian capital in a local frame C(a, b, z): bell from radius r at z0, two rows of acanthus, corner volutes, abacus.
+function corinthian(S, C, r, z0, h, col, dark, st) {
+  sweep(S, C, [[0, 0, z0, r, r], [0, 0, z0 + h * 0.45, r * 1.08, r * 1.08], [0, 0, z0 + h * 0.8, r * 1.3, r * 1.3], [0, 0, z0 + h * 0.86, r * 1.36, r * 1.36]], col, st, 16, false);
+  for (const [row, n, off] of [[0, 8, 0], [1, 8, 0.5]]) for (let k = 0; k < n; k++) {
+    const t = ((k + off) / n) * Math.PI * 2, x = Math.cos(t), y = Math.sin(t), z1 = z0 + h * (row ? 0.25 : 0.02), z2 = z0 + h * (row ? 0.75 : 0.45);
+    sweep(S, C, [[x * r, y * r, z1, 0.18 * r, 0.08 * r], [x * r * 1.16, y * r * 1.16, (z1 + z2) / 2, 0.2 * r, 0.1 * r], [x * r * 1.32, y * r * 1.32, z2, 0.1 * r, 0.06 * r], [x * r * 1.4, y * r * 1.4, z2 - 0.06 * h, 0.03 * r, 0.03 * r]], dark, st, 5);
   }
-  limb(S, P(6.8), P(8.0), 1.25, 1.1, 16, stone, ST);                         // base moulding
-  limb(S, P(8.0), P(21.8), 0.95, 0.82, 16, stone, ST);                        // shaft
-  limb(S, P(21.8), P(23.2), 0.85, 1.2, 12, shade, ST);                        // capital
-  box(S, cx, cy, 1, 0, 1.3, 1.3, g + 23.2, g + 23.8, stone, I0, ST);
-  limb(S, P(23.8), P(25.4), 0.5, 0.42, 8, bronze, PL);                        // D. Pedro IV
-  limb(S, P(25.4), P(26.6), 0.42, 0.36, 8, bronze, PL);
-  limb(S, P(26.6), P(27.4), 0.2, 0.18, 6, bronze, PL);
-  limb(S, [cx + 0.3, g + 26.3, -cy], [cx + 0.9, g + 27.1, -cy - 0.2], 0.09, 0.08, 4, bronze, PL);
+  for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) ell(S, C, [x * r * 1.05, y * r * 1.05, z0 + h * 0.86], [0.18 * r, 0.18 * r, 0.2 * r], col, st, 6);
+  sweep(S, C, [[0, 0, z0 + h * 0.86, r * 1.45, r * 1.45], [0, 0, z0 + h, r * 1.45, r * 1.45]], col, st, 4, true);   // abacus (square)
+}
+// Fluted column shaft (loft with flutes) and an Attic base, in a local frame.
+function flutedShaft(S, C, r0, r1, z0, z1, col, st, flutes = 20) {
+  sweep(S, C, [[0, 0, z0, r0 * 1.32, r0 * 1.32], [0, 0, z0 + r0 * 0.3, r0 * 1.32, r0 * 1.32], [0, 0, z0 + r0 * 0.42, r0 * 1.12, r0 * 1.12], [0, 0, z0 + r0 * 0.6, r0 * 1.2, r0 * 1.2], [0, 0, z0 + r0 * 0.75, r0 * 1.02, r0 * 1.02]], col, st, 16, false);
+  const secs = []; for (let k = 0; k <= 6; k++) { const q = k / 6, e = Math.sin(q * Math.PI) * 0.03; secs.push({ z: z0 + r0 * 0.75 + (z1 - z0 - r0 * 0.75) * q, rx: r0 + (r1 - r0) * q + e * r0, ry: r0 + (r1 - r0) * q + e * r0 }); }
+  loft(S, C, secs, col, st, { sides: flutes * 2, folds: flutes, foldAmp: 0.035, cap: false });
+}
+// a lion lying or standing guard (≈1 m tall at the shoulder before scaling)
+function lion(S, W0, sc, col, st) {
+  const W = (a, b, z) => W0(a * sc, b * sc, z * sc);
+  sweep(S, W, [[0, -0.75, 0.62, 0.14, 0.14], [0, -0.6, 0.65, 0.26, 0.28], [0, -0.1, 0.68, 0.28, 0.3], [0, 0.35, 0.72, 0.32, 0.36], [0, 0.55, 0.75, 0.2, 0.2]], col, st, 10);
+  ell(S, W, [0, 0.58, 0.95], [0.38, 0.32, 0.42], col, st, 10);   // mane
+  ell(S, W, [0, 0.82, 0.98], [0.17, 0.2, 0.18], col, st, 8);     // face
+  for (const s of [-1, 1]) {
+    sweep(S, W, [[s * 0.16, 0.45, 0.6, 0.1, 0.12], [s * 0.17, 0.5, 0.25, 0.06, 0.06], [s * 0.17, 0.58, 0.04, 0.07, 0.05]], col, st, 6);
+    sweep(S, W, [[s * 0.17, -0.55, 0.62, 0.13, 0.16], [s * 0.18, -0.48, 0.3, 0.07, 0.07], [s * 0.18, -0.56, 0.05, 0.065, 0.05]], col, st, 6);
+  }
+  sweep(S, W, [[0, -0.78, 0.6, 0.04, 0.04], [0, -1.0, 0.35, 0.03, 0.03], [0, -1.05, 0.12, 0.05, 0.05]], col, st, 4);
+}
+
+// Column of D. Pedro IV, Rossio (Davioud & Robert, 1870): 27.5 m. Stepped base, pedestal with four
+// seated virtues at its corners, fluted Corinthian shaft, bronze emperor holding the Charter.
+export function pedroIVColumn(S, { cx, cy, ground, lin, srgb, heading = Math.PI }) {
+  const stone = lin(srgb('#e8e1d1')), shade = lin(srgb('#d0c7b3')), bronze = lin(srgb('#4e5a4b')), bronzeHi = lin(srgb('#5f6d5b'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.23, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.23, 1], I0 = [0, 0, 0, 0];
+  const fx = Math.sin(heading), fy = Math.cos(heading), F = frame(cx, cy, fy, -fx, ground), U = [fy, -fx];
+  const L = (a0, b0, z0) => (a, b, z) => F(a0 + a, b0 + b, z0 + z), g = ground;
+  for (const [h, z0, z1, c] of [[5.4, -0.5, 0.3, shade], [5.0, 0.3, 0.6, stone], [4.6, 0.6, 0.9, shade]]) box(S, cx, cy, ...U, h, h, g + z0, g + z1, c, I0, ST);
+  box(S, cx, cy, ...U, 3.4, 3.4, g + 0.9, g + 1.6, shade, I0, ST);
+  box(S, cx, cy, ...U, 3.0, 3.0, g + 1.6, g + 6.0, stone, I0, ST);
+  for (const [a, b, c, d] of [[6.0, 6.25, 3.15, shade], [6.25, 6.6, 3.35, stone], [6.6, 6.85, 3.25, shade]]) box(S, cx, cy, ...U, c, c, g + a, g + b, d, I0, ST);
+  // panels with bronze arms on each face
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const A = L(dx * 3.05, dy * 3.05, 3.8), o = [dx, dy];
+    const Q = (a, z) => A(a * -o[1], a * o[0], z);
+    slab4(S, [Q(-1.6, 1.6), Q(1.6, 1.6), Q(1.6, -1.6), Q(-1.6, -1.6)], 0.1, shade, ST);
+    slab4(S, [Q(-0.55, 0.75), Q(0.55, 0.75), Q(0.5, -0.4), Q(-0.5, -0.4)], 0.22, bronze, PL);
+    ell(S, A, [0, 0, -0.55], [0.4, 0.4, 0.3], bronze, PL, 7);
+  }
+  // four seated virtues (Justice, Wisdom, Strength, Moderation) on the corners, facing outwards
+  [[1, 1], [-1, 1], [-1, -1], [1, -1]].forEach(([dx, dy], k) => {
+    const ang = Math.atan2(dx, dy), c = Math.cos(ang), s2 = Math.sin(ang), bx = dx * 3.45, by = dy * 3.45;
+    const p = F(bx, by, 0); box(S, p[0], -p[2], ...U, 1.0, 1.0, g + 1.6, g + 2.2, shade, I0, ST);
+    const V = (a, b, z) => F(bx + a * c + b * s2, by - a * s2 + b * c, 2.2 + z);
+    figure(S, V, 1.55, stone, ST, { seated: true, robe: false, cloak: true, crown: k === 1, helmet: k === 2, arms: [[-0.25, 0.25, [0.4, -0.3, 0.1, -0.35][k]], [0.2, 0.3, [-0.2, 0.15, -0.35, 0.05][k]]] });
+  });
+  // fluted shaft and capital
+  const C = L(0, 0, 0);
+  sweep(S, C, [[0, 0, 6.85, 1.6, 1.6], [0, 0, 7.4, 1.6, 1.6], [0, 0, 7.4, 1.35, 1.35], [0, 0, 7.9, 1.3, 1.3]], stone, ST, 16, true);
+  flutedShaft(S, C, 0.95, 0.8, 7.9, 21.6, stone, ST, 20);
+  corinthian(S, C, 0.8, 21.6, 1.8, stone, shade, ST);
+  box(S, cx, cy, ...U, 1.25, 1.25, g + 23.4, g + 24.1, shade, I0, ST);
+  // D. Pedro IV in uniform and mantle, the Constitutional Charter in his right hand, crown wreath
+  const K = L(0, 0, 24.1);
+  figure(S, K, 2.05, bronze, PL, { cloak: true, stride: 0.4, arms: [[-0.15, 0.12, -0.55], [0.22, 0.42, -0.1]] });
+  slab4(S, [K(0.95, 0.95, 2.85), K(1.25, 1.0, 2.9), K(1.25, 1.05, 2.45), K(0.95, 1.0, 2.4)], 0.06, bronzeHi, PL);
+  sweep(S, K, [[-0.6, -0.15, 0.5, 0.15, 0.08], [-0.4, -0.4, 1.4, 0.35, 0.08], [0, -0.45, 2.6, 0.45, 0.08], [0.4, -0.4, 1.4, 0.35, 0.08], [0.6, -0.15, 0.5, 0.15, 0.08]], bronze, PL, 6);   // mantle folds
 }
 
 // Rossio's twin bronze fountains (1889): wide stone basin, sculpted base, two bowls, crowning figure.
@@ -1431,25 +1475,48 @@ export function estrelaBasilica(S, o) {
 }
 
 // Marquês de Pombal: stepped plinth, sculpted pedestal, tall column, the Marquês with his lion on top.
-export function marquesColumn(S, { cx, cy, ground, lin, srgb }) {
-  const stone = lin(srgb('#ece7dc')), shade = lin(srgb('#d3cbba')), bronze = lin(srgb('#4c5747'));
-  const ST = [KIND.STONE / 8, 5 / 8, 0.31, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.31, 1], I0 = [0, 0, 0, 0], P = (z) => [cx, ground + z, -cy];
-  for (let k = 0; k < 4; k++) limb(S, P(-0.6 + k * 0.5 * (k > 0)), P(0.5 * (k + 1)), 12.5 - k * 1.4, 12.5 - k * 1.4, 16, k % 2 ? shade : stone, ST, true);
-  box(S, cx, cy, 1, 0, 5.2, 5.2, ground + 2, ground + 4, shade, I0, ST);
-  box(S, cx, cy, 1, 0, 4.2, 4.2, ground + 4, ground + 12.5, stone, I0, ST);
-  box(S, cx, cy, 1, 0, 4.6, 4.6, ground + 12.5, ground + 13.4, shade, I0, ST);
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {                    // allegorical groups on each face
-    box(S, cx + dx * 5.4, cy + dy * 5.4, 1, 0, 1.6, 1.6, ground + 2, ground + 5.5, bronze, I0, PL);
-    box(S, cx + dx * 5.0, cy + dy * 5.0, 1, 0, 1.0, 1.0, ground + 5.5, ground + 7.2, bronze, I0, PL);
-  }
-  limb(S, P(13.4), P(14.6), 2.2, 2.0, 16, shade, ST, true);
-  limb(S, P(14.6), P(34.5), 1.75, 1.5, 16, stone, ST, false);
-  limb(S, P(34.5), P(35.6), 2.1, 2.1, 12, shade, ST, true);
-  limb(S, P(35.6), P(36.3), 1.6, 1.6, 12, stone, ST, true);
-  limb(S, P(36.3), P(40.2), 0.55, 0.42, 8, bronze, PL, true);                     // the Marquês, hand on the lion
-  limb(S, P(40.2), P(40.9), 0.32, 0.28, 6, bronze, PL, true);
-  box(S, cx + 0.9, cy - 0.3, 0.6, 0.8, 1.2, 0.45, ground + 36.3, ground + 37.6, bronze, I0, PL);
-  box(S, cx + 1.6, cy + 0.4, 0.6, 0.8, 0.4, 0.38, ground + 37.2, ground + 38.1, bronze, I0, PL);
+export function marquesColumn(S, { cx, cy, ground, lin, srgb, heading = Math.PI }) {
+  const stone = lin(srgb('#ece7dc')), shade = lin(srgb('#d3cbba')), bronze = lin(srgb('#4c5747')), bronzeHi = lin(srgb('#5d6a58'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.31, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.31, 1], I0 = [0, 0, 0, 0];
+  const fx = Math.sin(heading), fy = Math.cos(heading), F = frame(cx, cy, fy, -fx, ground), U = [fy, -fx];
+  const L = (a0, b0, z0) => (a, b, z) => F(a0 + a, b0 + b, z0 + z);
+  const C = L(0, 0, 0);
+  // round stepped platform with a balustrade ring
+  for (let k = 0; k < 4; k++) sweep(S, C, [[0, 0, -0.6, 12.5 - k * 1.4, 12.5 - k * 1.4], [0, 0, 0.5 * (k + 1), 12.5 - k * 1.4, 12.5 - k * 1.4]], k % 2 ? shade : stone, ST, 40, true);
+  // pedestal: base, die with relief panels and the four allegorical groups, cornice
+  box(S, cx, cy, ...U, 5.4, 5.4, ground + 2, ground + 3.0, shade, I0, ST);
+  box(S, cx, cy, ...U, 5.0, 5.0, ground + 3.0, ground + 3.6, stone, I0, ST);
+  box(S, cx, cy, ...U, 4.2, 4.2, ground + 3.6, ground + 12.2, stone, I0, ST);
+  for (const [a, b, c, d] of [[12.2, 12.5, 4.35, shade], [12.5, 13.0, 4.6, stone], [13.0, 13.4, 4.45, shade]]) box(S, cx, cy, ...U, c, c, ground + a, ground + b, d, I0, ST);
+  [[0, 1], [1, 0], [0, -1], [-1, 0]].forEach(([dx, dy], k) => {
+    const ang = Math.atan2(dx, dy), c = Math.cos(ang), s2 = Math.sin(ang);
+    const O = (ox, oy, oz) => (a, b, z) => F(ox + a * c + b * s2, oy - a * s2 + b * c, oz + z);
+    const G = O(dx * 4.2, dy * 4.2, 3.6);
+    slab4(S, [G(-2.8, 0.06, 7.8), G(2.8, 0.06, 7.8), G(2.8, 0.06, 4.2), G(-2.8, 0.06, 4.2)], 0.14, bronze, PL);   // bronze relief panel
+    for (let q = 0; q < 5; q++) ell(S, G, [-2.2 + q * 1.1, 0.18, 6.0], [0.3, 0.12, 0.9 + 0.2 * (q % 2)], bronzeHi, PL, 6);
+    const B = O(dx * 6.0, dy * 6.0, 2);
+    const p = F(dx * 6.0, dy * 6.0, 0); box(S, p[0], -p[2], ...U, dy ? 3.2 : 1.8, dy ? 1.8 : 3.2, ground + 2, ground + 3.4, shade, I0, ST);
+    const BB = O(dx * 6.0, dy * 6.0, 3.4);
+    if (k === 0) {   // front: the waters (1755) and Lisbon rising; broken masonry
+      for (let q = 0; q < 6; q++) sweep(S, BB, [[-2.8 + q * 1.1, 0.6, 0, 0.35, 0.3], [-2.6 + q * 1.1, 1.1, 0.9, 0.25, 0.2], [-2.3 + q * 1.1, 1.3, 1.4, 0.06, 0.06]], bronzeHi, PL, 6);
+      figure(S, O(dx * 6.0, dy * 6.0 - 0.2, 3.4), 1.6, bronze, PL, { robe: true, crown: true, arms: [[-0.4, 0.3, 0.6], [0.4, 0.3, 0.6]] });
+    } else {
+      figure(S, O(dx * 6.0 - 0.9 * c, dy * 6.0 + 0.9 * s2, 3.4), 1.45, bronze, PL, { seated: true, cloak: true, arms: [[-0.2, 0.3, -0.3], [0.2, 0.35, 0.05 * k]] });
+      figure(S, O(dx * 6.0 + 1.0 * c, dy * 6.0 - 1.0 * s2, 3.4), 1.5, bronze, PL, { robe: k !== 2, stride: 0.5, arms: [[-0.25, 0.3, 0.1 * k], [0.1, 0.1, -0.55]] });
+    }
+    void B;
+  });
+  // the column: base, shaft, capital, die
+  sweep(S, C, [[0, 0, 13.4, 2.25, 2.25], [0, 0, 13.9, 2.25, 2.25], [0, 0, 13.9, 2.0, 2.0], [0, 0, 14.3, 2.0, 2.0], [0, 0, 14.6, 1.8, 1.8]], shade, ST, 20, true);
+  loft(S, C, [{ z: 14.6, rx: 1.75, ry: 1.75 }, { z: 24, rx: 1.68, ry: 1.68 }, { z: 34.0, rx: 1.5, ry: 1.5 }], stone, ST, { sides: 28, cap: false });
+  corinthian(S, C, 1.5, 34.0, 2.6, stone, shade, ST);
+  box(S, cx, cy, ...U, 2.1, 2.1, ground + 36.6, ground + 37.0, shade, I0, ST);
+  box(S, cx, cy, ...U, 1.85, 1.85, ground + 37.0, ground + 37.6, stone, I0, ST);
+  // the Marquês in coat and cloak, his hand on the lion
+  const K = L(-0.3, 0, 37.6);
+  figure(S, K, 2.4, bronze, PL, { cloak: true, stride: 0.3, arms: [[-0.12, 0.2, -0.5], [0.4, 0.15, -0.5]] });
+  sweep(S, K, [[-0.55, -0.2, 0.5, 0.2, 0.08], [-0.45, -0.45, 1.6, 0.35, 0.08], [0, -0.5, 3.1, 0.5, 0.08], [0.45, -0.45, 1.6, 0.35, 0.08], [0.55, -0.2, 0.5, 0.2, 0.08]], bronze, PL, 6);
+  lion(S, (a, b, z) => F(1.45 + b * 0 + a, -0.2 + b, 37.6 + z), 1.55, bronzeHi, PL);
 }
 
 // Príncipe Real's Cupressus lusitanica: trained flat over an iron trellis into a ~25 m green parasol.

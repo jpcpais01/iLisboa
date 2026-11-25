@@ -608,7 +608,7 @@ function addBuilding_(p) {
   }
   {   // Praça Marquês de Pombal: the column (its OSM outline is dropped)
     const mp = els.find((e) => e.type === 'way' && e.id === 822816252);
-    if (mp) { const g = mp.geometry, [x, y] = proj.fwd(g.reduce((a, q) => a + q.lat, 0) / g.length, g.reduce((a, q) => a + q.lon, 0) / g.length); marquesColumn(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
+    if (mp) { const g = mp.geometry, [x, y] = proj.fwd(g.reduce((a, q) => a + q.lat, 0) / g.length, g.reduce((a, q) => a + q.lon, 0) / g.length); marquesColumn(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb, heading: 2.53 }); mark(); }
   }
   { const cr = byId.get('w87891338');   // Cristo Rei: pedestal and statue on the OSM footprint, facing Lisbon
     if (cr && cr.c[0] >= minX && cr.c[0] < maxX && cr.c[1] >= minY && cr.c[1] < maxY) { const ob = obb(cr.outer); cristoRei(tileB(...cr.c), { cx: cr.c[0], cy: cr.c[1], ux: ob.ux, uy: ob.uy, hl: ob.hl, hw: ob.hw, ground: cr.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark(); } }
