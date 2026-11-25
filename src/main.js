@@ -6,8 +6,6 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 
-const AREA = new URLSearchParams(location.search).get('area') || 'baixa-alfama';
-const BASE = `/tiles/${AREA}/`;
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 
@@ -61,26 +59,91 @@ controls.maxDistance = 7000;
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
 
-// ─── load ───────────────────────────────────────────────────────────────
+
+// ─── load: the city is several areas of 500 m tiles; tiles stream in and out around the view ───
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const texLoader = new THREE.TextureLoader();
 const progressEl = document.getElementById('progress');
-const manifest = await (await fetch(BASE + 'manifest.json', { cache: 'no-cache' })).json();
-// every asset URL carries the build stamp, so a new deploy never mixes with cached tiles
-const url = (f) => `${BASE}${f}?v=${encodeURIComponent(manifest.built)}`;
 const ok = (r) => { if (!r.ok) throw new Error(`${r.status} ${r.url}`); return r; };
-const { minX, minY, maxX, maxY } = manifest.bounds;
+const index = await (await fetch('/tiles/index.json', { cache: 'no-cache' })).json();
+const AREAS = index.areas;
+const manifest = AREAS[0];   // origin, water level and attribution are shared by every area
+let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+for (const a of AREAS) { minX = Math.min(minX, a.bounds.minX); minY = Math.min(minY, a.bounds.minY); maxX = Math.max(maxX, a.bounds.maxX); maxY = Math.max(maxY, a.bounds.maxY); }
 const center = new THREE.Vector3((minX + maxX) / 2, 0, -(minY + maxY) / 2);
 const size = Math.hypot(maxX - minX, maxY - minY);
 document.getElementById('attrib').textContent = manifest.attribution;
 
 const matBuildings = buildingMaterial();
 const maxAniso = renderer.capabilities.getMaxAnisotropy();
-let done = 0;
-const total = manifest.tiles.length + 6;
-const tick = () => { progressEl.style.width = `${(++done / total) * 100}%`; };
+let done = 0, total = 1;
+const tick = () => { progressEl.style.width = `${Math.min(1, ++done / total) * 100}%`; };
 
-function adopt(gltf) {
+// every asset URL carries its area's build stamp, so a new deploy never mixes with cached tiles
+const url = (a, f) => `/tiles/${a.area}/${f}?v=${encodeURIComponent(a.built)}`;
+const balconyParts = (() => { let g = null; return () => g || (g = (() => { const { slab, rail } = balconyGeometry(); return { slab, rail: mergeGeometries(rail), slabMat: new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 0.8 }), railMat: railingMaterial() }; })()); })();
+const balconyChunks = [];
+function balconies(buf) {
+  const d = new Float32Array(buf), n = d.length / 5, B = balconyParts();
+  const a = new THREE.InstancedMesh(B.slab, B.slabMat, n), b = new THREE.InstancedMesh(B.rail, B.railMat, n);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let j = 0, i = 0; j < n; j++, i += 5) {
+    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, d[i + 3]);
+    m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(d[i + 4], 1, 1));
+    a.setMatrixAt(j, m); b.setMatrixAt(j, m); c.add(p);
+  }
+  a.computeBoundingSphere(); b.computeBoundingSphere();
+  a.castShadow = true; a.receiveShadow = true;
+  const g = new THREE.Group(); g.add(a, b); g.userData.c = c.divideScalar(Math.max(1, n));
+  return g;
+}
+
+// every area starts with its water, its skirt and its far level of detail (a coarse terrain and plain blocks per tile)
+const farBuildingMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
+const tileAt = new Map();
+function base(a) {
+  if (a.base) return a.base;
+  return (a.base = (async () => {
+    a.mask = await texLoader.loadAsync(url(a, 'water.png'));
+    const { minX, minY, maxX, maxY } = a.bounds;
+    if (a.stats.water !== 0) {
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(maxX - minX, maxY - minY, 1, 1).rotateX(-Math.PI / 2), waterMaterial(a.mask));
+      water.position.set((minX + maxX) / 2, a.waterY, -(minY + maxY) / 2);
+      water.receiveShadow = true;
+      scene.add(water);
+    }
+    loader.loadAsync(url(a, 'base.glb')).then((g) => { g.scene.traverse((o) => { if (o.isMesh) o.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }); }); scene.add(g.scene); }).catch(() => {});
+    if (a.far) {
+      const g = await loader.loadAsync(url(a, 'far.glb'));
+      for (const o of [...g.scene.children]) {
+        const m = /^f([tb])_(\d+)_(\d+)$/.exec(o.name), t = m && tileAt.get(`${a.area}:${m[2]}_${m[3]}`);
+        if (!t || !o.isMesh) continue;
+        if (m[1] === 't') { const map = o.material.map; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.anisotropy = 4; o.material = terrainMaterial(map, a.mask, a.bounds); }
+        else { o.material = farBuildingMat; }
+        o.receiveShadow = true; o.visible = t.state !== 2;
+        t.far.push(o); scene.add(o);
+      }
+    }
+  })());
+}
+// near the view an area also gets its trees, parked cars and street lamps
+function wake(a) {
+  if (a.ready) return a.ready;
+  return (a.ready = (async () => {
+    await base(a);
+    const get = (f) => fetch(url(a, f)).then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)));
+    get('trees.bin').then(addTrees); get('cars.bin').then(addCars); get('lamps.bin').then(addLamps);
+  })());
+}
+
+const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, obj: null, bal: null, far: [] })));   // state 0 idle, 1 loading, 2 shown
+for (const t of tiles) tileAt.set(`${t.a.area}:${t.t.i}_${t.t.j}`, t);
+const areaDist = (a) => rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], controls.target.x, -controls.target.z);
+let farReady = null;   // started once the camera is placed: nearest area first, the loading screen waits only for the one under the view
+const startFar = () => { const order = [...AREAS].sort((p, q) => areaDist(p) - areaDist(q)); farReady = base(order[0]).catch((e) => console.error(e)); (async () => { for (const a of order.slice(1)) await base(a).catch((e) => console.error(e)); })(); };
+const showFar = (t, v) => { for (const o of t.far) o.visible = v; };
+function adopt(tile, gltf) {
+  const { a } = tile;
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
     if (o.name.startsWith('buildings')) {
@@ -94,69 +157,87 @@ function adopt(gltf) {
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
       map.anisotropy = Math.min(8, maxAniso); map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
-      o.material = terrainMaterial(map, waterMask, manifest.bounds);
+      o.material = terrainMaterial(map, a.mask, a.bounds);
       o.receiveShadow = true;
-    } else if (o.name.startsWith('base')) {
-      o.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     }
   });
-  scene.add(gltf.scene);
-  tick();
+  return gltf.scene;
 }
-
-const waterMask = await texLoader.loadAsync(url('water.png'));
-const jobs = [...manifest.tiles.map((t) => t.file), 'base.glb'].map((f) => loader.loadAsync(url(f)).then(adopt));
-
-// balconies: instanced per 250 m chunk, only drawn near the camera
-const balconyChunks = [];
-jobs.push(Promise.all(manifest.tiles.filter((t) => t.balconies).map((t) => fetch(url(t.balconies)).then(ok).then((r) => r.arrayBuffer())))
-  .then((bufs) => {
-    const { slab, rail } = balconyGeometry();
-    const railGeo = mergeGeometries(rail);
-    const slabMat = new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 0.8 });
-    const railMat = railingMaterial();
-    const cells = new Map();
-    for (const buf of bufs) {
-      const d = new Float32Array(buf);
-      for (let i = 0; i < d.length; i += 5) {
-        const k = `${Math.floor(d[i] / 250)},${Math.floor(d[i + 2] / 250)}`;
-        if (!cells.has(k)) cells.set(k, []);
-        cells.get(k).push(i, d);
-      }
-    }
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
-    for (const list of cells.values()) {
-      const n = list.length / 2;
-      const a = new THREE.InstancedMesh(slab, slabMat, n), b = new THREE.InstancedMesh(railGeo, railMat, n);
-      const c = new THREE.Vector3();
-      for (let j = 0; j < n; j++) {
-        const i = list[j * 2], d = list[j * 2 + 1];
-        q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, d[i + 3]);
-        m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(d[i + 4], 1, 1));
-        a.setMatrixAt(j, m); b.setMatrixAt(j, m); c.add(p);
-      }
-      a.computeBoundingSphere(); b.computeBoundingSphere();
-      a.castShadow = true; a.receiveShadow = true;
-      const g = new THREE.Group(); g.add(a, b); g.userData.c = c.divideScalar(n);
-      balconyChunks.push(g); scene.add(g);
-    }
-    tick();
-  }));
-
-// water: plane clipped by the coastline mask
-jobs.push(Promise.resolve(waterMask).then((mask) => {
-  const geo = new THREE.PlaneGeometry(maxX - minX, maxY - minY, 1, 1).rotateX(-Math.PI / 2);
-  const water = new THREE.Mesh(geo, waterMaterial(mask));
-  water.position.set(center.x, manifest.waterY, center.z);
-  water.receiveShadow = true;
-  scene.add(water);
-  tick();
-}));
+function dispose(tile) {
+  for (const o of [tile.obj, tile.bal]) {
+    if (!o) continue;
+    scene.remove(o);
+    o.traverse((m) => {
+      if (m.isInstancedMesh) { m.dispose(); return; }
+      if (!m.isMesh) return;
+      m.geometry.dispose();
+      if (m.material !== matBuildings) { m.material.map?.dispose(); m.material.dispose(); }
+    });
+  }
+  const i = balconyChunks.indexOf(tile.bal); if (i >= 0) balconyChunks.splice(i, 1);
+  tile.obj = tile.bal = null; tile.state = 0; showFar(tile, true);
+}
+async function load(tile) {
+  tile.state = 1; const gen = (tile.gen = (tile.gen || 0) + 1);
+  try {
+    await wake(tile.a);
+    const [gltf, bal] = await Promise.all([loader.loadAsync(url(tile.a, tile.t.file)), tile.t.balconies ? fetch(url(tile.a, tile.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null]);
+    if (tile.state !== 1 || tile.gen !== gen) { tile.obj = gltf.scene; tile.bal = null; const st = tile.state; dispose(tile); tile.state = st; return; }   // dropped while in flight
+    tile.obj = adopt(tile, gltf); scene.add(tile.obj);
+    if (bal) { tile.bal = balconies(bal); scene.add(tile.bal); balconyChunks.push(tile.bal); }
+    tile.state = 2; showFar(tile, false);
+  } catch (e) { console.error(e); if (tile.gen === gen) tile.state = 0; tile.failed = (tile.failed || 0) + 1; }
+}
+// keep the tiles near the view loaded, nearest first; let go of those well outside it
+const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.8 + 1100, 1500, 2800);   // beyond this the far level of detail stands in
+const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - y, 0, y - b[3]));
+let inflight = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
+function stream(force) {
+  const x = controls.target.x, y = -controls.target.z, dist = camera.position.distanceTo(controls.target);
+  const R = nearR(dist) * (0.75 + 0.25 * lodK);
+  const want = [];
+  for (const t of tiles) {
+    const d = rectDist(t.b, x, y);
+    if (d > R + 900 && t.state === 2) dispose(t);
+    else if (d > R + 900 && t.state === 1) t.state = 0;
+    else if (d <= R && t.state === 0 && (t.failed || 0) < 3) want.push([d, t]);
+  }
+  want.sort((p, q) => p[0] - q[0]);
+  for (const [, t] of want) {
+    if (inflight >= (force ? 8 : 4)) break;
+    inflight++; load(t).finally(() => { inflight--; tick(); });
+  }
+  return want.length;
+}
+// tiles near the view that are not on screen yet (the loading screen waits for these)
+const pending = () => { const x = controls.target.x, y = -controls.target.z, R = Math.min(nearR(camera.position.distanceTo(controls.target)), 2000);
+  return tiles.filter((t) => t.state !== 2 && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R).length; };
 
 // trees: instanced, in chunks with a near/far level of detail
 const treeChunks = [];
-jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((buf) => {
+let KINDS = null;
+function addTrees(buf) {
   const d = new Float32Array(buf), n = d.length / 4;
+  if (!KINDS) KINDS = treeKinds();
+  // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
+  const CH = 600, cells = new Map();
+  for (let i = 0; i < n; i++) { const kind = Math.min(2, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); }
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+  for (const { kind, ids } of cells.values()) {
+    const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
+    ids.forEach((i, j) => {
+      const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
+      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
+      const k = d[i * 4 + 3] - kind * 10;
+      s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
+      m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
+      for (const mesh of [near, lo]) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
+    });
+    for (const mesh of [near, lo]) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); }
+    treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
+  }
+}
+function treeKinds() {
   const paint = (g, hex) => { const c = new THREE.Color(hex); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [c.r, c.g, c.b]).flat(), 3)); return g; };
   // clumped crown: three overlapping low-poly lobes, lighter on top
   // ~110 triangles a tree (was ~340): icosahedron lobes at detail 0, rotated so the facets don't line up
@@ -192,34 +273,16 @@ jobs.push(fetch(url('trees.bin')).then(ok).then((r) => r.arrayBuffer()).then((bu
   const pine = mergeGeometries([pineTrunk(5), flat(3.4, 0, 7.6, 0, 0xe4e4e4, 0.3, 0.42), flat(2.4, 1.2, 8.2, 0.6, 0xffffff, 1.1, 0.4), flat(2.2, -1.3, 8.0, -0.5, 0xf2f2f2, 2.0, 0.42)]);
   pine.computeVertexNormals();
   const pineFar = mergeGeometries([pineTrunk(3), flat(3.6, 0, 7.8, 0, 0xf0f0f0, 0.3, 0.45)]); pineFar.computeVertexNormals();
-  const KINDS = [
+  return [
     { near: geo, far, mat, greens: [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c] },
     { near: palm, far: palmFar, mat: palmMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
     { near: pine, far: pineFar, mat, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
   ];
-  // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
-  const CH = 600, cells = new Map();
-  for (let i = 0; i < n; i++) { const kind = Math.min(2, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); }
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-  for (const { kind, ids } of cells.values()) {
-    const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
-    ids.forEach((i, j) => {
-      const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
-      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
-      const k = d[i * 4 + 3] - kind * 10;
-      s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
-      m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
-      for (const mesh of [near, lo]) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
-    });
-    for (const mesh of [near, lo]) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); }
-    treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
-  }
-  tick();
-}));
+}
 
 // cars: instanced boxes (body, glass cabin, roof), chunked and only drawn near the camera
 const carChunks = [];
-jobs.push(fetch(url('cars.bin')).then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0))).then((buf) => {
+function addCars(buf) {
   const d = new Float32Array(buf), n = d.length / 6;
   const tint = (g, v) => { g = g.toNonIndexed(); g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(g.attributes.position.count * 3).fill(v), 3)); return g; };
   const geo = mergeGeometries([
@@ -243,13 +306,12 @@ jobs.push(fetch(url('cars.bin')).then((r) => (r.ok ? r.arrayBuffer() : new Array
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); mesh.visible = false;
     scene.add(mesh); carChunks.push({ mesh, c: mesh.boundingSphere.center.clone(), r: mesh.boundingSphere.radius });
   }
-  tick();
-}));
+}
 
 // street lamps: one additive point sprite each, warm core and soft halo; only drawn after dusk
 const lampUniforms = { uNight: cityUniforms.uNight, uScale: { value: 1 } };
-let lampPoints = null;
-jobs.push(fetch(url('lamps.bin')).then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0))).then((buf) => {
+const lampPoints = [];
+function addLamps(buf) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(buf), 3));
   const mat = new THREE.ShaderMaterial({
@@ -263,10 +325,10 @@ jobs.push(fetch(url('lamps.bin')).then((r) => (r.ok ? r.arrayBuffer() : new Arra
         float core = smoothstep(vCore, 0., r), halo = pow(1. - r, 2.2) * .35;
         gl_FragColor = vec4(vec3(1., .74, .42) * (core * 1.3 + halo) * uNight, 1.); }`,
   });
-  lampPoints = new THREE.Points(geo, mat); lampPoints.frustumCulled = false; lampPoints.renderOrder = 2;
-  scene.add(lampPoints);
-  tick();
-}));
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 2;
+  scene.add(pts); lampPoints.push(pts);
+}
+
 
 // ─── sun / time of day ──────────────────────────────────────────────────
 const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
@@ -348,10 +410,10 @@ window.__scene = scene; window.__view = (arr) => { camera.position.fromArray(arr
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
-let frames = 0, acc = 0, last = performance.now(), slow = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
+let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false;
 renderer.setAnimationLoop((now) => {
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
-  if (introT < 1 && done >= total) {
+  if (introT < 1 && ready) {
     introT = Math.min(1, introT + dt / 2.8);
     const e = 1 - (1 - introT) ** 3;
     camera.position.lerpVectors(startPos, endPos, e);
@@ -361,18 +423,20 @@ renderer.setAnimationLoop((now) => {
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
+  if (++nf % 12 === 0 || !ready) stream(!ready);
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 900 * lodK;
   for (const c of carChunks) c.mesh.visible = camera.position.distanceTo(c.c) - c.r < 850 * lodK;
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
-  if (lampPoints) { lampPoints.visible = cityUniforms.uNight.value > 0.01; lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
+  for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
+  { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones
   frames++; acc += raw;
   if (acc > 1) {
     const fps = frames / acc;
-    if (done >= total && introT >= 1) {
+    if (ready && introT >= 1) {
       if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
       else if (fps < 45 && lodK > 0.55) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
@@ -391,7 +455,10 @@ camera.aspect = innerWidth / innerHeight;
 camera.updateProjectionMatrix();
 
 try {
-  await Promise.all(jobs);
+  total = Math.max(1, pending()) + 1;
+  startFar(); await farReady; tick();
+  await new Promise((res) => { const w = () => (pending() === 0 ? res() : setTimeout(w, 100)); w(); });
+  ready = true;
   if (camOnGround) {   // ?cam ranges are measured from the ground, as in Google Earth: lift the view onto the terrain
     const terrain = []; scene.traverse((o) => { if (o.isMesh && o.name.startsWith('terrain')) terrain.push(o); });
     const hit = new THREE.Raycaster(controls.target.clone().setY(2000), new THREE.Vector3(0, -1, 0)).intersectObjects(terrain)[0];
@@ -402,5 +469,5 @@ try {
   console.error(err);
   document.querySelector('#loading span').textContent = 'Lisboa não carregou. Recarregue a página.';
 }
-document.getElementById('subtitle').textContent = `Centro histórico · ${manifest.stats.buildings.toLocaleString('pt-PT')} edifícios`;
+document.getElementById('subtitle').textContent = `Lisboa · ${AREAS.reduce((n, a) => n + a.stats.buildings, 0).toLocaleString('pt-PT')} edifícios`;
 window.__ready = true;

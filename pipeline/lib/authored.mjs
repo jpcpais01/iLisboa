@@ -98,7 +98,7 @@ export const AREAS = [
 ];
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
-  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252']);   // + São Bento frontispiece (authored)
+  'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338']);   // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
 
@@ -1350,4 +1350,230 @@ export function trellisCedar(S, { cx, cy, ground, lin, srgb }) {
   limb(S, P(2.9), P(3.6), 13.2, 13.4, 20, leaf, PL, true);                          // the flat parasol
   limb(S, P(3.6), P(4.3), 12.4, 7.5, 20, leafTop, PL, true);
   limb(S, P(4.3), P(6.5), 3.2, 0.6, 10, leafTop, PL, true);                         // leader rising out of the middle
+}
+
+// ─── Ponte 25 de Abril ───────────────────────────────────────────────────
+// Suspension bridge, 1966 (Steinman): 483 + 1013 + 483 m spans, towers 190.5 m above the river, road deck at 70 m on a
+// 10.7 m deep stiffening truss with the railway inside it, all in international orange; a curved truss viaduct on
+// concrete piers carries it over Alcântara. Centreline from the OSM carriageways; anchorages and towers fall exactly
+// on its spans (485 m, 1013 m apart). Built whole in world coordinates: the caller keeps the triangles it owns.
+export const PONTE_LINE = [[38.708369, -9.17795], [38.708017, -9.178015], [38.707653, -9.178136], [38.707423, -9.178239], [38.706768, -9.178502], [38.706275, -9.178696], [38.705923, -9.178834], [38.705614, -9.178953], [38.705224, -9.179114], [38.70494, -9.179235], [38.704829, -9.179283], [38.704168, -9.179475], [38.703515, -9.179641], [38.702832, -9.179729], [38.702141, -9.179742], [38.701456, -9.179683], [38.700788, -9.179563], [38.700095, -9.179422], [38.699176, -9.179207], [38.698303, -9.179009], [38.693997, -9.178077], [38.685003, -9.176092], [38.680722, -9.175139], [38.679851, -9.174936], [38.679472, -9.174841]];
+export function ponte25Abril(S, { fwd, ground, lin, srgb }) {
+  const orange = lin(srgb('#b4472f')), orangeD = lin(srgb('#8f3a28')), asphalt = lin(srgb('#55534f')), concrete = lin(srgb('#bdb7ac')), PL = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0];
+  const pts = PONTE_LINE.map(([la, lo]) => fwd(la, lo));
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const L = cum[cum.length - 1];
+  const at = (s) => {   // point and unit direction along the centreline
+    let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
+    const t = Math.max(0, Math.min(1, (s - cum[i - 1]) / (cum[i] - cum[i - 1]))), [ax, ay] = pts[i - 1], [bx, by] = pts[i], d = Math.hypot(bx - ax, by - ay);
+    return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, ux: (bx - ax) / d, uy: (by - ay) / d };
+  };
+  const sNA = cum[19], sNT = cum[20], sST = cum[21], sSA = cum[22];   // anchorages and towers
+  const DECK = 70, TRUSS = 10.7, HW = 11.5;
+  const g0 = 46.5, g1 = 71.5;   // road level where the deck lands (fixed, so every area builds the same deck)
+  const deckZ = (s) => s < sNA ? g0 + (DECK - g0) * Math.min(1, Math.pow(s / sNA, 0.6)) : s > sSA ? DECK + (g1 - DECK) * (s - sSA) / (L - sSA) : DECK;
+  const P3 = (s, v, z) => { const a = at(s); return [a.x - a.uy * v, z, -(a.y + a.ux * v)]; };   // v: offset to the left (west) of the line
+  const quad = (A, B, C, D, col, want) => {   // wound to face `want`
+    let n = norm(A, B, C); if (n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) { [B, D] = [D, B]; n = n.map((q) => -q); }
+    triRaw(S, A, B, C, n, col, [0, 0], [0, 0], [0, 0], I0, PL); triRaw(S, A, C, D, n, col, [0, 0], [0, 0], [0, 0], I0, PL);
+  };
+  const lat = (s, sign) => { const a = at(s); return [-a.uy * sign, 0, -a.ux * sign]; };   // world direction of +v (sign 1) or -v
+  const slab = (s0, s1, w, z0, z1, top, side, bottom = true) => {   // a deck slab between stations, following the curve
+    const A = P3(s0, -w, z1), B = P3(s1, -w, z1), C = P3(s1, w, z1), D = P3(s0, w, z1);
+    quad(A, D, C, B, top, [0, 1, 0]);
+    const A0 = P3(s0, -w, z0), B0 = P3(s1, -w, z0), C0 = P3(s1, w, z0), D0 = P3(s0, w, z0);
+    quad(A0, B0, B, A, side, lat(s0, -1)); quad(C0, D0, D, C, side, lat(s0, 1));
+    if (bottom) quad(A0, D0, C0, B0, side, [0, -1, 0]);
+  };
+  // deck: one slab every ~12 m along the whole line, the road on top
+  const STEP = 11.5;
+  for (let s = 0; s < L - 0.1; s += STEP) {
+    const s1 = Math.min(L, s + STEP), z0 = deckZ(s), z1 = deckZ(s1);
+    const A = P3(s, -HW, z0), B = P3(s1, -HW, z1), C = P3(s1, HW, z1), D = P3(s, HW, z0);
+    quad(A, D, C, B, asphalt, [0, 1, 0]);
+    const A0 = P3(s, -HW, z0 - 1.2), B0 = P3(s1, -HW, z1 - 1.2), C0 = P3(s1, HW, z1 - 1.2), D0 = P3(s, HW, z0 - 1.2);
+    quad(A0, B0, B, A, orange, lat(s, -1)); quad(C0, D0, D, C, orange, lat(s, 1)); quad(A0, D0, C0, B0, orangeD, [0, -1, 0]);
+    // parapet rails
+    for (const v of [-HW, HW]) limb(S, P3(s, v, z0 + 1.1), P3(s1, v, z1 + 1.1), 0.12, 0.12, 3, orange, PL, false);
+  }
+  // stiffening truss: Warren panels down both sides, a lower chord and the rail deck inside, full length
+  for (let s = 0; s < L - 0.1; s += STEP) {
+    const s1 = Math.min(L, s + STEP), z0 = deckZ(s), z1 = deckZ(s1), depth = s > sNA - 30 && s < sSA + 30 ? TRUSS : 7;
+    if (z0 - depth < ground(at(s).x, at(s).y) + 2) continue;   // where the approach meets the hill there is no room for a truss
+    for (const v of [-HW + 0.4, HW - 0.4]) {
+      const b0 = P3(s, v, z0 - depth), b1 = P3(s1, v, z1 - depth), t0 = P3(s, v, z0 - 1.2), t1 = P3(s1, v, z1 - 1.2);
+      limb(S, b0, b1, 0.45, 0.45, 4, orange, PL, false);
+      limb(S, b0, t0, 0.3, 0.3, 4, orange, PL, false);
+      limb(S, (Math.round(s / STEP) % 2 ? b0 : t0), (Math.round(s / STEP) % 2 ? t1 : b1), 0.28, 0.28, 4, orange, PL, false);
+    }
+    slab(s, s1, 7.5, z0 - depth + 0.4, z0 - depth + 1.2, concrete, orangeD);   // the rail deck
+  }
+  // approach piers: pairs of concrete columns under the viaduct and the Almada end
+  for (let s = 40; s < L; s += 68) {
+    if (s > sNA - 20 && s < sSA + 20) continue;
+    const z = deckZ(s) - (s < sNA ? 7 : 7), a = at(s);
+    const gz = ground(a.x, a.y) - 1; if (z - gz < 4) continue;
+    for (const v of [-6.5, 6.5]) { const [px, , pz] = P3(s, v, 0); box(S, px, -pz, a.ux, a.uy, 2.2, 1.8, gz, z, concrete, I0, PL); }
+    const [cx, , cz] = P3(s, 0, 0); box(S, cx, -cz, a.ux, a.uy, 2.4, 9, z - 2.2, z, concrete, I0, PL);
+  }
+  // anchorages: massive concrete blocks the cables run into
+  for (const [s, dir] of [[sNA, -1], [sSA, 1]]) {
+    const a = at(s), gz = Math.min(ground(a.x, a.y), 2) - 2;
+    box(S, a.x + a.ux * dir * 18, a.y + a.uy * dir * 18, a.ux, a.uy, 24, 17, gz, DECK - TRUSS - 1, concrete, I0, PL);
+    box(S, a.x + a.ux * dir * 8, a.y + a.uy * dir * 8, a.ux, a.uy, 10, 15, DECK - TRUSS - 1, DECK - 1.2, concrete, I0, PL);
+  }
+  // towers: two legs on a river pier, braced by struts and the X panels that mark this bridge from the Golden Gate
+  const TOP = 190.5, LEG = 13;
+  for (const s of [sNT, sST]) {
+    const a = at(s);
+    box(S, a.x, a.y, a.ux, a.uy, 14, 22, -4, 9, concrete, I0, PL);
+    const leg = (v) => { const [px, , pz] = P3(s, v, 0); box(S, px, -pz, a.ux, a.uy, 3.6, 2.6, 9, 40, orange, I0, PL); box(S, px, -pz, a.ux, a.uy, 3.2, 2.3, 40, 110, orange, I0, PL); box(S, px, -pz, a.ux, a.uy, 2.8, 2.0, 110, TOP - 2, orange, I0, PL); box(S, px, -pz, a.ux, a.uy, 3.2, 2.6, TOP - 2, TOP, orangeD, I0, PL); };
+    leg(-LEG); leg(LEG);
+    const strut = (z, h) => { const [px, , pz] = P3(s, 0, 0); box(S, px, -pz, a.ux, a.uy, 2.2, LEG, z - h, z, orange, I0, PL); };
+    const levels = [DECK - TRUSS - 1, 104, 136, 164, TOP - 1];
+    levels.forEach((z, k) => strut(z, k === 0 || k === levels.length - 1 ? 4 : 2.6));
+    for (let k = 1; k + 1 < levels.length; k++) {   // X bracing between the struts above the deck
+      const z0 = levels[k] + 0.5, z1 = levels[k + 1] - 2.6;
+      for (const f of [-1, 1]) limb(S, P3(s, -LEG * f, z0), P3(s, LEG * f, z1), 0.8, 0.8, 4, orange, PL, false);
+    }
+    for (const f of [-1, 1]) limb(S, P3(s, -LEG * f, DECK + 1), P3(s, LEG * f, 104 - 2.6), 0.8, 0.8, 4, orange, PL, false);
+  }
+  // main cables: parabolas from saddle to saddle sagging to just above the deck, side spans down into the anchorages; hangers every 23 m
+  const cableZ = (s) => {
+    if (s <= sNT) { const t = (s - sNA) / (sNT - sNA); return (DECK - 8) + (TOP + 0.5 - (DECK - 8)) * t - 14 * 4 * t * (1 - t); }
+    if (s >= sST) { const t = (sSA - s) / (sSA - sST); return (DECK - 8) + (TOP + 0.5 - (DECK - 8)) * t - 14 * 4 * t * (1 - t); }
+    const t = (s - sNT) / (sST - sNT); return DECK + 4 + (TOP + 0.5 - DECK - 4) * (2 * t - 1) ** 2;
+  };
+  for (const v of [-LEG, LEG]) {
+    for (let s = sNA - 8; s < sSA + 8 - 0.1; s += 23) {
+      const s1 = Math.min(sSA + 8, s + 23);
+      limb(S, P3(s, v, cableZ(Math.max(sNA, Math.min(sSA, s)))), P3(s1, v, cableZ(Math.max(sNA, Math.min(sSA, s1)))), 0.42, 0.42, 5, orangeD, PL, false);
+    }
+    for (let s = sNA + 23; s < sSA - 5; s += 23) {
+      const z = cableZ(s); if (z - DECK < 2.5 || Math.abs(s - sNT) < 8 || Math.abs(s - sST) < 8) continue;
+      limb(S, P3(s, v, DECK + 0.2), P3(s, v, z), 0.14, 0.14, 3, orangeD, PL, false);
+    }
+  }
+}
+const norm = (a, b, c) => { const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]; const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx], l = Math.hypot(...n) || 1; return n.map((q) => q / l); };
+
+// ─── sculpture kit: lofted ellipse sections (robes, torsos, heads) and slabs (drapery) ───
+// W(a, b, z) maps local right/forward/up into world [x, y_up, -y]. Sections: { z, rx, ry, b? (forward shift), a? }.
+export function loft(S, W, secs, col, st, { sides = 16, folds = 0, foldAmp = 0, cap = true } = {}) {
+  const I0 = [0, 0, 0, 0];
+  const ring = (s) => Array.from({ length: sides }, (_, k) => {
+    const t = (k / sides) * Math.PI * 2, m = 1 + (folds ? foldAmp * Math.sin(t * folds) * Math.min(1, s.fold ?? 1) : 0);
+    return { p: W((s.a || 0) + Math.cos(t) * s.rx * m, (s.b || 0) + Math.sin(t) * s.ry * m, s.z), t };
+  });
+  const R = secs.map(ring);
+  const nrm = (s, t) => { const c = W(s.a || 0, s.b || 0, s.z), p = W((s.a || 0) + Math.cos(t) * s.rx, (s.b || 0) + Math.sin(t) * s.ry, s.z); const v = [p[0] - c[0], 0, p[2] - c[2]]; const l = Math.hypot(...v) || 1; return [v[0] / l, 0, v[2] / l]; };
+  for (let i = 0; i + 1 < R.length; i++) {
+    const s0 = secs[i], s1 = secs[i + 1], dr = Math.max(s0.rx, s0.ry) - Math.max(s1.rx, s1.ry), dz = s1.z - s0.z || 1e-3;
+    for (let k = 0; k < sides; k++) {
+      const k2 = (k + 1) % sides, a0 = R[i][k].p, b0 = R[i][k2].p, a1 = R[i + 1][k].p, b1 = R[i + 1][k2].p;
+      const h = nrm(s0, R[i][k].t + Math.PI / sides), sl = dr / dz, l = Math.hypot(1, sl), n = [h[0] / l, sl / l, h[2] / l];
+      tri(S, a0, b0, b1, n, col, [k, s0.z], [k + 1, s0.z], [k + 1, s1.z], I0, st);
+      tri(S, a0, b1, a1, n, col, [k, s0.z], [k + 1, s1.z], [k, s1.z], I0, st);
+    }
+  }
+  if (cap) for (const [i, up] of [[0, -1], [R.length - 1, 1]]) {
+    const s = secs[i]; if (s.rx < 0.02) continue; const c = W(s.a || 0, s.b || 0, s.z);
+    for (let k = 0; k < sides; k++) { const p = R[i][k].p, q = R[i][(k + 1) % sides].p; if (up > 0) tri(S, c, q, p, [0, 1, 0], col, [0, 0], [0, 0], [0, 0], I0, st); else tri(S, c, p, q, [0, -1, 0], col, [0, 0], [0, 0], [0, 0], I0, st); }
+  }
+}
+// a solid slab through four corners (in order), `t` thick along its normal: drapery, wings, banners
+export function slab4(S, P, t, col, st) {
+  const I0 = [0, 0, 0, 0], sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const u = sub(P[1], P[0]), v = sub(P[3], P[0]), n0 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], l = Math.hypot(...n0) || 1, n = n0.map((q) => q / l);
+  const F = P.map((p) => p.map((c, i) => c + n[i] * t / 2)), B = P.map((p) => p.map((c, i) => c - n[i] * t / 2));
+  const face = (a, b, c, d, nn) => { tri(S, a, b, c, nn, col, [0, 0], [1, 0], [1, 1], I0, st); tri(S, a, c, d, nn, col, [0, 0], [1, 1], [0, 1], I0, st); };
+  face(F[0], F[1], F[2], F[3], n); face(B[0], B[3], B[2], B[1], n.map((q) => -q));
+  for (let k = 0; k < 4; k++) { const k2 = (k + 1) % 4, e = sub(F[k2], F[k]), m = [e[1] * n[2] - e[2] * n[1], e[2] * n[0] - e[0] * n[2], e[0] * n[1] - e[1] * n[0]], ml = Math.hypot(...m) || 1; face(F[k], B[k], B[k2], F[k2], m.map((q) => -q / ml)); }
+}
+
+// ─── Cristo Rei (Almada, 1959) ──────────────────────────────────────────
+// A 75 m pedestal (a four-legged portico with great arches, then a ribbed tapering shaft and the viewing deck) under
+// a 28 m Christ with outspread arms, facing Lisbon across the Tejo.
+export function cristoRei(S, { cx, cy, ux, uy, hl, hw, ground, lin, srgb }) {
+  const con = lin(srgb('#dcd8cf')), conD = lin(srgb('#c9c4ba')), conL = lin(srgb('#e6e3dc')), statue = lin(srgb('#d8d4cc')), dark = lin(srgb('#7d7a74'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.52, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.52, 1], I0 = [0, 0, 0, 0];
+  if (uy < 0) { ux = -ux; uy = -uy; }                 // u along the long (east–west) axis, v = the face towards Lisbon (north)
+  let vx = -uy, vy = ux; if (vy < 0) { vx = -vx; vy = -vy; }
+  const W = (a, b, z) => [cx + ux * a + vx * b, ground + z, -(cy + uy * a + vy * b)];
+  const B = (a, b, ha, hb, z0, z1, col, st = ST) => box(S, cx + ux * a + vx * b, cy + uy * a + vy * b, ux, uy, ha, hb, ground + z0, ground + z1, col, I0, st);
+  const A = Math.max(11, Math.min(hl, 16)), Bw = Math.max(8, Math.min(hw, 12));   // half sizes of the base
+  // stepped platform
+  for (let k = 0; k < 3; k++) B(0, 0, A + 6 - k * 1.6, Bw + 6 - k * 1.6, -2 + k * 0.6, -1.4 + k * 0.6 + 0.6, k % 2 ? conD : conL);
+  // four legs with chamfered inner faces
+  const LA = A * 0.34, LB = Bw * 0.42, Z1 = 27;
+  for (const sa of [-1, 1]) for (const sb of [-1, 1]) {
+    B(sa * (A - LA), sb * (Bw - LB), LA, LB, 0, Z1, con);
+    B(sa * (A - LA), sb * (Bw - LB), LA + 0.5, LB + 0.5, 0, 2.2, conD);                  // plinth
+    B(sa * (A + 0.2), sb * (Bw - LB), 0.35, LB * 0.6, 3, Z1 - 1, conD);                   // pilaster strip on the outer face
+  }
+  // arches: spandrel strips whose soffit follows a semicircle (long faces) and a narrower arch (short faces)
+  const arch = (along, half, depth, spring, crown, zTop, off) => {
+    const n = 14;
+    for (let k = 0; k < n; k++) {
+      const x0 = -half + (2 * half * k) / n, x1 = x0 + (2 * half) / n, xm = (x0 + x1) / 2, R = half;
+      const zb = spring + (crown - spring) * Math.sqrt(Math.max(0, 1 - (xm / R) ** 2));
+      if (along) B(xm, off, (x1 - x0) / 2 + 0.02, depth, zb, zTop, con); else B(off, xm, depth, (x1 - x0) / 2 + 0.02, zb, zTop, con);
+    }
+  };
+  const ha = A - 2 * LA, hb = Bw - 2 * LB;
+  for (const sb of [-1, 1]) arch(true, ha, LB, Z1 - ha * 0.9, Z1 - 1, Z1 + 3, sb * (Bw - LB));
+  for (const sa of [-1, 1]) arch(false, Math.max(1, hb), LA, Z1 - hb * 1.3 - 4, Z1 - 1, Z1 + 3, sa * (A - LA));
+  B(0, 0, A - 0.5, Bw - 0.5, Z1 + 1, Z1 + 3, con);                                         // vault over the portico
+  B(0, 0, A + 0.8, Bw + 0.8, Z1 + 3, Z1 + 4.6, conL);                                      // cornice band
+  // ribbed shaft, tapering to the deck
+  const Z2 = 73, a0 = A * 0.92, b0 = Bw * 0.9, a1 = A * 0.6, b1 = Bw * 0.62;
+  frustumAB(S, W, a0, b0, a1, b1, Z1 + 4.6, Z2, con, ST);
+  for (const sb of [-1, 1]) for (let k = -3; k <= 3; k++) {   // vertical ribs on the long faces
+    const f = k / 3.6; limb(S, W(f * a0, sb * (b0 + 0.25), Z1 + 4.6), W(f * a1, sb * (b1 + 0.25), Z2), 0.55, 0.45, 4, conD, ST, false);
+  }
+  for (const sa of [-1, 1]) for (let k = -1; k <= 1; k++) { const f = k / 1.8; limb(S, W(sa * (a0 + 0.25), f * b0, Z1 + 4.6), W(sa * (a1 + 0.25), f * b1, Z2), 0.55, 0.45, 4, conD, ST, false); }
+  // capital: corbelled cornice, viewing deck with its parapet and the statue's drum
+  B(0, 0, a1 + 1.2, b1 + 1.2, Z2, Z2 + 1.4, conL);
+  B(0, 0, a1 + 2.4, b1 + 2.4, Z2 + 1.4, Z2 + 2.6, con);
+  for (const sb of [-1, 1]) B(0, sb * (b1 + 2.2), a1 + 2.4, 0.2, Z2 + 2.6, Z2 + 3.7, conD);
+  for (const sa of [-1, 1]) B(sa * (a1 + 2.2), 0, 0.2, b1 + 2.4, Z2 + 2.6, Z2 + 3.7, conD);
+  B(0, 0, 4.2, 4.2, Z2 + 2.6, Z2 + 6.5, conD);
+  B(0, 0, 4.6, 4.6, Z2 + 6.5, Z2 + 7.2, conL);
+  // the statue, 28 m, robe with folds, arms spread wide with hanging sleeves, facing +v
+  const z0 = Z2 + 7.2, Ws = (a, b, z) => W(a, b, z0 + z);
+  loft(S, Ws, [
+    { z: 0, rx: 3.9, ry: 3.0, fold: 1 }, { z: 1.2, rx: 3.95, ry: 3.0, fold: 1 }, { z: 5, rx: 3.5, ry: 2.6, fold: 1 }, { z: 10, rx: 2.95, ry: 2.15, fold: 0.8 },
+    { z: 13.5, rx: 2.45, ry: 1.8, b: 0.1, fold: 0.5 }, { z: 17, rx: 2.7, ry: 1.85, b: 0.15, fold: 0.3 }, { z: 19.6, rx: 3.0, ry: 1.8, b: 0.1, fold: 0.2 },
+    { z: 20.6, rx: 2.6, ry: 1.6, fold: 0 }, { z: 21.2, rx: 1.3, ry: 1.2, fold: 0 }, { z: 21.6, rx: 0.75, ry: 0.8, fold: 0 },
+  ], statue, PL, { sides: 24, folds: 9, foldAmp: 0.06 });
+  loft(S, Ws, [   // head with the hair falling to the shoulders behind
+    { z: 21.5, rx: 0.78, ry: 0.85, b: -0.05 }, { z: 22.4, rx: 1.05, ry: 1.12, b: -0.12 }, { z: 23.6, rx: 1.12, ry: 1.2, b: -0.08 }, { z: 24.6, rx: 1.0, ry: 1.1, b: -0.05 },
+    { z: 25.3, rx: 0.7, ry: 0.78, b: -0.05 }, { z: 25.65, rx: 0.2, ry: 0.22, b: -0.05 },
+  ], statue, PL, { sides: 14 });
+  loft(S, Ws, [{ z: 21.0, rx: 0.9, ry: 0.5, b: -0.9 }, { z: 22.6, rx: 1.05, ry: 0.55, b: -0.95 }, { z: 24.2, rx: 0.95, ry: 0.5, b: -0.75 }], conD, PL, { sides: 10 });   // hair
+  loft(S, Ws, [{ z: 22.0, rx: 0.55, ry: 0.35, b: 0.85 }, { z: 22.6, rx: 0.62, ry: 0.4, b: 0.9 }, { z: 23.1, rx: 0.45, ry: 0.3, b: 0.95 }], conD, PL, { sides: 8 });       // beard
+  for (const sa of [-1, 1]) {
+    const sh = [sa * 2.55, 0.15, 19.9], el = [sa * 7.2, 0.55, 20.3], wr = [sa * 11.2, 0.9, 20.9];
+    limb(S, Ws(...sh), Ws(...el), 1.05, 0.85, 10, statue, PL, true);
+    limb(S, Ws(...el), Ws(...wr), 0.85, 0.6, 10, statue, PL, true);
+    limb(S, Ws(...wr), Ws(sa * 12.6, 1.0, 21.3), 0.55, 0.32, 8, statue, PL, true);             // hand, palm forward
+    limb(S, Ws(sa * 12.1, 1.0, 21.1), Ws(sa * 12.4, 1.25, 22.0), 0.18, 0.12, 5, statue, PL, true);   // thumb
+    // sleeve drapery: hangs from the forearm and upper arm back to the robe's side
+    slab4(S, [Ws(sa * 2.7, 0.1, 19.6), Ws(sa * 7.2, 0.5, 19.7), Ws(sa * 6.6, 0.45, 16.2), Ws(sa * 2.9, 0.15, 13.6)], 0.5, statue, PL);
+    slab4(S, [Ws(sa * 7.2, 0.5, 19.7), Ws(sa * 10.6, 0.85, 20.2), Ws(sa * 10.2, 0.8, 18.3), Ws(sa * 6.6, 0.45, 16.2)], 0.4, statue, PL);
+  }
+  for (const sa of [-1, 1]) limb(S, Ws(sa * 0.9, 1.9, 0.1), Ws(sa * 0.95, 2.4, 0.5), 0.45, 0.35, 6, conD, PL, true);   // feet under the hem
+}
+// a rectangular frustum (half sizes a×b at z0 to a1×b1 at z1) in a local frame W
+function frustumAB(S, W, a0, b0, a1, b1, z0, z1, col, st) {
+  const I0 = [0, 0, 0, 0], c = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const P = (k, top) => W(c[k][0] * (top ? a1 : a0), c[k][1] * (top ? b1 : b0), top ? z1 : z0);
+  for (let k = 0; k < 4; k++) {
+    const k2 = (k + 1) % 4, p0 = P(k, 0), p1 = P(k2, 0), p2 = P(k2, 1), p3 = P(k, 1);
+    const u = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], v = [p3[0] - p0[0], p3[1] - p0[1], p3[2] - p0[2]];
+    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; n = n.map((q) => q / l);
+    const mid = W((c[k][0] + c[k2][0]) / 2 * a0, (c[k][1] + c[k2][1]) / 2 * b0, z0), ctr = W(0, 0, z0), out = [mid[0] - ctr[0], 0, mid[2] - ctr[2]];
+    if (n[0] * out[0] + n[2] * out[2] < 0) { tri(S, p0, p2, p1, n.map((q) => -q), col, [0, 0], [1, 1], [1, 0], I0, st); tri(S, p0, p3, p2, n.map((q) => -q), col, [0, 0], [0, 1], [1, 1], I0, st); }
+    else { tri(S, p0, p1, p2, n, col, [0, 0], [1, 0], [1, 1], I0, st); tri(S, p0, p2, p3, n, col, [0, 0], [1, 1], [0, 1], I0, st); }
+  }
 }

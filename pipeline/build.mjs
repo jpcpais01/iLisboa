@@ -12,10 +12,11 @@ import { Document, NodeIO, Logger } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions';
 import { weld, meshopt } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
+import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -23,7 +24,9 @@ await SkeletonBuilder.init();
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const AREA = process.argv[2] || 'baixa-alfama';
-const areaLine = fs.readFileSync(path.join(ROOT, 'pipeline/areas.txt'), 'utf8').split('\n').find((l) => l.split(/\s+/)[0] === AREA);
+const areaLines = fs.readFileSync(path.join(ROOT, 'pipeline/areas.txt'), 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+const areaLine = areaLines.find((l) => l.split(/\s+/)[0] === AREA);
+const ALL_AREAS = areaLines.map((l) => l.trim().split(/\s+/)).map(([n, ...b]) => [n, ...b.map(Number)]);
 if (!areaLine) throw new Error(`unknown area ${AREA}`);
 const [S, W, N, E] = areaLine.trim().split(/\s+/).slice(1).map(Number);
 const OUT = path.join(ROOT, 'public/tiles', AREA);
@@ -39,7 +42,8 @@ const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...a);
 
 // ─── projection & extent ────────────────────────────────────────────────
-const lat0 = (S + N) / 2, lon0 = (W + E) / 2;
+// every area projects around the same point (the centre of the first, historic area) so their tiles join into one city
+const lat0 = 38.71375, lon0 = -9.13975;
 const proj = makeProjection(lat0, lon0);
 const [minX] = proj.fwd(lat0, W), [maxX] = proj.fwd(lat0, E);
 const [, minY] = proj.fwd(S, lon0), [, maxY] = proj.fwd(N, lon0);
@@ -158,8 +162,13 @@ const polysB = (() => {   // the same footprint mapped twice (a convent relation
 }
 const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
 for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
-const roads = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
-const rails = extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !underground(t));
+const roads0 = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
+// roads and rails up on the Ponte 25 de Abril deck are part of the authored bridge, not of the ground
+const ponteXY = PONTE_LINE.map(([la, lo]) => proj.fwd(la, lo));
+const nearPonte = (x, y) => { for (let i = 0; i + 1 < ponteXY.length; i++) { const [ax, ay] = ponteXY[i], [bx, by] = ponteXY[i + 1], dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))); if (Math.hypot(ax + dx * t - x, ay + dy * t - y) < 16) return true; } return false; };
+const onPonte = (l) => l.tags.bridge && l.tags.bridge !== 'no' && l.pts.every(([x, y]) => nearPonte(x, y));
+const roads = roads0.filter((r) => !onPonte(r));
+const rails = (extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !underground(t))).filter((r) => !onPonte(r));
 const coast = extractLines(els, proj, (t) => t.natural === 'coastline');
 const treeNodes = extractNodes(els, proj, (t) => t.natural === 'tree');
 const treeRows = extractLines(els, proj, (t) => t.natural === 'tree_row');
@@ -167,7 +176,8 @@ log(`buildings ${polysB.length}, areas ${polysArea.length}, roads ${roads.length
 
 // ─── water mask: flood-fill from the water side of OSM coastline ────────
 const WM = 1; // m/px
-const wr = new Raster(minX, minY, maxX, maxY, WM);
+const WMG = 40;   // margin: water just across a seam with a neighbouring area must still count, or the river shore rises there
+const wr = new Raster(minX - WMG, minY - WMG, maxX + WMG, maxY + WMG, WM);
 const water = wr.data; // 0 land, 1 barrier, 2 water
 let waterSource = 'osm-coastline';
 {
@@ -196,14 +206,14 @@ let waterSource = 'osm-coastline';
   let nW = 0, agree = 0;
   for (let i = 0; i < water.length; i++) if (water[i] === 2) {
     nW++;
-    if (dem.rawWater(minX + ((i % wr.w) + 0.5) * WM, maxY - (((i / wr.w) | 0) + 0.5) * WM)) agree++;
+    if (dem.rawWater(wr.minX + ((i % wr.w) + 0.5) * WM, wr.maxY - (((i / wr.w) | 0) + 0.5) * WM)) agree++;
   }
   const frac = nW / water.length;
   log(`coastline flood: ${(frac * 100).toFixed(1)}% water, DEM agreement ${((agree / Math.max(1, nW)) * 100).toFixed(1)}%`);
-  if (coast.length === 0 || frac > 0.7 || agree / Math.max(1, nW) < 0.6) {
+  if (coast.length === 0 || frac > 0.97 || agree / Math.max(1, nW) < 0.6) {
     waterSource = 'dem';
     log('falling back to DEM water mask');
-    for (let i = 0; i < water.length; i++) water[i] = dem.rawWater(minX + ((i % wr.w) + 0.5) * WM, maxY - (((i / wr.w) | 0) + 0.5) * WM) ? 2 : 0;
+    for (let i = 0; i < water.length; i++) water[i] = dem.rawWater(wr.minX + ((i % wr.w) + 0.5) * WM, wr.maxY - (((i / wr.w) | 0) + 0.5) * WM) ? 2 : 0;
   }
   for (let i = 0; i < water.length; i++) if (water[i] === 1) water[i] = 2; // barrier is shoreline → water
   // inland water bodies (ponds, fountains, docks)
@@ -358,6 +368,7 @@ function buildingSpec(p) {
   return spec;
 }
 
+const FAR = [];   // footprints for the far level of detail (one block per building)
 const BAD = []; // guard: any building vertex far outside the diorama fails the build
 const tileB0 = (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; };
 function addBuilding(p) {
@@ -469,13 +480,14 @@ function addBuilding_(p) {
   // hand-authored pilot: the Praça's arcade pillars live in the façade shader; the Arco and D. José are modelled below
   const [pxa, pya] = proj.fwd(38.7062, -9.1400), [pxb, pyb] = proj.fwd(38.7092, -9.1330);
   const inPraca = (p) => p.c[0] > pxa && p.c[0] < pxb && p.c[1] > pya && p.c[1] < pyb;
-  const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p));
+  const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p)) || (p.tags['bridge:support'] && nearPonte(p.c[0], p.c[1]));   // the bridge's piers and pylons are authored
   // Sé: the mapped parts carry no heights; the cathedral is modelled by hand below
   const seOutline = polysB.find((p) => p.id === 'r19372558_0');
   const seParts = seOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], seOutline.outer)) : [];
   const ptOutline = polysB.find((p) => p.id === 'w9253917');
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
+  for (const p of [...outlines.filter((o) => !o.skip), ...parts]) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
   let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
@@ -597,6 +609,8 @@ function addBuilding_(p) {
     const mp = els.find((e) => e.type === 'way' && e.id === 822816252);
     if (mp) { const g = mp.geometry, [x, y] = proj.fwd(g.reduce((a, q) => a + q.lat, 0) / g.length, g.reduce((a, q) => a + q.lon, 0) / g.length); marquesColumn(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   }
+  { const cr = byId.get('w87891338');   // Cristo Rei: pedestal and statue on the OSM footprint, facing Lisbon
+    if (cr && cr.c[0] >= minX && cr.c[0] < maxX && cr.c[1] >= minY && cr.c[1] < maxY) { const ob = obb(cr.outer); cristoRei(tileB(...cr.c), { cx: cr.c[0], cy: cr.c[1], ux: ob.ux, uy: ob.uy, hl: ob.hl, hw: ob.hw, ground: cr.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark(); } }
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); trellisCedar(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
   const camara = byId.get('w95417254');
   if (camara) { const [a, b] = facing(camara, -1, 0, 15); const sg = ringArea(camara.outer) > 0; portico(tileB(...camara.c), { a: sg ? a : b, b: sg ? b : a, ground: groundAt(...camara.c), depth: 3.2, colH: 12.5, cols: 4, span: 13, statue: false, lin, srgb }); mark(); }
@@ -781,6 +795,24 @@ function addBuilding_(p) {
   stats.miradouros = n; log(`miradouros ${n}`);
 }
 
+// ─── structures that cross area seams: built whole, each area keeps the triangles over its own ground ───
+function distribute(T) {
+  let kept = 0;
+  for (let t = 0; t < T.pos.length / 9; t++) {
+    const o = t * 9, cx = (T.pos[o] + T.pos[o + 3] + T.pos[o + 6]) / 3, cy = -(T.pos[o + 2] + T.pos[o + 5] + T.pos[o + 8]) / 3;
+    if (cx < minX || cx >= maxX || cy < minY || cy >= maxY) continue;
+    const D = tileB0(cx, cy); kept++;
+    for (let k = 0; k < 9; k++) { D.pos.push(T.pos[o + k]); D.nrm.push(T.nrm[o + k]); D.col.push(T.col[o + k]); }
+    for (let k = 0; k < 12; k++) { D.info.push(T.info[t * 12 + k]); D.style.push(T.style[t * 12 + k]); }
+    for (let k = 0; k < 6; k++) D.surf.push(T.surf[t * 6 + k]);
+  }
+  return kept;
+}
+{
+  const T = makeSink();
+  ponte25Abril(T, { fwd: proj.fwd, ground: (x, y) => Math.max(LAND_MIN, dem.ground(x, y)), lin, srgb });
+  stats.ponte = distribute(T);
+}
 // ─── statues, columns & historic walls ──────────────────────────────────
 const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
 {
@@ -964,7 +996,7 @@ for (const r of rails) { // two rails per track
 }
 // water (from 1 m mask)
 for (let r = 0; r < gm.h; r++) for (let c = 0; c < gm.w; c++) {
-  const wi = Math.floor((r * SS) / WM) * wr.w + Math.floor((c * SS) / WM);
+  const wi = Math.floor((r * SS + WMG) / WM) * wr.w + Math.floor((c * SS + WMG) / WM);
   if (water[wi] === 2) paint(C.water)(r * gm.w + c);
   else if (water[wi] === 3) paint(C.pond)(r * gm.w + c);
 }
@@ -990,7 +1022,7 @@ log('AO baked');
     const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); return (h(xi, yi) * (1 - sx) + h(xi + 1, yi) * sx) * (1 - sy) + (h(xi, yi + 1) * (1 - sx) + h(xi + 1, yi + 1) * sx) * sy; };
   const mpp = (maxX - minX) / GW;
   for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) {
-    const x = c * mpp, y = r * mpp, k = 0.93 + 0.09 * vn(x / 23, y / 23) + 0.05 * vn(x / 4.1, y / 4.1), i = (r * GW + c) * 3;
+    const x = minX + c * mpp, y = maxY - r * mpp, k = 0.93 + 0.09 * vn(x / 23, y / 23) + 0.05 * vn(x / 4.1, y / 4.1), i = (r * GW + c) * 3;
     ground1[i] *= k; ground1[i + 1] *= k; ground1[i + 2] *= k;
   }
 }
@@ -1139,7 +1171,7 @@ const cars = [];
   log(`cars ${cars.length / 6}`);
 }
 const manifest = {
-  area: AREA, origin: { lat: lat0, lon: lon0 }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
+  area: AREA, origin: { lat: lat0, lon: lon0 }, bbox: { S, W, N, E }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
   tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3, cars: cars.length / 6 },
   attribution: '© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus',
   built: new Date().toISOString(),
@@ -1214,6 +1246,92 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   log(`tile ${i},${j}: ${(bytes / 1024).toFixed(0)} KB`);
 }
 
+
+// ─── far level of detail: one file per area, a coarse terrain and a plain block per building for every tile ───
+// Seen from a kilometre or more a building is its silhouette, wall colour and roof colour: that is all this keeps.
+{
+  const FG = 25, FTEX = 160;   // 25 m terrain grid, 160 px (≈3 m) per 500 m tile
+  const simplify = (ring, tol) => {   // Douglas–Peucker on a closed ring
+    const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
+    if (pts.length <= 4) return pts;
+    const keep = new Uint8Array(pts.length); keep[0] = 1;
+    let far = 0, fd = -1; for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > fd) { fd = d; far = i; } }
+    keep[far] = 1;
+    const dp = (a, b) => {   // indices a < b along the ring
+      const [ax, ay] = pts[a], [bx, by] = pts[b % pts.length], L = Math.hypot(bx - ax, by - ay) || 1e-9;
+      let m = -1, md = tol;
+      for (let i = a + 1; i < b; i++) { const d = Math.abs((bx - ax) * (ay - pts[i][1]) - (ax - pts[i][0]) * (by - ay)) / L; if (d > md) { md = d; m = i; } }
+      if (m >= 0) { keep[m] = 1; dp(a, m); dp(m, b); }
+    };
+    dp(0, far); dp(far, pts.length);
+    return pts.filter((_, i) => keep[i]);
+  };
+  const byTile = new Map();
+  for (const p of FAR) { const [ti, tj] = tileOf(p.c[0], p.c[1]); const k = `${ti}_${tj}`; if (!byTile.has(k)) byTile.set(k, []); byTile.get(k).push(p); }
+  const { doc, scene } = newDoc();
+  doc.createExtension(EXTTextureWebP).setRequired(true);
+  const bmat = doc.createMaterial('farBuildings').setRoughnessFactor(0.9).setMetallicFactor(0);
+  let farTris = 0;
+  for (const t of manifest.tiles) {
+    const [x0, y0, x1, y1] = t.bounds, { i, j } = t;
+    // terrain
+    const px0 = Math.round(((x0 - minX) / (maxX - minX)) * GW), px1 = Math.round(((x1 - minX) / (maxX - minX)) * GW);
+    const py0 = Math.round(((maxY - y1) / (maxY - minY)) * GH), py1 = Math.round(((maxY - y0) / (maxY - minY)) * GH);
+    const tw = Math.max(8, Math.round((FTEX * (x1 - x0)) / TILE)), th = Math.max(8, Math.round((FTEX * (y1 - y0)) / TILE));
+    const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } }).extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).webp({ quality: 72 }).toBuffer();
+    const gmat = doc.createMaterial(`fg_${i}_${j}`).setBaseColorTexture(doc.createTexture().setImage(webp).setMimeType('image/webp')).setRoughnessFactor(1).setMetallicFactor(0);
+    const cols = Math.max(2, Math.round((x1 - x0) / FG) + 1), rows = Math.max(2, Math.round((y1 - y0) / FG) + 1);
+    const pos = [], uv = [], idx = [], nrm = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = x0 + ((x1 - x0) * c) / (cols - 1), y = y1 - ((y1 - y0) * r) / (rows - 1);
+      pos.push(x, groundAt(x, y), -y); uv.push(c / (cols - 1), r / (rows - 1));
+      const e = 6, hx = groundAt(x + e, y) - groundAt(x - e, y), hy = groundAt(x, y + e) - groundAt(x, y - e), n = [-hx / (2 * e), 1, hy / (2 * e)], l = Math.hypot(...n);
+      nrm.push(n[0] / l, n[1] / l, n[2] / l);
+    }
+    for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) { const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1; idx.push(a, d, b, b, d, e); }
+    addMesh(doc, scene, `ft_${i}_${j}`, { POSITION: [Float32Array.from(pos), 'VEC3'], NORMAL: [Float32Array.from(nrm), 'VEC3'], TEXCOORD_0: [Float32Array.from(uv), 'VEC2'], indices: [Uint32Array.from(idx)] }, gmat);
+    farTris += idx.length / 3;
+    // buildings: extruded simplified footprints, walls in the façade colour, a flat cap in the roof colour at mid-roof
+    const list = byTile.get(`${i}_${j}`); if (!list) continue;
+    const P = [], C = [];   // no normals: the viewer shades these flat, so welding can share every corner
+    const tri = (a, b, c, col) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) C.push(...col); };
+    for (const p of list) {
+      const spec = buildingSpec(p);
+      if (Math.abs(p.area) < 25) continue;
+      const outer = simplify(p.outer, 1.5); if (outer.length < 3) continue;
+      const holes = p.holes.filter((h) => Math.abs(ringArea(h)) > 60).map((h) => simplify(h, 1.2)).filter((h) => h.length >= 3);
+      let g = Infinity; for (const [x, y] of outer) g = Math.min(g, groundAt(x, y));
+      const pitched = spec.shape !== 'flat', roofH = pitched ? Math.min(spec.roofH ?? 3, spec.h * 0.3) : 0;
+      const yb = g + (spec.minH || 0) - (spec.minH ? 0 : 1.5), yt = g + Math.max(spec.h - roofH * 0.55, (spec.minH || 0) + 0.5);
+      const wall = lin(spec.wall), roof = lin(pitched ? spec.roofCol : spec.flatCol);
+      const ccw = (r, want) => (Math.sign(ringArea(r)) === want ? r : r.slice().reverse());
+      const rings = [ccw(outer, 1), ...holes.map((h) => ccw(h, -1))];
+      for (const r of rings) for (let k = 0; k < r.length; k++) {   // outward walls (ccw outer: outside is on the right of each edge)
+        const [ax, ay] = r[k], [bx, by] = r[(k + 1) % r.length];
+        const A = [ax, yb, -ay], B = [bx, yb, -by], Bt = [bx, yt, -by], At = [ax, yt, -ay];
+        const n = triNormal(A, B, Bt), out = n[0] * (by - ay) + n[2] * (bx - ax) >= 0;   // outward = right of the edge = (dy, 0, dx) in world axes
+        if (out) { tri(A, B, Bt, wall); tri(A, Bt, At, wall); } else { tri(A, Bt, B, wall); tri(A, At, Bt, wall); }
+      }
+      const flat = [], hi = [];
+      for (const r of rings) { if (flat.length) hi.push(flat.length / 2); for (const [x, y] of r) flat.push(x, y); }
+      const ix = earcut(flat, hi);
+      for (let k = 0; k < ix.length; k += 3) {
+        const v = (q) => [flat[q * 2], yt, -flat[q * 2 + 1]];
+        const a = v(ix[k]), b = v(ix[k + 1]), c = v(ix[k + 2]);
+        if (triNormal(a, b, c)[1] < 0) tri(a, c, b, roof); else tri(a, b, c, roof);
+      }
+    }
+    if (P.length) {
+      addMesh(doc, scene, `fb_${i}_${j}`, { POSITION: [Float32Array.from(P), 'VEC3'], COLOR_0: [Uint8Array.from(C, (v) => Math.round(Math.min(1, v) * 255)), 'VEC3', true] }, bmat);
+      farTris += P.length / 9;
+    }
+  }
+  const bytes = await writeDoc(doc, path.join(OUT, 'far.glb'));
+  totalBytes += bytes;
+  manifest.far = { bytes, tris: farTris };
+  log(`far LOD: ${(bytes / 1048576).toFixed(2)} MB, ${(farTris / 1e6).toFixed(2)} M tris`);
+}
+
 // diorama base: skirt walls around the edge + bottom
 {
   const { doc, scene } = newDoc();
@@ -1235,10 +1353,15 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
       quad(Math.min(h1, WATER_Y + 1e3), Math.min(h2, WATER_Y + 1e3), BASE_Y, BASE_Y, soilTop, soilBot);
     }
   };
-  edge(minX, minY, maxX, minY, [0, 0, 1]);   // south
-  edge(maxX, minY, maxX, maxY, [1, 0, 0]);   // east
-  edge(maxX, maxY, minX, maxY, [0, 0, -1]);  // north
-  edge(minX, maxY, minX, minY, [-1, 0, 0]);  // west
+  // a side shared with a neighbouring area is inside the city: no wall there
+  const near = (a, b) => Math.abs(a - b) < 1e-6, overlap = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0) > 1e-6;
+  const others = ALL_AREAS.filter(([n]) => n !== AREA);
+  const hasN = (side) => others.some(([, s, w, n, e]) => side === 'S' ? near(n, S) && overlap(w, e, W, E) : side === 'N' ? near(s, N) && overlap(w, e, W, E)
+    : side === 'E' ? near(w, E) && overlap(s, n, S, N) : near(e, W) && overlap(s, n, S, N));
+  if (!hasN('S')) edge(minX, minY, maxX, minY, [0, 0, 1]);   // south
+  if (!hasN('E')) edge(maxX, minY, maxX, maxY, [1, 0, 0]);   // east
+  if (!hasN('N')) edge(maxX, maxY, minX, maxY, [0, 0, -1]);  // north
+  if (!hasN('W')) edge(minX, maxY, minX, minY, [-1, 0, 0]);  // west
   // fix winding per side so faces point outward
   const P = Float32Array.from(pos), Nn = Float32Array.from(nrm);
   for (let t = 0; t < P.length; t += 9) {
@@ -1255,8 +1378,11 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
 // water mask (2 m/px, R channel) for the water shader; trees
 {
   const m = Buffer.alloc(wr.w * wr.h);
+  let nw = 0; for (let i = 0; i < water.length; i++) if (water[i] === 2) nw++;
+  manifest.stats.water = +(nw / water.length).toFixed(4);
   for (let i = 0; i < m.length; i++) m[i] = water[i] === 2 ? 255 : 0;
-  await sharp(m, { raw: { width: wr.w, height: wr.h, channels: 1 } }).blur(0.7).png({ compressionLevel: 9, palette: false }).toFile(path.join(OUT, 'water.png'));
+  await sharp(m, { raw: { width: wr.w, height: wr.h, channels: 1 } }).blur(0.7)
+    .extract({ left: WMG / WM, top: WMG / WM, width: Math.ceil((maxX - minX) / WM), height: Math.ceil((maxY - minY) / WM) }).png({ compressionLevel: 9, palette: false }).toFile(path.join(OUT, 'water.png'));
   fs.writeFileSync(path.join(OUT, 'trees.bin'), Buffer.from(Float32Array.from(trees).buffer));
   fs.writeFileSync(path.join(OUT, 'lamps.bin'), Buffer.from(Float32Array.from(lamps).buffer));
   fs.writeFileSync(path.join(OUT, 'cars.bin'), Buffer.from(Float32Array.from(cars).buffer));
@@ -1266,4 +1392,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
 manifest.stats.bytes = totalBytes;
 manifest.stats.triangles = totalTris;
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
+// city index: every built area's manifest in one file, first area first (the viewer streams tiles from all of them)
+const index = { areas: ALL_AREAS.map(([n]) => path.join(ROOT, 'public/tiles', n, 'manifest.json')).filter((f) => fs.existsSync(f)).map((f) => JSON.parse(fs.readFileSync(f, 'utf8'))) };
+fs.writeFileSync(path.join(ROOT, 'public/tiles/index.json'), JSON.stringify(index));
 log(`done: ${(totalBytes / 1048576).toFixed(2)} MB, ${(totalTris / 1e6).toFixed(2)} M tris`);
