@@ -53,6 +53,7 @@ export const OVERRIDES = {
   // Fundação Gulbenkian (1969): brutalist concrete under flat, partly planted roofs; CAM under Kengo Kuma's pale tiled eaves
   ...Object.fromEntries(['r17036063_0', 'w39784735'].map((id) => [id, { shape: 'flat', wall: '#bbb6ab', flatCol: [148, 156, 128], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.8 }])),
   w188143627: { shape: 'flat', wall: '#c4c0b6', flatCol: [208, 208, 204], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.6 },
+  w174189905: { shape: 'flat', wall: '#d9dcd9', variant: 3, parapet: 0.8 },   // Sporting's multisports pavilion
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
@@ -119,7 +120,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633', 'r9159876_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2635,4 +2636,52 @@ export function oceanario(S, { corners, core, ground, zTop = 15, lin, srgb }) {
     frustumAB(S, F, o.hl, o.hw, o.hl, o.hw, zTop - 0.5, zTop + 6, blue, PL);
     frustumAB(S, F, o.hl + 0.3, o.hw + 0.3, o.hl + 0.3, o.hw + 0.3, zTop + 6, zTop + 7, white, PL);
   }
+}
+
+// Estádio José Alvalade (Tomás Taveira, 2003): the bowl of green seats, a façade of coloured ceramic panels
+// (Sporting green, yellow, white, a little blue), and a pale roof ring on yellow trusses over the stands.
+export function alvaladeStadium(S, { ring, hole, ground, lin, srgb, H = 36 }) {
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], I0 = [0, 0, 0, 0];
+  const green = lin(srgb('#1d7347')), green2 = lin(srgb('#25845a')), conc = lin(srgb('#b4b2ac')), roofC = lin(srgb('#e9ebea')), yellow = lin(srgb('#e3b92c'));
+  const tiles = ['#2f8a52', '#e0bd3a', '#eeeeea', '#1f6b45', '#8fc3a1', '#5f86b3'].map((h) => lin(srgb(h)));
+  const c = hole.reduce((a, p) => [a[0] + p[0] / hole.length, a[1] + p[1] / hole.length], [0, 0]);
+  const hit = (r, a) => { const dx = Math.cos(a), dy = Math.sin(a); let best = 0;
+    for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length], ex = q[0] - p[0], ey = q[1] - p[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue;
+      const wx = p[0] - c[0], wy = p[1] - c[1], t = (wx * ey - wy * ex) / den, s = (wx * dy - wy * dx) / den; if (t > 0 && s >= 0 && s <= 1) best = Math.max(best, t); } return best; };
+  const N = 120, A = Array.from({ length: N }, (_, k) => (k / N) * Math.PI * 2);
+  const Ro = A.map((a) => hit(ring, a)), Ri = A.map((a) => hit(hole, a));
+  const P = (k, r, z) => [c[0] + Math.cos(A[k % N]) * r, ground + z, -(c[1] + Math.sin(A[k % N]) * r)];
+  const nrm = (a, b, d) => { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]; const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; return n.map((q) => q / l); };
+  const quad = (a, b, cc, d, col, up) => { let n = nrm(a, b, d); if ((up > 0 && n[1] < 0) || (up < 0 && n[1] > 0)) n = n.map((q) => -q); tri(S, a, b, cc, n, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, cc, d, n, col, [0, 0], [0, 0], [0, 0], I0, PL); };
+  // stands: lower tier, a concourse band, upper tier, rising to the roof's inner shadow line
+  const tiers = [[0, 1.2], [0.42, 15], [0.45, 17], [0.86, 33]];   // fraction of the way from the pitch edge to the outer wall, height
+  const rAt = (k, f) => Ri[k] + (Ro[k] - Ri[k]) * f;
+  for (let t = 0; t + 1 < tiers.length; t++) for (let k = 0; k < N; k++) {
+    const col = t === 1 ? conc : (k + t) % 2 ? green : green2;
+    quad(P(k, rAt(k, tiers[t][0]), tiers[t][1]), P(k + 1, rAt((k + 1) % N, tiers[t][0]), tiers[t][1]), P(k + 1, rAt((k + 1) % N, tiers[t + 1][0]), tiers[t + 1][1]), P(k, rAt(k, tiers[t + 1][0]), tiers[t + 1][1]), col, 1);
+  }
+  // façade: coloured ceramic panels, 3 m wide, 4.5 m tall, a deterministic mosaic
+  const hsh = (i, j) => { const x = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return x - Math.floor(x); };
+  for (let k = 0; k < N; k++) {
+    const k2 = (k + 1) % N;
+    for (let j = 0; j < 8; j++) {
+      const z0 = j * 4.5, z1 = z0 + 4.5, h = hsh(k, j), col = j === 0 ? conc : tiles[h < 0.3 ? 0 : h < 0.5 ? 1 : h < 0.72 ? 2 : h < 0.85 ? 3 : h < 0.94 ? 4 : 5];
+      quad(P(k, Ro[k], z0 - (j ? 0 : 1)), P(k + 1, Ro[k2], z0 - (j ? 0 : 1)), P(k + 1, Ro[k2], z1), P(k, Ro[k], z1), col, 0);
+    }
+  }
+  // roof ring: from the outer wall (H) to an inner edge over the front rows, rising slightly inward; underside too
+  const rIn = (k) => Ri[k] + (Ro[k] - Ri[k]) * 0.18;
+  for (let k = 0; k < N; k++) {
+    const k2 = (k + 1) % N;
+    quad(P(k, Ro[k], H), P(k + 1, Ro[k2], H), P(k + 1, rIn(k2), H + 3.5), P(k, rIn(k), H + 3.5), roofC, 1);
+    quad(P(k, Ro[k], H - 0.6), P(k + 1, Ro[k2], H - 0.6), P(k + 1, rIn(k2), H + 2.9), P(k, rIn(k), H + 2.9), conc, -1);
+    quad(P(k, rIn(k), H + 2.9), P(k + 1, rIn(k2), H + 2.9), P(k + 1, rIn(k2), H + 3.5), P(k, rIn(k), H + 3.5), yellow, 0);   // yellow inner edge
+  }
+  // yellow trusses over the roof, radial, every 3 m of perimeter
+  for (let k = 0; k < N; k += 3) {
+    const rm = (Ro[k] + rIn(k)) / 2;
+    limb(S, P(k, Ro[k] + 1, H + 0.3), P(k, rm, H + 8), 0.45, 0.35, 6, yellow, PL, false);
+    limb(S, P(k, rm, H + 8), P(k, rIn(k) - 0.5, H + 3.8), 0.35, 0.3, 6, yellow, PL, false);
+  }
+  for (let k = 0; k < N; k++) limb(S, P(k, (Ro[k] + rIn(k)) / 2, H + 8), P(k + 1, (Ro[(k + 1) % N] + rIn((k + 1) % N)) / 2, H + 8), 0.3, 0.3, 5, yellow, PL, false);
 }
