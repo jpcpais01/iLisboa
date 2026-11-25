@@ -65,9 +65,20 @@ export const OVERRIDES = {
   ...Object.fromEntries(['w1453809581', 'w1453809582'].map((id) => [id, { h: 61, minH: 0, shape: 'flat', wall: '#3f6c86', flatCol: [214, 216, 214], variant: 3, floorH: 3.7, groundH: 5, parapet: 0.6 }])),
   ...Object.fromEntries(['w240817325', 'w1015870543'].map((id) => [id, { h: 96, shape: 'flat', wall: '#c9d6db', flatCol: [200, 205, 205], variant: 3, floorH: 3.6, parapet: 0 }])),   // São Rafael / São Gabriel (crowns authored)
   w240816973: { h: 21, shape: 'flat', wall: '#e3e1dc', flatCol: [214, 214, 210], variant: 3, floorH: 0, parapet: 1 },   // Centro Vasco da Gama (glass vault authored)
-  w495968845: { h: 27, minH: 0, shape: 'dome', roofH: 10, roofCol: '#9db1b8', wall: '#d9d3c8', variant: 3, floorH: 0 },   // the glass dome over Praça Central
+  w495968845: { h: 36, minH: 0, shape: 'dome', roofH: 11, roofCol: '#93a9b1', wall: '#d9d3c8', variant: 3, floorH: 0 },   // the glass dome over Praça Central
   w496232837: { h: 23, shape: 'flat', wall: '#d9d3c8', flatCol: [196, 196, 192], variant: 3, floorH: 0 },   // its drum terrace
   w495968846: { h: 11, minH: 0, shape: 'dome', roofH: 6, roofCol: '#5d8e93', wall: '#c98f7f', variant: 3, floorH: 0 },   // small teal dome at the front between the towers
+  // Mesquita Central de Lisboa (checked against Earth): sand-coloured flat-roofed blocks, a pale blue-green dome over the prayer hall, a smaller green dome, a slender pointed minaret
+  w1420989247: { h: 13, shape: 'flat', wall: '#d8c6a3', flatCol: [212, 200, 178], variant: 4, floorH: 0, parapet: 1.2 },   // musalla
+  w1240194497: { minH: 13, h: 15, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 6.6, col: '#a8c8c5' } },   // drum; the dome is authored
+  w940705830: { minH: 9.5, h: 10.5, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 3.9, col: '#95b9a7' } },
+  w1367318284: { minH: 6, h: 6.5, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 2.4, col: '#a8c8c5' } },
+  w1420989251: { h: 9.5, shape: 'flat', wall: '#d3c09c', flatCol: [210, 198, 176], variant: 4, floorH: 0 },
+  w1420989255: { h: 9.5, shape: 'flat', wall: '#d3c09c', flatCol: [210, 198, 176], variant: 4, floorH: 0 },
+  w1420989250: { h: 6, shape: 'flat', wall: '#d8c6a3', flatCol: [212, 200, 178], variant: 4, floorH: 0 },
+  w1420989252: { h: 8, shape: 'flat', wall: '#d8c6a3', flatCol: [212, 200, 178], variant: 4, floorH: 0 },
+  w1420989246: { h: 29, shape: 'flat', flatCol: [220, 208, 184], wall: '#e0d2b4', variant: 3, floorH: 0, parapet: 0, spire: { rise: 7, col: '#d6c9ad' } },   // minaret: shaft; gallery and spire authored
+  w301676199: { h: 13, shape: 'flat', wall: '#efeee9', variant: 3, floorH: 0, flatCol: [214, 212, 206] },   // Teatro Aberto: white box, flat roof
   w155331041: { shape: 'flat', wall: '#efefeb', flatCol: [222, 222, 218], variant: 3, parapet: 0.8 },   // Fundação Champalimaud (Charles Correa)
   r3232954_0: { shape: 'flat', wall: '#ebebe6', flatCol: [214, 214, 210], variant: 3, parapet: 0.6 },   // Pavilhão do Conhecimento (Carrilho da Graça)
   r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
@@ -2398,7 +2409,7 @@ export function jeronimosChurch(S, { ring, fwd, ground, lin, srgb }) {
 // Estádio da Luz (2003): the bowl of red seats under a pale roof that hangs from four steel arches,
 // one along each side. Seats are lofted from the edge of the roof's opening (round the pitch) out and up
 // under the roof; the arches spring from the roof's corners.
-export function estadioLuz(S, { roof, hole, ground, lin, srgb }) {
+export function estadioLuz(S, { roof, hole, outer = null, ground, lin, srgb }) {
   const red = lin(srgb('#b3272e')), red2 = lin(srgb('#9c2128')), steel = lin(srgb('#dcdedf')), conc = lin(srgb('#a9a7a2'));
   const PL = [KIND.PLAIN / 8, 5 / 8, 0.7, 1], I0 = [0, 0, 0, 0];
   const c = hole.reduce((a, p) => [a[0] + p[0] / hole.length, a[1] + p[1] / hole.length], [0, 0]);
@@ -2412,12 +2423,21 @@ export function estadioLuz(S, { roof, hole, ground, lin, srgb }) {
       tri(S, A[i], A[j], B[j], up, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, A[i], B[j], B[i], up, col, [0, 0], [0, 0], [0, 0], I0, PL);
     }
   }
-  // the façade: the roof's outline carried down to the podium in bands of glass and grey cladding
-  const sg = polyArea(roof) > 0 ? 1 : -1;
-  for (let i = 0; i < roof.length; i++) {
-    const a = roof[i], b = roof[(i + 1) % roof.length]; if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.2) continue;
-    const [p, q] = sg > 0 ? [a, b] : [b, a];
-    for (let k = 0; k < 8; k++) { const z0 = ground + 5.5 + k * 4.25; wallQuad(S, p, q, z0, z0, z0 + 4.25, z0 + 4.25, k % 2 ? lin(srgb('#8e9aa1')) : lin(srgb('#d2d4d4')), 0, 1, ground, I0, PL); }
+  // the bowl's outer wall on the stadium's own outline (checked against Earth): dark glazing in deep bands with pale ledges from the
+  // podium up to ~34 m, and the pale membrane roof sloping up from that rim to the roof ring under the arches
+  const hit = (r, a) => { const dx = Math.cos(a), dy = Math.sin(a); let best = 0;
+    for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length], ex = q[0] - p[0], ey = q[1] - p[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue;
+      const wx = p[0] - c[0], wy = p[1] - c[1], t = (wx * ey - wy * ex) / den, s = (wx * dy - wy * dx) / den; if (t > 0 && s >= 0 && s <= 1) best = Math.max(best, t); } return best; };
+  const N = 144, Ang = Array.from({ length: N }, (_, k) => (k / N) * Math.PI * 2);
+  const W = outer || roof, Ro = Ang.map((a) => hit(W, a) - (outer ? 3 : 0)), Rr = Ang.map((a) => hit(roof, a));
+  const Q = (k, r, z) => [c[0] + Math.cos(Ang[k % N]) * r, ground + z, -(c[1] + Math.sin(Ang[k % N]) * r)];
+  const quad = (a, b, cc, d, col, up) => { let n = norm(a, b, cc); if ((up > 0 && n[1] < 0) || (up < 0 && n[1] > 0) || (up === 0 && n[0] * (a[0] - c[0]) + n[2] * (a[2] + c[1]) < 0)) n = n.map((q) => -q);
+    tri(S, a, b, cc, n, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, cc, d, n, col, [0, 0], [0, 0], [0, 0], I0, PL); };
+  const glass = lin(srgb('#39434d')), ledge = lin(srgb('#e3e4e2')), memb = lin(srgb('#d5d8d8')), memb2 = lin(srgb('#cbcfd0'));
+  const bands = [[5.5, 6.5, ledge], [6.5, 12, glass], [12, 13, ledge], [13, 19, glass], [19, 20, ledge], [20, 26.5, glass], [26.5, 27.5, ledge], [27.5, 33, glass], [33, 34.5, ledge]];
+  for (let k = 0; k < N; k++) { const k2 = (k + 1) % N;
+    for (const [z0, z1, col] of bands) quad(Q(k, Ro[k], z0), Q(k + 1, Ro[k2], z0), Q(k + 1, Ro[k2], z1), Q(k, Ro[k], z1), col, 0);
+    if (Rr[k] < Ro[k] - 1 && Rr[k2] < Ro[k2] - 1) quad(Q(k, Ro[k], 34.5), Q(k + 1, Ro[k2], 34.5), Q(k + 1, Rr[k2], 39.8), Q(k, Rr[k], 39.8), k % 8 < 4 ? memb : memb2, 1);
   }
   const o = obb(roof), zr = 41, archC = lin(srgb('#a3262c'));
   const P = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
@@ -2675,10 +2695,12 @@ export function alvaladeStadium(S, { ring, hole, ground, lin, srgb, H = 36 }) {
   const nrm = (a, b, d) => { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]; const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; return n.map((q) => q / l); };
   const quad = (a, b, cc, d, col, up) => { let n = nrm(a, b, d); if ((up > 0 && n[1] < 0) || (up < 0 && n[1] > 0)) n = n.map((q) => -q); tri(S, a, b, cc, n, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, cc, d, n, col, [0, 0], [0, 0], [0, 0], I0, PL); };
   // stands: lower tier, a concourse band, upper tier, rising to the roof's inner shadow line
+  const seatC = ['#1f5a44', '#1a4637', '#2a4862', '#262f36', '#3a7853', '#c4a33a', '#d6d6cf'].map((h) => lin(srgb(h)));
   const tiers = [[0, 1.2], [0.42, 15], [0.45, 17], [0.86, 33]];   // fraction of the way from the pitch edge to the outer wall, height
   const rAt = (k, f) => Ri[k] + (Ro[k] - Ri[k]) * f;
   for (let t = 0; t + 1 < tiers.length; t++) for (let k = 0; k < N; k++) {
-    const col = t === 1 ? conc : (k + t) % 2 ? green : green2;
+    const hs = Math.sin(k * 91.7 + t * 37.3) * 43758.5453, hv = hs - Math.floor(hs);   // seats: a dark mosaic of greens, navy and charcoal with yellow and white flecks (reads dark from the air, as on Earth)
+    const col = t === 1 ? conc : seatC[hv < 0.3 ? 0 : hv < 0.52 ? 1 : hv < 0.7 ? 2 : hv < 0.84 ? 3 : hv < 0.93 ? 4 : hv < 0.97 ? 5 : 6];
     quad(P(k, rAt(k, tiers[t][0]), tiers[t][1]), P(k + 1, rAt((k + 1) % N, tiers[t][0]), tiers[t][1]), P(k + 1, rAt((k + 1) % N, tiers[t + 1][0]), tiers[t + 1][1]), P(k, rAt(k, tiers[t + 1][0]), tiers[t + 1][1]), col, 1);
   }
   // façade: coloured ceramic panels, 3 m wide, 4.5 m tall, a deterministic mosaic
@@ -2692,7 +2714,7 @@ export function alvaladeStadium(S, { ring, hole, ground, lin, srgb, H = 36 }) {
   }
   // roof: a round, pale sage translucent disc reaching right to the rectangular opening over the pitch, with cream opaque
   // panels along each side of the opening (not at the corners); hung by cables from four green lattice masts on the diagonals
-  const sage = lin(srgb('#b9cc9f')), sage2 = lin(srgb('#adc293')), cream = lin(srgb('#e4dcc2')), mastC = lin(srgb('#2f7a55'));
+  const sage = lin(srgb('#b3ca8f')), sage2 = lin(srgb('#a8c086')), cream = lin(srgb('#e4dcc2')), mastC = lin(srgb('#2f7a55'));
   const oh = obb(hole);
   const sideMid = (k) => { const x = c[0] + Math.cos(A[k]) * Ri[k] - oh.cx, y = c[1] + Math.sin(A[k]) * Ri[k] - oh.cy;
     const u = x * oh.ux + y * oh.uy, v = -x * oh.uy + y * oh.ux; return !(Math.abs(u) > oh.hl * 0.8 && Math.abs(v) > oh.hw * 0.72); };   // anywhere along a side, not round a corner
@@ -3058,4 +3080,45 @@ export function sawtoothRoof(S, { outer, holes = [], z0, metal = '#a7aaab', glas
     flush(o.hl);
   }
   return n;
+}
+
+// A smooth masonry or tiled dome: a spherical cap from the rim (z0) up by rise, with a short finial.
+export function plainDome(S, { cx, cy, r, z0, rise, col, lin, srgb, seg = 24, finial = '#c8b98f' }) {
+  const c = Array.isArray(col) ? col : lin(srgb(col)), PL = [KIND.PLAIN / 8, 5 / 8, 0.55, 1], I0 = [0, 0, 0, 0];
+  const R = (r * r + rise * rise) / (2 * rise), zc = z0 + rise - R, rings = 7, phi0 = Math.asin(Math.min(1, r / R));
+  const V = (i, k) => { const ph = phi0 * (1 - k / rings), th = (i / seg) * 2 * Math.PI, rr = R * Math.sin(ph); return [cx + rr * Math.cos(th), zc + R * Math.cos(ph), -(cy + rr * Math.sin(th))]; };
+  const N = (p) => { const v = [p[0] - cx, p[1] - zc, p[2] + cy], l = Math.hypot(...v); return v.map((q) => q / l); };
+  for (let i = 0; i < seg; i++) for (let k = 0; k < rings; k++) {
+    const p00 = V(i, k), p10 = V(i + 1, k), p01 = V(i, k + 1), p11 = V(i + 1, k + 1);
+    tri(S, p00, p10, p11, N(p00), c, [0, 0], [1, 0], [1, 1], I0, PL);
+    if (k < rings - 1) tri(S, p00, p11, p01, N(p00), c, [0, 0], [1, 1], [0, 1], I0, PL);
+  }
+  const f = lin(srgb(finial));
+  limb(S, [cx, z0 + rise - 0.1, -cy], [cx, z0 + rise + Math.max(1, r * 0.25), -cy], 0.12 + r * 0.02, 0.08, 6, f, PL, true);
+}
+// Minaret top: a gallery ring on brackets, then a slender cone.
+export function minaretTop(S, { cx, cy, r, z0, rise, col, lin, srgb }) {
+  const c = lin(srgb(col)), PL = [KIND.PLAIN / 8, 5 / 8, 0.55, 1];
+  limb(S, [cx, z0 - 4.2, -cy], [cx, z0 - 3.6, -cy], r + 0.9, r + 0.9, 12, c, PL, true);   // gallery floor
+  limb(S, [cx, z0 - 3.6, -cy], [cx, z0 - 2.6, -cy], r + 0.85, r + 0.85, 12, c, PL, false);   // its parapet
+  limb(S, [cx, z0, -cy], [cx, z0 + 0.5, -cy], r + 0.3, r + 0.3, 12, c, PL, true);
+  limb(S, [cx, z0 + 0.5, -cy], [cx, z0 + rise, -cy], r + 0.1, 0.08, 12, c, PL, true);
+  limb(S, [cx, z0 + rise, -cy], [cx, z0 + rise + 1.2, -cy], 0.07, 0.05, 4, lin(srgb('#c8b98f')), PL, true);
+}
+
+// A glazed half-round vault swept along a plan polyline (Colombo's long skylit malls), half-width hw, rise, on a roof at z0,
+// with a metal rib every third section.
+export function vaultAlong(S, { path, hw, rise, z0, col = '#8fa9ad', rib = '#d8dcdc', lin, srgb }) {
+  const g = lin(srgb(col)), g2 = g.map((v) => v * 0.86), m = lin(srgb(rib)), PL = [KIND.PLAIN / 8, 5 / 8, 0.25, 1], I0 = [0, 0, 0, 0], nV = 6;
+  const nrm = path.map((p, i) => { const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; });
+  const P = (i, j) => { const v = -1 + (2 * j) / nV, [x, y] = path[i], [nx, ny] = nrm[i]; return [x + nx * hw * v, z0 + rise * Math.sqrt(Math.max(0, 1 - v * v)), -(y + ny * hw * v)]; };
+  for (let i = 0; i + 1 < path.length; i++) for (let j = 0; j < nV; j++) {
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
+    let n = norm(a, b, c); if (n[1] < 0) n = n.map((q) => -q);
+    const col = (i + j) % 2 ? g : g2;
+    tri(S, a, b, c, n, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, c, d, n, col, [0, 0], [0, 0], [0, 0], I0, PL);
+  }
+  for (let i = 0; i < path.length; i += 3) for (let j = 0; j < nV; j++) limb(S, P(i, j), P(i, j + 1), 0.13, 0.13, 4, m, PL, false);
+  for (const i of [0, path.length - 1]) { const pts = Array.from({ length: nV + 1 }, (_, j) => P(i, j)), cc = [path[i][0], z0, -path[i][1]];   // glazed end walls
+    for (let j = 0; j < nV; j++) { let n = norm(cc, pts[j], pts[j + 1]); tri(S, cc, pts[j], pts[j + 1], n, g2, [0, 0], [0, 0], [0, 0], I0, PL); } }
 }

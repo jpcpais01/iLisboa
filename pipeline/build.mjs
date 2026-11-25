@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -305,14 +305,14 @@ const RESI_KINDS = new Set(['residential', 'apartments', 'yes', 'flats', 'dormit
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
 // Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
-const POMBALINE = pal([['#f1ece2', 40], ['#ece0c2', 14], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
+const POMBALINE = pal([['#f1ece2', 55], ['#ece0c2', 14], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
 const VERNACULAR = pal([['#f5f2eb', 60], ['#ece8de', 14], ['#f0e3c4', 8], ['#efcc7e', 4], ['#ecb79e', 4], ['#bcd3e3', 2], ['#d3dfb8', 1], ['#e8ac84', 2], ['#e2bccb', 2], ['#c86a53', 1], ['#b8cbbb', 1], ['#f3d899', 3]]);   // re-checked 2026-11-25 against Earth over Alfama and Bairro Alto: four in five are white or off-white   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
 const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
 const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
 const ROOFS = pal([['#b5725f', 5], ['#bd7e69', 4], ['#a86a59', 3], ['#c28a75', 3], ['#9a6152', 2], ['#b27765', 3]]);   // sun-faded salmon terracotta (Earth over Alfama/Bairro Alto reads lighter and pinker than new tile)   // weathered terracotta, lighter with sun and lichen
-const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2]]);   // newer machine-made tiles, brighter than the old town's
+const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2], ['#a9705f', 2], ['#9e6b5c', 1]]);   // newer machine-made tiles, brighter than the old town's
 const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
@@ -408,7 +408,7 @@ function buildingSpec(p) {
   const instOut = !core && !church && !palace && !castle && ['school', 'university', 'college', 'hospital', 'public', 'civic', 'government', 'kindergarten'].includes(kind) && h >= 7;
   const bizOut = !core && !church && !palace && ['office', 'commercial', 'retail', 'hotel'].includes(kind) && h >= 9;
   let variant = hall ? 1 : resiTall || instOut || (newTown && RESI_KINDS.has(kind) && h >= 9 && !church) ? 8 : bizOut || (newTown && !church && !palace && h >= 9) ? 3 : (modern && !(levels >= 9 && RESI_KINDS.has(kind) && !MODERN.has(kind))) || officeTall ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
-  if ((variant === 0 || variant === 1) && !hall && u('azu') < (variant === 1 ? 0.16 : 0.1)) variant = 2; // azulejo-clad
+  if ((variant === 0 || variant === 1) && !hall && u('azu') < (variant === 1 ? 0.11 : 0.08)) variant = 2; // azulejo-clad
   const stone = castle || pillar || (church && !t['building:colour']) || (monument && !UTILITY.has(kind));
   const utility = UTILITY.has(kind) || p.area < 25 || hall;
   // roof shape
@@ -532,8 +532,11 @@ function addBuilding_(p) {
   const planarOK = ob && !p.holes.length && fill > 0.72 && p.outer.length <= 40 && !['dome', 'onion', 'cone'].includes(s.shape);
   let wallTop = top, sk = null, mode = 'flat';
   const sl = Math.tan((s.pitch * Math.PI) / 180);
-  let barrel = null;
-  if (s.shape === 'round') {   // barrel vault along the long axis of a near-rectangular plan; otherwise flat
+  let barrel = null, domeR = null;
+  if (s.shape === 'dome' && ob && ob.hw / ob.hl > 0.8 && fill > 0.7 && fill < 0.87 && !p.holes.length) {   // a round plan under roof:shape=dome: a true spherical cap on a drum (the straight-skeleton dome came out as a cone)
+    const r = Math.sqrt(Math.abs(p.area) / Math.PI); wallTop = top - Math.min(s.roofH ?? r * 0.85, Math.max(0, s.h - s.minH - 1)); domeR = { r, rise: top - wallTop };
+  }
+  else if (s.shape === 'round') {   // barrel vault along the long axis of a near-rectangular plan; otherwise flat
     if (planarOK && ob.hw > 6) { barrel = { ob, rise: s.roofH ?? Math.min(9, ob.hw * 0.32) }; wallTop = top - Math.min(barrel.rise, Math.max(0, s.h - s.minH - 2.5)); barrel.rise = top - wallTop; }
   }
   else if (pitched && s.shape !== 'flat') {
@@ -558,6 +561,7 @@ function addBuilding_(p) {
   const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1], D: T.d };
   const res = buildRoofAndWalls(S, ctx);
   if (barrel) barrelRoof(S, { ob: barrel.ob, z0: wallTop, rise: barrel.rise, col: colRoof, under: colWall });
+  if (domeR && domeR.rise > 0.5) { plainDome(S, { cx: p.c[0], cy: p.c[1], r: domeR.r * 0.98, z0: wallTop, rise: domeR.rise, col: colRoof, lin, srgb }); stats.domes = (stats.domes || 0) + 1; }
   if (mode === 'flat' && ['industrial', 'warehouse', 'manufacture', 'factory'].includes(s.kind) && Math.abs(p.area) > 2500 && !OVERRIDES[p.id] && hash(p.id + 'saw') < 0.7) {
     const k = sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb }); if (k) stats.sawtooth = (stats.sawtooth || 0) + 1;
   }
@@ -817,6 +821,23 @@ function addBuilding_(p) {
     if (tw && inArea(tw.c)) { const o = obb(tw.outer); sailCrown(tileB(...tw.c), { ring: tw.outer, z0: groundAt(...tw.c) + OVERRIDES[id].h, rise: 18, toward: o.ux > 0 ? 1 : -1, col: '#b9cdd6', lin, srgb }); mark(); } }
   { const tm = byId.get('w193025303');   // Torre de Monsanto: the slanted glass top, rising 20 m to the north
     if (tm && inArea(tm.c)) { slopedCrown(tileB(...tm.c), { ring: tm.outer, z0: groundAt(...tm.c) + OVERRIDES['w193025303'].h, rise: 20, up: [0, 1], col: '#4b6577', lin, srgb }); mark(); } }
+  for (const [id, o] of Object.entries(OVERRIDES)) if (o.dome || o.spire) { const d = byId.get(id);   // authored domes and minaret spires on their mapped parts
+    if (!d || !inArea(d.c)) continue; const r = Math.sqrt(Math.abs(d.area) / Math.PI), g = groundAt(...d.c);
+    if (o.dome) plainDome(tileB(...d.c), { cx: d.c[0], cy: d.c[1], r: r * 0.97, z0: g + o.h, rise: o.dome.rise, col: o.dome.col, lin, srgb });
+    else minaretTop(tileB(...d.c), { cx: d.c[0], cy: d.c[1], r: Math.min(r, 2.6) * 0.9, z0: g + o.h, rise: o.spire.rise, col: o.spire.col, lin, srgb });
+    mark(); }
+  { const pc = byId.get('w1464595790');   // Centro Colombo (checked top-down on Earth): a long glazed vault arcs round the north of Praça Central's dome
+    if (pc && inArea(pc.c)) {                // at ~54 m and runs on in straight malls to the south-west and east; small glass pyramids light the plaza roof
+      const cx = -4236, cy = 4518, z0 = groundAt(cx, cy) + (OVERRIDES.w42645796?.h ?? 18) + 0.2, R = 54, path = [];
+      const A0 = (20 * Math.PI) / 180, A1 = (160 * Math.PI) / 180, e1 = [cx + Math.cos(A1) * R, cy + Math.sin(A1) * R], e0 = [cx + Math.cos(A0) * R, cy + Math.sin(A0) * R];
+      for (let k = 11; k >= 1; k--) path.push([e1[0] - 0.61 * 5 * k, e1[1] - 0.79 * 5 * k]);
+      for (let k = 0; k <= 28; k++) { const a = A1 - ((A1 - A0) * k) / 28; path.push([cx + Math.cos(a) * R, cy + Math.sin(a) * R]); }
+      for (let k = 1; k <= 9; k++) path.push([e0[0] + 0.9 * 5 * k, e0[1] - 0.43 * 5 * k]);
+      vaultAlong(tileB(cx, cy), { path, hw: 6.5, rise: 4.8, z0, lin, srgb });
+      const gl = lin(srgb('#8fa9ad')), PLg = [KIND.PLAIN / 8, 5 / 8, 0.25, 1];
+      for (const deg of [10, 50, 90, 130, 170, 210, 330]) { const a = (deg * Math.PI) / 180, x = cx + Math.cos(a) * 37, y = cy + Math.sin(a) * 37;
+        limb(tileB(cx, cy), [x, z0, -y], [x, z0 + 2.6, -y], 2.6, 0.06, 4, gl, PLg, true); }
+      mark(); } }
   { const gt = byId.get('w151780623');   // Torre da Galp: refinery flare tower
     if (gt && inArea(gt.c)) { flareTower(tileB(...gt.c), { c: gt.c, ground: groundAt(...gt.c), H: parseMeters(gt.tags.height) || 90, lin, srgb }); mark(); } }
   { const vg = byId.get('w240816973');   // Centro Vasco da Gama: the long glass vault (with water running over it) down its spine
@@ -824,7 +845,7 @@ function addBuilding_(p) {
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms
     if (cn && inArea(cn.c)) { oriente(tileB(...cn.c), { canopy: cn.outer, ground: groundAt(...cn.c), deck: 11.6, lin, srgb }); mark(); } }
   { const rf = byId.get('r16349886_0');   // Estádio da Luz: seats and the four arches
-    if (rf && rf.holes.length && inArea(rf.c)) { estadioLuz(tileB(...rf.c), { roof: rf.outer, hole: rf.holes[0], ground: groundAt(...rf.c), lin, srgb }); mark(); } }
+    if (rf && rf.holes.length && inArea(rf.c)) { estadioLuz(tileB(...rf.c), { roof: rf.outer, hole: rf.holes[0], outer: byId.get('r9143921_0')?.outer, ground: groundAt(...rf.c), lin, srgb }); mark(); } }
   { const tb = byId.get('w24341353');   // Torre de Belém on its mapped outline
     if (tb && inArea(tb.c)) { torreBelem(tileB(...tb.c), { fwd: proj.fwd, ring: tb.outer, ground: Math.max(LAND_MIN, tb.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity)), lin, srgb }); mark(); } }
   { const hull = byId.get('w152327819'), sl = byId.get('w259346570');   // Padrão dos Descobrimentos
@@ -1112,6 +1133,24 @@ const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), 
         box(S, x, y, dx, dy, 0.6, th / 2, z - 0.05, z + 1.1, col, SI, st);
       }
       stats.wallsM += L;
+    }
+  }
+  // clipped hedges (barrier=hedge): box and laurel along garden edges, the parterres of Parque Eduardo VII and Belém
+  const hedges = extractLines(els, proj, (t) => t.barrier === 'hedge' && t.area !== 'yes');
+  for (const w of hedges) {
+    const H = Math.min(3, parseMeters(w.tags.height) ?? 1.2), th = 0.9, hc = hash(w.id + 'hc'), col = lin(srgb(hc < 0.4 ? '#4b6a3a' : hc < 0.75 ? '#557343' : '#425f35'));
+    for (let i = 0; i + 1 < w.pts.length; i++) {
+      const a = w.pts[i], b = w.pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.3) continue;
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      if (mx < minX || mx > maxX || my < minY || my > maxY) continue;
+      const S = getTile(...tileOf(mx, my)).b, st = PL(hash(w.id + i)), dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, nx = -dy * th / 2, ny = dx * th / 2;
+      const ga = groundAt(a[0], a[1]), gb = groundAt(b[0], b[1]);
+      const q = [[a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny], [b[0] - nx, b[1] - ny], [a[0] - nx, a[1] - ny]], zb = [ga, gb, gb, ga], zt = zb.map((z) => z + H);
+      wallQuad(S, q[3], q[2], zb[3] - 0.3, zb[2] - 0.3, zt[3], zt[2], col, 0, L, zb[3], SI, st);
+      wallQuad(S, q[1], q[0], zb[1] - 0.3, zb[0] - 0.3, zt[1], zt[0], col, 0, L, zb[1], SI, st);
+      triUp(S, [q[0][0], zt[0], -q[0][1]], [q[1][0], zt[1], -q[1][1]], [q[2][0], zt[2], -q[2][1]], col.map((v) => v * 1.1), [0, 0], [0, 0], [0, 0], SI, st);
+      triUp(S, [q[0][0], zt[0], -q[0][1]], [q[2][0], zt[2], -q[2][1]], [q[3][0], zt[3], -q[3][1]], col.map((v) => v * 1.1), [0, 0], [0, 0], [0, 0], SI, st);
+      stats.hedgeM = (stats.hedgeM || 0) + L;
     }
   }
 }
