@@ -841,101 +841,221 @@ function kit(S, { cx, cy, ux, uy, ground, zb, wall, roof, ST, TL }) {
   return { P2, W3, blk, block, crenel, gable, arch };
 }
 
+// Openings kit in a local frame (P2 for plan points, F for 3D): tbox = box along any local tangent;
+// win = window/door on a wall at (u, v) facing (nu, nv): dark opening just proud of the wall, frame, hood ('cornice' | 'pediment' | 'arch' | 'round')
+function openings(S, P2, F, ux, uy, ground, trim, dark, ST) {
+  const I0 = [0, 0, 0, 0];
+  const tbox = (u, v, tu, tv, ht, hn, z0, z1, col) => { const [x, y] = P2(u, v); box(S, x, y, ux * tu - uy * tv, uy * tu + ux * tv, ht, hn, ground + z0, ground + z1, col, I0, ST); };
+  const arc = (u, v, tu, tv, z, r, rw, rh, col, n = 9) => sweep(S, F, Array.from({ length: n }, (_, k) => { const t = Math.PI * (k / (n - 1)); return [u + tu * Math.cos(t) * r, v + tv * Math.cos(t) * r, z + Math.sin(t) * r, rw, rh]; }), col, ST, 5);
+  const win = (u, v, nu, nv, z0, w, h, hood = 'cornice', fd = 0.15) => {
+    const tu = -nv, tv = nu, o = (d) => [u + nu * d, v + nv * d];
+    tbox(...o(0.04), tu, tv, w / 2, 0.05, z0, z0 + h, dark);
+    if (hood === 'round') { const c = o(0.04); sweep(S, F, Array.from({ length: 7 }, (_, k) => { const t = Math.PI * (k / 6); return [c[0] + tu * Math.cos(t) * w * 0.25, c[1] + tv * Math.cos(t) * w * 0.25, z0 + h + Math.sin(t) * w * 0.45, w * 0.25, 0.05]; }), dark, ST, 4); }
+    for (const s of [-1, 1]) { const q = o(fd); tbox(q[0] + tu * s * (w / 2 + 0.17), q[1] + tv * s * (w / 2 + 0.17), tu, tv, 0.17, fd, z0 - 0.1, z0 + h + 0.1, trim); }
+    tbox(...o(fd + 0.05), tu, tv, w / 2 + 0.4, fd + 0.05, z0 - 0.3, z0 - 0.08, trim);
+    if (hood === 'cornice') { tbox(...o(fd), tu, tv, w / 2 + 0.34, fd, z0 + h, z0 + h + 0.3, trim); tbox(...o(fd + 0.1), tu, tv, w / 2 + 0.6, fd + 0.1, z0 + h + 0.3, z0 + h + 0.55, trim); }
+    if (hood === 'pediment') { tbox(...o(fd), tu, tv, w / 2 + 0.34, fd, z0 + h, z0 + h + 0.3, trim); const c = o(0.2), A = F(c[0] - tu * (w / 2 + 0.6), c[1] - tv * (w / 2 + 0.6), z0 + h + 0.35), B = F(c[0] + tu * (w / 2 + 0.6), c[1] + tv * (w / 2 + 0.6), z0 + h + 0.35), T = F(c[0], c[1], z0 + h + 1.3); slab4(S, [A, B, T, T], 0.35, trim, ST); }
+    if (hood === 'arch' || hood === 'round') arc(...o(fd * 0.8), tu, tv, z0 + h, w / 2 + 0.17, 0.17, fd + 0.05, trim);
+  };
+  return { tbox, win, arc };
+}
+
 // Sé de Lisboa (12th c., Romanesque with a Gothic chevet). West front with two crenellated towers,
 // rose window and deep portal; three-aisled nave; transept with a crenellated lantern; apse and ambulatory.
 // Frame from the OBB of the mapped cathedral parts: u runs west→east along the nave.
 export function seCathedral(S, { cx, cy, ux, uy, hl, ground, gmin, lin, srgb }) {
-  const stone = lin(srgb('#d8ccb2')), stone2 = lin(srgb('#cbbd9f')), dark = lin(srgb('#3b3a37')), roof = lin(srgb('#a8604a'));
+  const stone = lin(srgb('#d8ccb2')), stone2 = lin(srgb('#cbbd9f')), dark = lin(srgb('#2f2e2c')), roof = lin(srgb('#a8604a')), trim = lin(srgb('#e2d7bf'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.53, 0.9], I0 = [0, 0, 0, 0], TL = [KIND.TILES / 8, 5 / 8, 0.53, 1];
   const zb = gmin - ground - 1.5;
   const { P2, W3, block, crenel, gable } = kit(S, { cx, cy, ux, uy, ground, zb, wall: stone, roof, ST, TL });
+  const F = (u, v, z) => W3(u, v, z);
+  const { tbox, win, arc } = openings(S, P2, F, ux, uy, ground, trim, dark, ST);
   const W = -hl;                                     // west front
-  // towers
+  // towers: corner buttress strips, string courses, paired round-arched belfry openings, crenellations
   for (const s of [-1, 1]) {
-    const v0 = s > 0 ? 6 : -16, v1 = s > 0 ? 16 : -6;
+    const v0 = s > 0 ? 6 : -16, v1 = s > 0 ? 16 : -6, vm = (v0 + v1) / 2;
     block(W, W + 10, v0, v1, 27.5);
-    block(W - 0.3, W + 10.3, v0 - 0.3, v1 + 0.3, 1.0, stone2);                       // plinth
+    block(W - 0.3, W + 10.3, v0 - 0.3, v1 + 0.3, 1.0, stone2);
+    for (const [a, b] of [[W, v0], [W, v1], [W + 10, s > 0 ? v1 : v0]]) tbox(a, b, 1, 0, 0.7, 0.7, zb, 26.6, stone2);
+    for (const z of [9.5, 18.2]) { tbox(W - 0.15, vm, 0, 1, 5.2, 0.2, z, z + 0.35, trim); tbox(W + 5, s > 0 ? v1 + 0.15 : v0 - 0.15, 1, 0, 5.2, 0.2, z, z + 0.35, trim); }
+    tbox(W + 5, vm, 1, 0, 5.4, 5.4, 26.6, 27.5, trim);
     crenel(W + 0.4, W + 9.6, v0 + 0.4, v1 - 0.4, 27.5);
-    for (const v of [v0 + 3, v1 - 3]) { const [x, y] = P2(W - 0.08, v); box(S, x, y, ux, uy, 0.12, 0.8, ground + 20, ground + 24.5, dark, I0, ST); }  // belfry openings
-    for (const u of [W + 3, W + 7]) { const [x, y] = P2(u, s > 0 ? v1 + 0.08 : v0 - 0.08); box(S, x, y, ux, uy, 0.8, 0.12, ground + 20, ground + 24.5, dark, I0, ST); }
+    for (const t of [-1.25, 1.25]) {
+      win(W, vm + t * 1.6, -1, 0, 20.5, 1.6, 3.6, 'arch', 0.2);
+      win(W + 5 + t * 1.6, s > 0 ? v1 : v0, 0, s, 20.5, 1.6, 3.6, 'arch', 0.2);
+    }
+    tbox(W - 0.1, vm, 0, 1, 0.18, 0.18, 20.4, 24.3, trim);
+    win(W, vm, -1, 0, 12.6, 0.7, 2.2, 'round', 0.12);           // narrow slit windows lower down
+    win(W + 5, s > 0 ? v1 : v0, 0, s, 12.6, 0.7, 2.2, 'round', 0.12);
   }
-  // central front: portal and rose window, crenellated
+  // central front: Romanesque portal with five receding archivolts on colonnettes, rose window with tracery, crenellated
   block(W, W + 10, -6, 6, 22.5);
   crenel(W + 0.4, W + 9.6, -5.6, 5.6, 22.5);
-  { const [x, y] = P2(W - 0.6, 0); box(S, x, y, ux, uy, 0.7, 3.4, ground + zb, ground + 9.5, stone2, I0, ST); }       // portal surround
-  { const [x, y] = P2(W - 1.25, 0); box(S, x, y, ux, uy, 0.08, 2.0, ground, ground + 7, dark, I0, ST); }              // doors
-  limb(S, W3(W - 0.15, 0, 15.5), W3(W - 0.05, 0, 15.5), 2.9, 2.9, 20, stone2, ST);                                     // rose window frame
-  limb(S, W3(W - 0.25, 0, 15.5), W3(W - 0.15, 0, 15.5), 2.3, 2.3, 20, dark, ST);
-  // nave + aisles
+  tbox(W - 1.0, 0, 0, 1, 4.4, 1.0, zb, 9.2, stone2);
+  tbox(W - 1.2, 0, 0, 1, 4.7, 1.2, 9.2, 9.6, trim);
+  tbox(W - 2.05, 0, 0, 1, 1.75, 0.06, 0, 4.4, dark);
+  arc(W - 2.04, 0, 0, 1, 4.4, 0.85, 0.85, 0.04, dark, 9);
+  for (let k = 0; k < 5; k++) {
+    const r = 1.95 + k * 0.42, d = -1.85 + k * 0.17;
+    arc(W + d, 0, 0, 1, 4.6, r, 0.2, 0.22, k % 2 ? trim : stone2, 13);
+    for (const s of [-1, 1]) { limb(S, F(W + d, s * r, 0.5), F(W + d, s * r, 4.4), 0.17, 0.15, 7, trim, ST); ell(S, F, [W + d, s * r, 4.5], [0.24, 0.24, 0.16], stone2, ST, 6); }
+  }
+  // rose window
+  { const zc = 15.2, R = 2.9, A = (r, t) => F(W - 0.3, Math.cos(t) * r, zc + Math.sin(t) * r);
+    sweep(S, F, Array.from({ length: 25 }, (_, k) => { const t = (k / 24) * Math.PI * 2; return [W - 0.3, Math.cos(t) * R, zc + Math.sin(t) * R, 0.25, 0.3]; }), trim, ST, 6, false);
+    limb(S, F(W - 0.12, 0, zc), F(W - 0.05, 0, zc), R, R, 24, dark, ST);
+    sweep(S, F, Array.from({ length: 13 }, (_, k) => { const t = (k / 12) * Math.PI * 2; return [W - 0.3, Math.cos(t) * 0.8, zc + Math.sin(t) * 0.8, 0.12, 0.14]; }), trim, ST, 5, false);
+    for (let k = 0; k < 12; k++) { const t = (k / 12) * Math.PI * 2; limb(S, A(0.8, t), A(R, t), 0.08, 0.08, 4, trim, ST); }
+    sweep(S, F, Array.from({ length: 25 }, (_, k) => { const t = (k / 24) * Math.PI * 2; return [W - 0.35, Math.cos(t) * (R + 0.5), zc + Math.sin(t) * (R + 0.5), 0.2, 0.2]; }), stone2, ST, 5, false); }
+  // nave: clerestory with round-arched windows, corbel table; aisles with lean-to roofs, windows, buttresses
   const nE = hl - 22;
   block(W + 10, nE, -7, 7, 17.5); gable(W + 10, nE, -7.4, 7.4, 17.5, 22.5);
   for (const s of [-1, 1]) {
-    const v0 = s > 0 ? 7 : -12, v1 = s > 0 ? 12 : -7;
+    const v0 = s > 0 ? 7 : -12, v1 = s > 0 ? 12 : -7, vo = s > 0 ? v1 : v0;
     block(W + 10, nE, v0, v1, 11);
-    const vi = s > 0 ? v0 : v1, vo = s > 0 ? v1 + 0.4 : v0 - 0.4;  // lean-to roof
-    triUp(S, W3(W + 10, vo, 11), W3(nE, vo, 11), W3(nE, vi, 13.2), roof, [0, 0], [1, 0], [0, 1], I0, TL);
-    triUp(S, W3(W + 10, vo, 11), W3(nE, vi, 13.2), W3(W + 10, vi, 13.2), roof, [0, 0], [1, 0], [0, 1], I0, TL);
-    for (let u = W + 13; u < nE - 1; u += 4.5) { const [x, y] = P2(u, s > 0 ? v1 + 0.06 : v0 - 0.06); box(S, x, y, ux, uy, 0.45, 0.1, ground + 4, ground + 8, dark, I0, ST); }   // aisle windows
-    for (let u = W + 13; u < nE - 1; u += 4.5) { const [x, y] = P2(u, s > 0 ? 7.06 : -7.06); box(S, x, y, ux, uy, 0.4, 0.1, ground + 13.8, ground + 16.4, dark, I0, ST); }  // clerestory
+    const vi = s > 0 ? v0 : v1, vr = s > 0 ? v1 + 0.4 : v0 - 0.4;
+    triUp(S, W3(W + 10, vr, 11), W3(nE, vr, 11), W3(nE, vi, 13.2), roof, [0, 0], [1, 0], [0, 1], I0, TL);
+    triUp(S, W3(W + 10, vr, 11), W3(nE, vi, 13.2), W3(W + 10, vi, 13.2), roof, [0, 0], [1, 0], [0, 1], I0, TL);
+    tbox((W + 10 + nE) / 2, vo + s * 0.15, 1, 0, (nE - W - 10) / 2, 0.25, 10.4, 10.9, trim);   // corbel table
+    tbox((W + 10 + nE) / 2, s * 7.15, 1, 0, (nE - W - 10) / 2, 0.25, 17.0, 17.5, trim);
+    for (let u = W + 12.25; u < nE - 1; u += 4.5) {
+      win(u, vo, 0, s, 4.2, 1.0, 3.2, 'arch', 0.18);
+      win(u, s * 7, 0, s, 13.6, 0.9, 2.4, 'arch', 0.15);
+      tbox(u + 2.25, vo + s * 0.55, 1, 0, 0.5, 0.55, zb, 9.2, stone2);
+      slab4(S, [F(u + 1.85, vo + s * 1.1, 9.2), F(u + 2.65, vo + s * 1.1, 9.2), F(u + 2.65, vo, 10.6), F(u + 1.85, vo, 10.6)], 0.12, stone2, ST);
+    }
   }
-  // transept and crossing lantern
+  // transept and crossing lantern (crenellated, with paired windows)
   block(nE - 10, nE, -16, 16, 17.5); gable(nE - 10, nE, -16.4, 16.4, 17.5, 22, false);
+  for (const s of [-1, 1]) { win(nE - 5, s * 16, 0, s, 10.5, 1.4, 3.8, 'arch', 0.2); for (const u of [nE - 10, nE]) tbox(u, s * 15.6, 1, 0, 0.6, 0.6, zb, 16.8, stone2); }
   block(nE - 9.5, nE - 0.5, -4.5, 4.5, 27); crenel(nE - 9.1, nE - 0.9, -4.1, 4.1, 27);
-  for (const s of [-1, 1]) { const [x, y] = P2(nE - 5, s * 4.56); box(S, x, y, ux, uy, 1.4, 0.1, ground + 21.5, ground + 25, dark, I0, ST); }
-  // apse + ambulatory: half-polygons around (nE, 0)
-  const semi = (r, z1, zr, col) => {
-    const n = 10, pts = Array.from({ length: n + 1 }, (_, k) => { const a = -Math.PI / 2 + (k / n) * Math.PI; return [nE + Math.cos(a) * r, Math.sin(a) * r]; });
+  tbox(nE - 5, 0, 1, 0, 4.8, 4.8, 26.3, 26.7, trim);
+  for (const s of [-1, 1]) for (const t of [-1.3, 1.3]) { win(nE - 5 + t, s * 4.5, 0, s, 22.0, 1.0, 2.8, 'arch', 0.15); win(nE - 9.5 + (s < 0 ? 0 : 9), t, s, 0, 22.0, 1.0, 2.8, 'arch', 0.15); }
+  // Gothic chevet: ambulatory with radiating chapels, flying buttresses from the apse, crenellated tops
+  const semi = (r, z1, zr, col, n = 10) => {
+    const pts = Array.from({ length: n + 1 }, (_, k) => { const a = -Math.PI / 2 + (k / n) * Math.PI; return [nE + Math.cos(a) * r, Math.sin(a) * r]; });
     for (let k = 0; k < n; k++) {
       const a = P2(...pts[k + 1]), b = P2(...pts[k]);
       wallQuad(S, b, a, ground + zb, ground + zb, ground + z1, ground + z1, col, 0, 1, ground, I0, ST);
       triUp(S, W3(...pts[k], z1), W3(...pts[k + 1], z1), W3(nE, 0, zr), roof, [0, 0], [1, 0], [0, 1], I0, TL);
     }
+    return pts;
   };
   semi(13, 10.5, 13, stone2);
-  semi(8, 17.5, 22.5, stone);
-  for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + ((k + 0.5) / 5) * Math.PI; const [x, y] = P2(nE + Math.cos(a) * 13.1, Math.sin(a) * 13.1); box(S, x, y, Math.cos(a) * ux - Math.sin(a) * uy, Math.cos(a) * uy + Math.sin(a) * ux, 0.1, 0.45, ground + 3.5, ground + 7.5, dark, I0, ST); }
-  // buttresses along the aisles
-  for (const s of [-1, 1]) for (let u = W + 11; u < nE; u += 4.5) { const [x, y] = P2(u + 2.25, s * 12.6); box(S, x, y, ux, uy, 0.5, 0.6, ground + zb, ground + 9, stone2, I0, ST); }
+  const apse = semi(8, 17.5, 22.5, stone);
+  for (let k = 0; k < 5; k++) {
+    const a = -Math.PI / 2 + ((k + 0.5) / 5) * Math.PI, c = Math.cos(a), sn = Math.sin(a);
+    const CH = (r) => [nE + c * r, sn * r];
+    // radiating chapel: a small polygonal block with a pointed window, pinnacles between
+    const [pu, pv] = CH(14.2); tbox(pu, pv, -sn, c, 2.4, 1.6, zb, 8.6, stone2); tbox(pu, pv, -sn, c, 2.6, 1.8, 8.6, 9.1, trim);
+    win(...CH(15.8), c, sn, 3.2, 0.9, 3.4, 'arch', 0.15);
+    win(...CH(8), c, sn, 12.0, 0.9, 3.6, 'arch', 0.12);
+    // flying buttress from an outer pier to the apse wall
+    const b = -Math.PI / 2 + (k / 5) * Math.PI + (k ? 0 : 0.0001), cb = Math.cos(b), sb = Math.sin(b);
+    if (k) {
+      const pier = [nE + cb * 13.6, sb * 13.6];
+      tbox(pier[0], pier[1], -sb, cb, 0.5, 0.8, zb, 15.2, stone2);
+      limb(S, F(pier[0], pier[1], 15.2), F(pier[0], pier[1], 16.8), 0.4, 0.05, 4, trim, ST);
+      slab4(S, [F(nE + cb * 13.2, sb * 13.2, 13.4), F(nE + cb * 8.1, sb * 8.1, 16.6), F(nE + cb * 8.1, sb * 8.1, 15.8), F(nE + cb * 13.2, sb * 13.2, 12.2)], 0.5, stone2, ST);
+    }
+  }
+  void apse;
 }
 
 // Panteão Nacional (Santa Engrácia): white baroque Greek cross with undulating arms, four corner
 // towers, a tall drum and dome with lantern (~80 m above the street on the slope; ~62 m to the cross).
 export function panteao(S, { cx, cy, ux, uy, ground, gmin, lin, srgb }) {
-  const white = lin(srgb('#f1eee6')), trim = lin(srgb('#ddd6c6')), dark = lin(srgb('#3d3d3b')), domeC = lin(srgb('#e9e5dc'));
+  const white = lin(srgb('#f1eee6')), trim = lin(srgb('#ddd6c6')), dark = lin(srgb('#2f3134')), domeC = lin(srgb('#ebe7de')), pink = lin(srgb('#e3d3c6'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.67, 0.9], I0 = [0, 0, 0, 0];
   const P2 = (u, v) => [cx + ux * u - uy * v, cy + uy * u + ux * v];
+  const F = frame(cx, cy, ux, uy, ground);
   const zb = gmin - ground - 1.5;
   const blk = (u, v, hu, hv, z0, z1, col = white) => { const [x, y] = P2(u, v); box(S, x, y, ux, uy, hu, hv, ground + z0, ground + z1, col, I0, ST); };
-  // cross arms and core
-  blk(0, 0, 27, 10.5, zb, 24); blk(0, 0, 10.5, 23, zb, 24); blk(0, 0, 15, 15, zb, 24);
-  blk(0, 0, 27.4, 10.9, 24, 25.2, trim); blk(0, 0, 10.9, 23.4, 24, 25.2, trim);       // cornice
-  for (const [u, v] of [[27, 0], [-27, 0], [0, 23], [0, -23]]) {                    // arm ends: pediment-like attics + doors
-    const along = u !== 0;
-    blk(u * 0.98, v * 0.98, along ? 0.6 : 6, along ? 6 : 0.6, 25.2, 28.5, white);
-    blk(u * 1.005, v * 1.005, along ? 0.1 : 1.6, along ? 1.6 : 0.1, 0, 6.5, dark);
-    for (const z of [9, 15.5]) for (const o of [-4, 0, 4]) blk(u * 1.005 + (along ? 0 : o), v * 1.005 + (along ? o : 0), along ? 0.1 : 0.7, along ? 0.7 : 0.1, z, z + 3.2, dark);
+  // a box aligned with an arbitrary local direction (tu, tv) = tangent of a wall
+  const tbox = (u, v, tu, tv, ht, hn, z0, z1, col) => { const [x, y] = P2(u, v); box(S, x, y, ux * tu - uy * tv, uy * tu + ux * tv, ht, hn, ground + z0, ground + z1, col, I0, ST); };
+  // framed window on a wall at (u, v) facing (nu, nv): dark glass just proud of the wall, a lioz frame 0.3 deep around it, hood or pediment
+  const win = (u, v, nu, nv, z0, w, h, hood = 'cornice') => {
+    const tu = -nv, tv = nu, o = (d) => [u + nu * d, v + nv * d];
+    tbox(...o(0.04), tu, tv, w / 2, 0.05, z0, z0 + h, dark);
+    for (const s of [-1, 1]) { const q = o(0.15); tbox(q[0] + tu * s * (w / 2 + 0.17), q[1] + tv * s * (w / 2 + 0.17), tu, tv, 0.17, 0.15, z0 - 0.1, z0 + h + 0.1, trim); }
+    tbox(...o(0.2), tu, tv, w / 2 + 0.45, 0.2, z0 - 0.35, z0 - 0.1, trim);
+    tbox(...o(0.15), tu, tv, w / 2 + 0.34, 0.15, z0 + h, z0 + h + 0.3, trim);
+    if (hood === 'cornice') tbox(...o(0.25), tu, tv, w / 2 + 0.6, 0.25, z0 + h + 0.3, z0 + h + 0.55, trim);
+    if (hood === 'pediment') { const c = o(0.2), A = F(c[0] - tu * (w / 2 + 0.6), c[1] - tv * (w / 2 + 0.6), z0 + h + 0.35), B = F(c[0] + tu * (w / 2 + 0.6), c[1] + tv * (w / 2 + 0.6), z0 + h + 0.35), T = F(c[0], c[1], z0 + h + 1.3); slab4(S, [A, B, T, T], 0.35, trim, ST); }
+    if (hood === 'arch') { const c = o(0.12); sweep(S, F, Array.from({ length: 9 }, (_, k) => { const t = Math.PI * (k / 8); return [c[0] + tu * Math.cos(t) * (w / 2 + 0.17), c[1] + tv * Math.cos(t) * (w / 2 + 0.17), z0 + h + Math.sin(t) * (w / 2 + 0.17), 0.17, 0.2]; }), trim, ST, 5); }
+  };
+  // cross arms and core, on a socle
+  blk(0, 0, 27.6, 11.1, zb, 1.6, trim); blk(0, 0, 11.1, 23.6, zb, 1.6, trim);
+  blk(0, 0, 27, 10.5, 1.6, 24); blk(0, 0, 10.5, 23, 1.6, 24); blk(0, 0, 15, 15, zb, 24);
+  for (const [z0, z1, d] of [[22.4, 22.8, 0.15], [24, 24.7, 0.45], [24.7, 25.2, 0.7]]) { blk(0, 0, 27 + d, 10.5 + d, z0, z1, trim); blk(0, 0, 10.5 + d, 23 + d, z0, z1, trim); }
+  // the arm faces: giant pilasters and framed windows on both storeys; balustraded attic; ends with doors and pediments
+  const arms = [[1, 0, 27, 10.5], [-1, 0, 27, 10.5], [0, 1, 23, 10.5], [0, -1, 23, 10.5]];
+  const sw = (() => { let best = -9, bi = 0; arms.forEach(([du, dv], i) => { const [x, y] = P2(du, dv), d = (x - cx) * -0.71 + (y - cy) * -0.71; if (d > best) { best = d; bi = i; } }); return bi; })();
+  arms.forEach(([du, dv, len, half], i) => {
+    const tu = -dv, tv = du;                                // across the arm end
+    const end = (d, t) => [du * (len + d) + tu * t, dv * (len + d) + tv * t];
+    // end façade: four giant pilasters, door, windows, pediment on the attic
+    for (const t of [-8.6, -3.2, 3.2, 8.6]) { const [a, b] = end(0.25, t); tbox(a, b, tu, tv, 0.75, 0.3, 1.6, 22.4, trim); }
+    if (i === sw) {
+      // main front: a three-arched portico (galilee) with paired columns and a terrace above
+      const [pa, pb] = end(3.2, 0); tbox(pa, pb, tu, tv, 10.2, 3.2, 1.6, 2.1, trim);
+      for (const t of [-9.6, -6.4, -1.9, 1.9, 6.4, 9.6]) { const [a, b] = end(5.6, t); limb(S, F(a, b, 2.1), F(a, b, 11.2), 0.55, 0.5, 12, white, ST); tbox(a, b, tu, tv, 0.7, 0.7, 2.1, 2.7, trim); tbox(a, b, tu, tv, 0.75, 0.75, 11.0, 11.6, trim); }
+      const [ea, eb] = end(3.2, 0); tbox(ea, eb, tu, tv, 10.4, 3.2, 11.6, 13.4, white); tbox(ea, eb, tu, tv, 10.7, 3.5, 13.4, 13.9, trim);
+      for (let k = 0; k < 20; k++) { const [a, b] = end(6.2, -9.5 + k); limb(S, F(a, b, 13.9), F(a, b, 14.8), 0.14, 0.1, 6, trim, ST); }
+      const [ra, rb] = end(6.2, 0); tbox(ra, rb, tu, tv, 10.2, 0.2, 14.8, 15.1, trim);
+      for (const t of [-4.2, 0, 4.2]) { const [a, b] = end(0.05, t); tbox(a, b, tu, tv, 1.5, 0.08, 1.6, 8.4, dark); }
+    } else { const [a, b] = end(0.05, 0); tbox(a, b, tu, tv, 1.6, 0.08, 1.6, 7.0, dark); const [c, d] = end(0.3, 0); tbox(c, d, tu, tv, 2.3, 0.3, 7.0, 7.5, trim); }
+    for (const t of [-5.9, 0, 5.9]) { const [a, b] = end(0, t); win(a, b, du, dv, 12.5, 1.9, 4.6, t === 0 ? 'pediment' : 'cornice'); }
+    // attic and pediment
+    { const [a, b] = end(-0.4, 0); tbox(a, b, tu, tv, half - 0.4, 0.5, 25.2, 28.2, white); const [c, d] = end(-0.3, 0); tbox(c, d, tu, tv, half - 0.2, 0.6, 28.2, 28.7, trim);
+      const P = end(0.1, 0), A = F(P[0] - tu * 9.5, P[1] - tv * 9.5, 28.7), B = F(P[0] + tu * 9.5, P[1] + tv * 9.5, 28.7), T = F(P[0], P[1], 32.2); slab4(S, [A, B, T, T], 1.0, white, ST);
+      const P3 = end(0.75, 0), A2 = F(P3[0] - tu * 9.9, P3[1] - tv * 9.9, 28.6), B2 = F(P3[0] + tu * 9.9, P3[1] + tv * 9.9, 28.6), T2 = F(P3[0], P3[1], 32.6); slab4(S, [A2, B2, T2, T2], 0.3, trim, ST);
+      ell(S, F, [P[0] + du * 0.6, P[1] + dv * 0.6, 30.0], [1.0, 1.0, 1.1], trim, ST, 8); }
+    // side walls of the arm: windows between pilasters
+    for (const s of [-1, 1]) for (const along of [len - 2.1]) {
+      const a = du * along + tu * s * half, b = dv * along + tv * s * half;
+      win(a, b, tu * s, tv * s, 4.5, 1.5, 3.4, 'cornice'); win(a, b, tu * s, tv * s, 13.2, 1.5, 3.8, 'arch');
+      const pa = du * (len - 0.4) + tu * s * (half + 0.2), pb = dv * (len - 0.4) + tv * s * (half + 0.2); tbox(pa, pb, du, dv, 0.4, 0.2, 1.6, 22.4, trim);
+    }
+  });
+  // corner towers: rusticated angles, windows, balustrade, ribbed cupola with a finial
+  for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+    const tu0 = su * 17, tv0 = sv * 15.5;
+    blk(tu0, tv0, 4.5, 4.5, zb, 31); blk(tu0, tv0, 4.9, 4.9, 31, 31.6, trim); blk(tu0, tv0, 5.1, 5.1, 31.6, 32, trim);
+    for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) blk(tu0 + a * 4.3, tv0 + b * 4.3, 0.35, 0.35, 1.6, 31, trim);
+    for (const [nu, nv] of [[su, 0], [0, sv]]) { win(tu0 + nu * 4.5, tv0 + nv * 4.5, nu, nv, 26.0, 1.4, 3.4, 'arch'); win(tu0 + nu * 4.5, tv0 + nv * 4.5, nu, nv, 17.5, 1.2, 2.8, 'cornice'); }
+    const T = (a, b, z) => F(tu0 + a, tv0 + b, z);
+    for (let k = 0; k < 16; k++) { const t = (k / 16) * Math.PI * 2; limb(S, T(Math.cos(t) * 4.5, Math.sin(t) * 4.5, 32), T(Math.cos(t) * 4.5, Math.sin(t) * 4.5, 33.0), 0.12, 0.09, 5, trim, ST); }
+    sweep(S, T, [[0, 0, 32, 3.6, 3.6], [0, 0, 33.6, 3.5, 3.5], [0, 0, 35.0, 2.7, 2.7], [0, 0, 36.0, 1.5, 1.5], [0, 0, 36.5, 0.5, 0.5], [0, 0, 37.2, 0.35, 0.35], [0, 0, 37.7, 0.6, 0.6], [0, 0, 38.6, 0.05, 0.05]], domeC, ST, 16, true);
+    for (let k = 0; k < 8; k++) { const t = (k / 8) * Math.PI * 2, c = Math.cos(t), s2 = Math.sin(t); sweep(S, T, [[c * 3.65, s2 * 3.65, 32.1, 0.12, 0.12], [c * 3.55, s2 * 3.55, 33.6, 0.12, 0.12], [c * 2.75, s2 * 2.75, 35.0, 0.11, 0.11], [c * 1.55, s2 * 1.55, 36.0, 0.09, 0.09], [c * 0.5, s2 * 0.5, 36.5, 0.06, 0.06]], trim, ST, 5); }
   }
-  for (const su of [-1, 1]) for (const sv of [-1, 1]) {                             // corner towers with small cupolas
-    blk(su * 17, sv * 15.5, 4.5, 4.5, zb, 31); blk(su * 17, sv * 15.5, 4.9, 4.9, 31, 32, trim);
-    const [x, y] = P2(su * 17, sv * 15.5);
-    limb(S, [x, ground + 32, -y], [x, ground + 35.5, -y], 3.4, 0.6, 12, domeC, ST);
-    limb(S, [x, ground + 35.5, -y], [x, ground + 37, -y], 0.3, 0.15, 6, white, ST);
+  // drum: base, paired pilasters with arched windows between, entablature, balustrade
+  const C = F;
+  sweep(S, C, [[0, 0, 24, 14.2, 14.2], [0, 0, 28, 14.2, 14.2]], white, ST, 32, false);
+  sweep(S, C, [[0, 0, 28, 14.6, 14.6], [0, 0, 28.8, 14.6, 14.6]], trim, ST, 32, true);
+  sweep(S, C, [[0, 0, 28.8, 12.5, 12.5], [0, 0, 40, 12.5, 12.5]], white, ST, 32, false);
+  for (let k = 0; k < 16; k++) {
+    const t = (k / 16) * Math.PI * 2, c = Math.cos(t), s2 = Math.sin(t);
+    for (const d of [-0.11, 0.11]) { const a = Math.cos(t + d) * 12.75, b = Math.sin(t + d) * 12.75; tbox(a, b, -Math.sin(t + d), Math.cos(t + d), 0.45, 0.3, 28.8, 39.6, trim); }
+    const tw = t + Math.PI / 16; win(Math.cos(tw) * 12.5, Math.sin(tw) * 12.5, Math.cos(tw), Math.sin(tw), 31.0, 1.9, 5.2, 'arch');
+    void c; void s2;
   }
-  // drum, dome and lantern
-  const c = [cx, 0, -cy], at = (z) => [cx, ground + z, -cy];
-  limb(S, at(24), at(28), 14, 14, 24, white, ST);
-  limb(S, at(28), at(40), 12.5, 12.5, 24, white, ST);
-  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2, x = cx + Math.cos(a) * 12.6, y = cy + Math.sin(a) * 12.6; box(S, x, y, -Math.sin(a), Math.cos(a), 0.9, 0.1, ground + 31, ground + 37, dark, I0, ST); }
-  limb(S, at(40), at(41.2), 13.3, 13.3, 24, trim, ST);
-  const rings = 6;
-  for (let k = 0; k < rings; k++) {                                                   // dome as a stack of frusta
-    const a0 = (k / rings) * Math.PI / 2, a1 = ((k + 1) / rings) * Math.PI / 2;
-    limb(S, at(41.2 + Math.sin(a0) * 15), at(41.2 + Math.sin(a1) * 15), Math.max(0.3, Math.cos(a0) * 12.5), Math.max(2.2, Math.cos(a1) * 12.5), 24, domeC, ST, k === rings - 1);
-  }
-  limb(S, at(55.5), at(62), 2.2, 1.8, 12, white, ST);                                 // lantern
-  limb(S, at(62), at(64.5), 1.9, 0.2, 12, domeC, ST);
-  limb(S, at(64.5), at(66.5), 0.12, 0.12, 4, dark, ST);
-  void c;
+  sweep(S, C, [[0, 0, 39.6, 13.1, 13.1], [0, 0, 40.4, 13.1, 13.1]], trim, ST, 32, false);
+  sweep(S, C, [[0, 0, 40.4, 13.6, 13.6], [0, 0, 41.2, 13.6, 13.6]], trim, ST, 32, true);
+  for (let k = 0; k < 64; k++) { const t = (k / 64) * Math.PI * 2; limb(S, F(Math.cos(t) * 13.3, Math.sin(t) * 13.3, 41.2), F(Math.cos(t) * 13.3, Math.sin(t) * 13.3, 42.2), 0.13, 0.1, 5, trim, ST, false); }
+  sweep(S, C, [[0, 0, 42.2, 13.4, 13.4], [0, 0, 42.5, 13.4, 13.4]], trim, ST, 32, true);
+  // dome: a smooth profile in 32 facets, 16 ribs, small oculi, lantern with columns, cupolino, finial
+  const prof = []; for (let k = 0; k <= 10; k++) { const a = (k / 10) * Math.PI / 2; prof.push([0, 0, 41.2 + Math.sin(a) * 15.5, Math.max(0.05, Math.cos(a) * 12.5), Math.max(0.05, Math.cos(a) * 12.5)]); }
+  sweep(S, C, prof.slice(0, 10).concat([[0, 0, 41.2 + Math.sin((9.4 / 10) * Math.PI / 2) * 15.5, 2.3, 2.3]]), domeC, ST, 32, true);
+  for (let k = 0; k < 16; k++) { const t = (k / 16) * Math.PI * 2, c = Math.cos(t), s2 = Math.sin(t); sweep(S, C, Array.from({ length: 9 }, (_, q) => { const a = (q / 9) * Math.PI / 2 * 0.95; const r = Math.cos(a) * 12.65; return [c * r, s2 * r, 41.2 + Math.sin(a) * 15.65, 0.28, 0.2]; }), trim, ST, 5, false); }
+  for (let k = 0; k < 8; k++) { const t = ((k + 0.5) / 8) * Math.PI * 2; ell(S, C, [Math.cos(t) * 10.9, Math.sin(t) * 10.9, 49.2], [0.7, 0.7, 0.7], trim, ST, 8); }
+  sweep(S, C, [[0, 0, 56.4, 2.6, 2.6], [0, 0, 57.0, 2.6, 2.6]], trim, ST, 16, true);
+  sweep(S, C, [[0, 0, 57, 1.6, 1.6], [0, 0, 61.6, 1.6, 1.6]], dark, ST, 12, false);
+  for (let k = 0; k < 8; k++) { const t = (k / 8) * Math.PI * 2; limb(S, F(Math.cos(t) * 2.1, Math.sin(t) * 2.1, 57), F(Math.cos(t) * 2.1, Math.sin(t) * 2.1, 61.6), 0.24, 0.2, 8, white, ST); }
+  sweep(S, C, [[0, 0, 61.6, 2.5, 2.5], [0, 0, 62.3, 2.5, 2.5], [0, 0, 62.3, 2.1, 2.1], [0, 0, 63.6, 1.6, 1.6], [0, 0, 64.5, 0.7, 0.7], [0, 0, 65.0, 0.3, 0.3], [0, 0, 65.6, 0.45, 0.45], [0, 0, 66.2, 0.05, 0.05]], domeC, ST, 16, true);
+  limb(S, F(0, 0, 66.2), F(0, 0, 68.4), 0.08, 0.08, 4, dark, ST);
+  limb(S, F(-0.5, 0, 67.7), F(0.5, 0, 67.7), 0.07, 0.07, 4, dark, ST);
+  void pink;
 }
 
 // box with an underside too (decks and bridges are seen from the street)
