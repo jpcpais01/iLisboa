@@ -197,6 +197,7 @@ function dropDetail(t) { if (t.detail) { scene.remove(t.detail); t.detail.traver
 function detail(t, d) {
   const DR = 900 * lodK;
   if (t.state !== 2 || !t.t.detail) return;
+  if (!ready || inflight > 1) { if (d > DR + 400 && t.dstate) dropDetail(t); return; }   // near-only detail waits until the city is on screen and its tiles are in
   if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
   if (d > DR || t.dstate) return;
   t.dstate = 1; const gen = t.gen;

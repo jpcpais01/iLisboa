@@ -1014,6 +1014,25 @@ for (const r of sorted) {
   const w = parseMeters(r.tags.width) ?? ROAD_W[k];
   gm.strokeLine(r.pts, w, paint(pedestrianish(k) ? C.calcada : C.asphalt));
 }
+// the airport: dry grass inside the fence, concrete aprons, taxiways with yellow centre lines, runways with white markings
+{
+  const offset = (pts, d) => pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [p[0] - ((b[1] - a[1]) / L) * d, p[1] + ((b[0] - a[0]) / L) * d]; });
+  const dashed = (pts, w, dash, gap, col) => { let acc = 0; for (let i = 0; i + 1 < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
+    for (let s = 0; s < L; ) { const ph = acc % (dash + gap), on = ph < dash, step = Math.min(L - s, on ? dash - ph : dash + gap - ph); if (on) gm.strokeLine([[x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L], [x1 + ((x2 - x1) * (s + step)) / L, y1 + ((y2 - y1) * (s + step)) / L]], w, paint(col)); s += step; acc += step; } } };
+  const aeroA = extractPolygons(els, proj, (t) => t.aeroway === 'aerodrome' || t.aeroway === 'apron');
+  for (const p of aeroA.filter((q) => q.tags.aeroway === 'aerodrome')) gm.fillRings([p.outer, ...p.holes], paint(srgb('#b8bd8f')));
+  for (const p of aeroA.filter((q) => q.tags.aeroway === 'apron')) gm.fillRings([p.outer, ...p.holes], paint(srgb('#b4b2ac')));
+  const aeroL = extractLines(els, proj, (t) => (t.aeroway === 'taxiway' || t.aeroway === 'runway') && t.area !== 'yes');
+  const WHITE = srgb('#ecebe6'), YEL = srgb('#d9b54a');
+  for (const r of aeroL.filter((q) => q.tags.aeroway === 'taxiway')) gm.strokeLine(r.pts, parseMeters(r.tags.width) ?? 23, paint(srgb('#7a7975')));
+  for (const r of aeroL.filter((q) => q.tags.aeroway === 'taxiway')) gm.strokeLine(r.pts, 0.5, paint(YEL));
+  for (const r of aeroL.filter((q) => q.tags.aeroway === 'runway')) {
+    const w = parseMeters(r.tags.width) ?? 45;
+    gm.strokeLine(r.pts, w + 6, paint(srgb('#a9a79f'))); gm.strokeLine(r.pts, w, paint(srgb('#5f5e5b')));
+    for (const d of [-1, 1]) gm.strokeLine(offset(r.pts, d * (w / 2 - 1.2)), 0.9, paint(WHITE));
+    dashed(r.pts, 0.9, 30, 20, WHITE);
+  }
+}
 for (const r of rails) if (r.tags.railway === 'rail' && !underground(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
 for (const r of rails) if (r.tags.railway === 'tram' && !underground(r.tags)) gm.strokeLine(r.pts, 2.3, paint(C.setts));   // granite setts between and beside the tram rails
 for (const r of rails) { // two rails per track

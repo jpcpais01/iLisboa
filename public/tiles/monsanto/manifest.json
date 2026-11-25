@@ -705,7 +705,7 @@
   "parts": 3,
   "skippedOutlines": 0,
   "partyEdges": 5744,
-  "balconies": 57294,
+  "balconies": 57305,
   "statues": 3,
   "wallsM": 8208.160218812818,
   "pillars": 0,
@@ -727,12 +727,12 @@
   "lamps": 7518,
   "cars": 14169,
   "water": 0,
-  "bytes": 21450987,
+  "bytes": 21451235,
   "detailTris": 520896,
   "triangles": 1106091
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T07:52:05.233Z",
+ "built": "2026-11-25T08:24:05.088Z",
  "far": {
   "bytes": 910584,
   "tris": 96682
