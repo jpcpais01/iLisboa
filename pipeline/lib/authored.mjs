@@ -50,6 +50,9 @@ export const OVERRIDES = {
   // Museu Nacional dos Coches (Paulo Mendes da Rocha, 2015): blank white concrete-and-metal boxes
   ...Object.fromEntries(['r5363219_0', 'r5363219_1', 'r5363219_2', 'r5363219_3', 'r15475185_0'].map((id) => [id, { wall: '#ebeae6', shape: 'flat', flatCol: [206, 206, 202], variant: 3, floorH: 0, parapet: 0.4 }])),
   w230062385: { h: 15, minH: 0, shape: 'flat', wall: '#97a9b6', flatCol: [214, 216, 214], variant: 3, floorH: 0, parapet: 1.2 },   // Oceanário: the box in the dock (roof authored)
+  // Fundação Gulbenkian (1969): brutalist concrete under flat, partly planted roofs; CAM under Kengo Kuma's pale tiled eaves
+  ...Object.fromEntries(['r17036063_0', 'w39784735'].map((id) => [id, { shape: 'flat', wall: '#bbb6ab', flatCol: [148, 156, 128], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.8 }])),
+  w188143627: { shape: 'flat', wall: '#c4c0b6', flatCol: [208, 208, 204], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.6 },
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
