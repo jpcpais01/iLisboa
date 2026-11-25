@@ -38,3 +38,15 @@ npm run build            # static site in dist/ (what Vercel serves)
 Add an area: append a line to `pipeline/areas.txt`, run the **fetch-data** workflow, then `npm run tiles -- <area>` and open `/?area=<area>`.
 
 Data © OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © DLR/Airbus, provided under COPERNICUS by the European Union and ESA.
+
+## Live layers (toggles, top right)
+
+| Layer | Source | Live? |
+|---|---|---|
+| Aviões | adsb.lol community ADS-B (`/api/planes`, no key) | live, ~8 s, dead-reckoned between fixes |
+| Autocarros / elétricos | Carris GTFS-RT + Carris Metropolitana API (`/api/transit`, no key) | live GPS, ~15 s |
+| Metro | Metro de Lisboa publishes no train positions | estimated: real track + stations (OSM), typical headways by hour |
+| Trânsito | TomTom Traffic Flow tiles (`/api/traffic`) when `TOMTOM_KEY` is set in Vercel | live; without a key: typical rush-hour pattern, labelled "estimado" |
+
+`node pipeline/live.mjs` rebuilds `public/live/{roads.bin,metro.json}` from `data/raw`. Code: `src/live/`, `api/`.
+`?live=traffic,transit,planes` opens with layers on; `?livehour=18.5` pins the modelled clock for checks.

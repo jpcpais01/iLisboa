@@ -5,6 +5,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
+import { initLive } from './live/index.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -561,6 +562,8 @@ controls.addEventListener('end', () => {
   const v = [...camera.position.toArray(), ...controls.target.toArray()].map((n) => Math.round(n));
   history.replaceState(null, '', '#' + v.join(','));
 });
+// live layers (traffic, transport, planes): separate module, off until toggled
+const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY } }); window.__live = live;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -596,6 +599,7 @@ renderer.setAnimationLoop((now) => {
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
+  live.update(dt, now);
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones (timed on consecutive moving frames only)
