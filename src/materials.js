@@ -43,6 +43,7 @@ if (kind < .5) {                                  // plain trims, chimneys
 } else if (kind < 2.5) {                          // façades (1) and blank walls (2)
   float top = vInfo.x, fh = max(vInfo.y, 2.4), bays = floor(vInfo.z + .5), gh = max(vInfo.w, 2.6);
   float y = vSurf.y;
+  flood = .3 * (1. - smoothstep(1., 11., y));   // after dusk the street lamps wash the lower floors in warm light
   col = base * (.9 + .1 * smoothstep(0., 5., y)) * (.95 + .07 * grime);
   // rain streaks
   col *= 1. - .05 * smoothstep(.55, 1., vnoise(vec2(vSurf.x * (kind > 1.5 ? 2.3 : 9.), y * .08))) * (1. - smoothstep(0., top, y) * .5);
@@ -52,7 +53,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     float pxm = max(fwidth(bx) * bw, fwidth(y)) + 1e-4;
     float aa = pxm * .7;
     float far = smoothstep(.38, 1.05, pxm);   // windows hold until a bay is ~1 px wide
-    if (far > .995) { col = mix(col, vec3(.16, .18, .2), .22); glow = .035; } else {   // far façades: skip the window work entirely
+    if (far > .995) { col = mix(col, vec3(.16, .18, .2), .22); glow = .045 + .05 * fract(seed * 13.7); } else {   // far façades: skip the window work entirely
     float isG = step(y, gh);
     float fi = isG > .5 ? 0. : 1. + floor((y - gh) / fh);
     float fy = isG > .5 ? y : mod(y - gh, fh);
@@ -166,7 +167,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     // far away: blend everything to the façade's average tone (no shimmer)
     vec3 avg = mix(wallC, vec3(.16, .18, .2), .22);
     col = mix(col, avg, far);
-    glassAmt *= 1. - far; glow = mix(glow, .035, far);   // lit windows averaged over the wall: a faint warm wash, not a lit wall
+    glassAmt *= 1. - far; glow = mix(glow, .045 + .05 * fract(seed * 13.7), far);   // lit windows averaged over the wall: a faint warm wash, not a lit wall
     }
   }
 } else if (kind < 3.5 || kind > 4.5 && kind < 5.5) {      // roof tiles (3) and mansard (5)
@@ -211,7 +212,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v10';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v11';
   return m;
 }
 
@@ -343,16 +344,17 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 export function terrainMaterial(map, mask, bounds) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uMask = { value: mask };
+    s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight;
     s.uniforms.uBounds = { value: new THREE.Vector4(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY) };
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight;')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   vec2 muv = vec2((vWPos.x - uBounds.x) / (uBounds.z - uBounds.x), (-vWPos.z - uBounds.y) / (uBounds.w - uBounds.y));
-  if (texture2D(uMask, muv).r > 0.5) discard;`)
+  if (texture2D(uMask, muv).r > 0.5) discard;
+  float tLit = 0.;`)
       .replace('#include <map_fragment>', `#include <map_fragment>
   {   // close-up surface: the ground map is 0.5 m a pixel, so the pavement texture itself comes from here, by world position
     vec2 p = vec2(vWPos.x, -vWPos.z);
@@ -388,6 +390,8 @@ export function terrainMaterial(map, mask, bounds) {
     }
     float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
     diffuseColor.rgb = c * k * macro;
+    // after dusk: streets and squares under the lamps, pools of warm light along the paved surfaces
+    if (uNight > .01) tLit = grey * smoothstep(.1, .16, L) * (1. - wGrass) * (.1 + .38 * smoothstep(.4, .85, tvn(p / 9.)) + .08 * tvn(p / 2.7));
     // steep banks (the ground map smears there): Lisbon's retaining walls, coursed limestone with dark joints and rain streaks
     vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
     float steep = (1. - smoothstep(.5, .68, abs(gn.y))) * (1. - wGrass);
@@ -401,11 +405,12 @@ export function terrainMaterial(map, mask, bounds) {
       wall *= .9 + .1 * tvn(vec2(w.x * 1.7, w.y * .12)) - .12 * smoothstep(.55, .9, tvn(vec2(w.x * 3.1, w.y * .25)));
       diffuseColor.rgb = mix(diffuseColor.rgb, wall * macro, steep);
     }
-  }`);
+  }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .68, .38) * tLit * uNight;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
 float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-terrain-v6';
+  m.customProgramCacheKey = () => 'ilisboa-terrain-v7';
   return m;
 }
