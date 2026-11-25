@@ -84,5 +84,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds }) {
       if (now - lastStatus > 5000) { lastStatus = now; renderStatus(); }
     },
     layers,
+    // moving things on screen: the viewer keeps full frame rate (traffic alone is static and needs none)
+    get busy() { return layers.transit.on || layers.planes.on; },
   };
 }
