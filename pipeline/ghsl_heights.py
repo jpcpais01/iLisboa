@@ -1,25 +1,22 @@
-"""Average building height per ~90 m cell (GHS-BUILT-H AGBH 2018, JRC, 3 arc-second WGS84 grid) for the city bbox
-→ data/raw/ghsl_h.json. The build uses it for footprints without an OSM height or storey count, instead of a guess.
-Reads the window straight out of the remote zip (GDAL /vsizip//vsicurl/), so only a few MB move."""
-import json, sys, urllib.request, re
+"""Mean building height per ~90 m cell for the city bbox → data/raw/ghsl_h.json, from JRC GHSL R2023A (2020, 3 arc-second
+WGS84 grids): built volume (m³) / built surface (m²) per cell. The AGBH product at this resolution averages in empty land,
+so the ratio is taken here instead. The build uses it for footprints with no OSM height or storey count of their own,
+and checks it against the cells where OSM does have heights. Reads windows straight out of the remote zips (GDAL
+/vsizip//vsicurl/), so only a few MB move."""
+import json, sys
 import rasterio
 from rasterio.windows import from_bounds
 W, S, E, N = -9.2525, 38.6715, -9.0705, 38.8070
-ROOT = 'https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2023A/'
-NAME = 'GHS_BUILT_H_AGBH_E2018_GLOBE_R2023A_4326_3ss'
-url = f'{ROOT}{NAME}/V1-0/{NAME}_V1_0.zip'
-try:
-    src = rasterio.open(f'/vsizip//vsicurl/{url}/{NAME}_V1_0.tif')
-except Exception as e:
-    print('open failed:', e)
-    for d in (ROOT, f'{ROOT}{NAME}/V1-0/'):
-        try: print(d, re.findall(r'href="([^"]+)"', urllib.request.urlopen(d).read().decode())[:40])
-        except Exception as e2: print(d, e2)
-    sys.exit(1)
-win = from_bounds(W, S, E, N, src.transform).round_offsets().round_lengths()
-a = src.read(1, window=win)
-t = src.window_transform(win)
-print('shape', a.shape, 'transform', t, 'nodata', src.nodata, 'max', float(a.max()))
-vals = [[round(float(v), 1) if v == v and v > 0 and v != src.nodata else 0 for v in row] for row in a]
-json.dump({'src': NAME, 'west': t.c, 'north': t.f, 'dx': t.a, 'dy': t.e, 'w': a.shape[1], 'h': a.shape[0], 'v': vals},
-          open('data/raw/ghsl_h.json', 'w'), separators=(',', ':'))
+ROOT = 'https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/'
+def grid(kind):
+    name = f'GHS_BUILT_{kind}_E2020_GLOBE_R2023A_4326_3ss'
+    src = rasterio.open(f'/vsizip//vsicurl/{ROOT}GHS_BUILT_{kind}_GLOBE_R2023A/{name}/V1-0/{name}_V1_0.zip/{name}_V1_0.tif')
+    win = from_bounds(W, S, E, N, src.transform).round_offsets().round_lengths()
+    return src.read(1, window=win).astype('float64'), src.window_transform(win), src.nodata
+V, t, nv = grid('V')
+Sg, t2, ns = grid('S')
+assert V.shape == Sg.shape and abs(t.c - t2.c) < 1e-9, (V.shape, Sg.shape)
+print('shape', V.shape, 'transform', t, 'nodata', nv, ns)
+vals = [[round(float(v / s), 1) if s >= 150 and v > 0 and v != nv and s != ns else 0 for v, s in zip(rv, rs)] for rv, rs in zip(V, Sg)]
+json.dump({'src': 'GHSL R2023A E2020 BUILT_V / BUILT_S, 3ss', 'west': t.c, 'north': t.f, 'dx': t.a, 'dy': t.e, 'w': V.shape[1], 'h': V.shape[0], 'v': vals,
+           'cover': [[round(float(s), 0) for s in rs] for rs in Sg]}, open('data/raw/ghsl_h.json', 'w'), separators=(',', ':'))
