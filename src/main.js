@@ -570,7 +570,7 @@ window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
-let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false;
+let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio;
 renderer.setAnimationLoop((now) => {
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
   if (introT < 1 && ready) {
@@ -583,7 +583,12 @@ renderer.setAnimationLoop((now) => {
   const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
   idleN = active ? 0 : idleN + 1;
-  if (!active && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
+  // motion resolution: while the view moves, draw at ~2/3 the pixel ratio (≈2.2× fewer pixels); full sharpness ~0.15 s after it settles
+  const moving = moved || introT < 1, want = moving ? Math.max(1, pixelRatio * 0.67) : pixelRatio;
+  if (moving) stillN = 0; else stillN++;
+  let resized = false;   // a resized canvas is blank until drawn, so it is drawn this frame
+  if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
+  if (!active && !resized && curRatio === pixelRatio && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
@@ -609,7 +614,7 @@ renderer.setAnimationLoop((now) => {
   if (acc > 1) {
     const fps = frames / acc;
     if (ready && introT >= 1) {
-      if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
+      if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
       else if (fps < 45 && lodK > 0.55) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
     }
