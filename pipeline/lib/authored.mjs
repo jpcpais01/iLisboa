@@ -2754,3 +2754,17 @@ export function arenaShell(S, { ring, ground, z0, z1, lin, srgb }) {
   for (let k = 0; k < N; k++) { const p = pts[k], q = pts[(k + 1) % N], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 0.05) continue;
     box(S, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (q[0] - p[0]) / l, (q[1] - p[1]) / l, l / 2 + 0.1, 0.5, ground + z0 - 0.6, ground + z0 + 0.5, rimC, I0, PL); }
 }
+
+// a jazigo: the family chapel-tomb that fills Lisbon's cemeteries in streets — a stone cell with a cornice and a
+// pyramid or gabled cap, its door to the path (u = along the path, v = towards it)
+export function jazigo(S, { x, y, ux, uy, ground, h, w, d, col, trim, cap }) {
+  const I0 = [0, 0, 0, 0], ST = [KIND.PLAIN / 8, 5 / 8, 0.37, 1];
+  box(S, x, y, ux, uy, w / 2, d / 2, ground - 0.4, ground + h, col, I0, ST);
+  box(S, x, y, ux, uy, w / 2 + 0.12, d / 2 + 0.12, ground + h, ground + h + 0.22, trim, I0, ST);
+  box(S, x, y, ux, uy, w / 2 + 0.1, d / 2 + 0.1, ground - 0.4, ground + 0.35, trim, I0, ST);
+  if (cap === 0) frustum(S, x, y, ux, uy, Math.min(w, d) / 2, 0.05, ground + h + 0.22, ground + h + 0.22 + Math.min(w, d) * 0.55, trim, ST, false);
+  else if (cap === 1) { frustum(S, x, y, ux, uy, Math.min(w, d) / 2 - 0.1, Math.min(w, d) / 2 - 0.1, ground + h + 0.22, ground + h + 0.6, trim, ST, true);
+    frustum(S, x, y, ux, uy, 0.12, 0.12, ground + h + 0.6, ground + h + 1.5, trim, ST, true); }   // a plinth and a stone cross shaft
+  // the door: a dark slot on the path face
+  box(S, x - uy * (d / 2 + 0.02), y + ux * (d / 2 + 0.02), ux, uy, Math.min(0.5, w * 0.25), 0.04, ground + 0.35, ground + Math.min(h - 0.4, 2.3), [0.05, 0.05, 0.05], I0, ST);
+}

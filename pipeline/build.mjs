@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -965,7 +965,7 @@ const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
+  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
@@ -1011,6 +1011,7 @@ const areaColor = (t) => {
   if (t.leisure === 'park' || t.leisure === 'garden' || t.landuse === 'recreation_ground' || t.landuse === 'village_green') return C.park;
   if (t.landuse === 'grass' || t.landuse === 'meadow' || t.natural === 'grassland' || t.landuse === 'flowerbed') return C.grass;
   if (t.natural === 'wood' || t.landuse === 'forest' || t.natural === 'scrub' || t.natural === 'heath') return C.wood;
+  if (t.landuse === 'cemetery' || t.amenity === 'grave_yard') return C.cemetery;
   if (t.leisure === 'pitch' || t.leisure === 'playground') return C.pitch;
   if (t.natural === 'sand' || t.natural === 'beach') return C.sand;
   if (t.amenity === 'parking' && !t.parking?.includes('underground') && t.parking !== 'multi-storey') return C.parking;
@@ -1022,9 +1023,17 @@ const areaColor = (t) => {
   return null;
 };
 // big areas first so small ones draw on top
+const GRAVE = [srgb('#e2ded5'), srgb('#cfcac0'), srgb('#bdb8ae'), srgb('#d8d2c4')], GRAVEL = srgb('#aaa290');
 for (const p of [...polysArea].sort((a, b) => b.area - a.area)) {
   const col = areaColor(p.tags);
-  if (col) gm.fillRings([p.outer, ...p.holes], paint(col));
+  if (col === C.cemetery) {   // the blocks between the tomb streets: ground graves, rows of stone slabs on gravel
+    const ob = obb(p.outer);
+    gm.fillRings([p.outer, ...p.holes], (i) => {
+      const x = minX + ((i % gm.w) + 0.5) * SS, y = maxY - (Math.floor(i / gm.w) + 0.5) * SS, u = x * ob.ux + y * ob.uy, v = -x * ob.uy + y * ob.ux;
+      const cu = Math.floor(u / 1.7), cv = Math.floor(v / 3.1), fu = u / 1.7 - cu, fv = v / 3.1 - cv, h = hash(`${cu},${cv}`);
+      paint(fu > 0.18 && fv > 0.12 && h < 0.85 ? GRAVE[Math.floor(h * 17) % 4] : GRAVEL)(i);
+    });
+  } else if (col) gm.fillRings([p.outer, ...p.holes], paint(col));
 }
 const ROAD_W = { motorway: 16, trunk: 14, primary: 12, secondary: 10, tertiary: 8, unclassified: 6, residential: 6, living_street: 5, service: 4, pedestrian: 6, footway: 2.4, path: 2, steps: 2.4, cycleway: 2.2, track: 3 };
 const ROAD_ORDER = ['footway', 'path', 'steps', 'cycleway', 'track', 'pedestrian', 'service', 'living_street', 'residential', 'unclassified', 'tertiary', 'secondary', 'primary', 'trunk', 'motorway'];
@@ -1180,9 +1189,9 @@ log('AO baked');
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
 const groundPx = (x, y) => { const c = Math.floor(((x - minX) / (maxX - minX)) * GW), r = Math.floor(((maxY - y) / (maxY - minY)) * GH); return c >= 0 && r >= 0 && c < GW && r < GH ? r * GW + c : -1; };
-// tree kind rides in the scale's tens digit: 0 broadleaf, 1 palm, 2 stone pine / conifer
+// tree kind rides in the scale's tens digit: 0 broadleaf, 1 palm, 2 stone pine / conifer, 3 cypress
 const PALMS = /^(phoenix|chamaerops|howea|jubaea|washingtonia|cocos|trachycarpus|syagrus|livistona|butia|archontophoenix)/i, CONIFERS = /^(pinus|cupressus|cedrus|araucaria|taxus|juniperus|abies|picea)/i;
-const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
+const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : /^cupressus/i.test(g) ? 3 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
 const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
 // size by species where the city's tree survey tagged it: the Avenida's planes and elms are big, the lódãos medium
 const treeScale = (t, h) => {
@@ -1194,6 +1203,46 @@ const treeScale = (t, h) => {
   if (/Celtis|Tilia|Jacaranda|Melia/i.test(g)) return 1.05 + h * 0.35;
   return 0.8 + h * 0.6;
 };
+// cemeteries (Prazeres, Alto de São João, Ajuda, Benfica, Lumiar): streets of jazigos along the mapped paths, lined with cypresses
+{
+  const { pointInRing } = await import('./lib/osm.mjs');
+  const cems = polysArea.filter((p) => (p.tags.landuse === 'cemetery' || p.tags.amenity === 'grave_yard') && p.area > 4000);
+  let nT = 0, nC = 0;
+  for (const cem of cems) {
+    const inside = (x, y) => pointInRing(x, y, cem.outer) && !cem.holes.some((h) => pointInRing(x, y, h));
+    const xs = cem.outer.map((q) => q[0]), ys = cem.outer.map((q) => q[1]), bb = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    const inBB = (q) => q[0] > bb[0] - 5 && q[0] < bb[2] + 5 && q[1] > bb[1] - 5 && q[1] < bb[3] + 5;
+    const paths = roads.filter((r) => r.pts.some(inBB) && r.pts.some((q) => inside(q[0], q[1])));
+    const segs = paths.flatMap((r) => r.pts.slice(1).map((q, i) => [r.pts[i], q, (ROAD_W[roadKind(r.tags)] || 3) / 2]));
+    const near = polysB.filter((b) => !b.tags['building:part'] && b.outer.some(inBB));
+    const segD = (x, y, [a, b]) => { const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2)); return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t); };
+    const clear = (x, y, r) => inside(x, y) && segs.every((sg) => segD(x, y, sg) > sg[2] + r) && !near.some((b) => pointInRing(x, y, b.outer));
+    const mapped = treeNodes.filter((t) => inBB(t.p) && inside(t.p[0], t.p[1])).length, plant = mapped < cem.area / 400;   // Prazeres has its cypresses mapped tree by tree
+    const taken = new Set(), cell = (x, y) => `${Math.floor(x / 2.6)},${Math.floor(y / 2.6)}`;
+    const MARBLE = [lin(srgb('#e9e7e1')), lin(srgb('#d2cdc2')), lin(srgb('#bdb8ad')), lin(srgb('#dcd5c6'))], TRIM = lin(srgb('#c4bfb4'));
+    for (const [a, b, hw] of segs) {
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 3) continue;
+      const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+      for (const side of [-1, 1]) {
+        const nx = -uy * side, ny = ux * side;
+        for (let s = 1.6; s < L - 1.6; s += 3.0) {   // a jazigo every 3 m, its door to the path
+          const off = hw + 0.9 + 1.6, x = a[0] + ux * s + nx * off, y = a[1] + uy * s + ny * off, k = cell(x, y);
+          if (x < minX || x >= maxX || y < minY || y >= maxY || taken.has(k) || !clear(x, y, 1.6)) continue;
+          taken.add(k);
+          const hh = hash(`${cem.id}${Math.round(x)},${Math.round(y)}`), cap = hh < 0.45 ? 0 : hh < 0.7 ? 1 : 2;
+          // facing the path: the door side (v) points back at it
+          jazigo(getTile(...tileOf(x, y)).d, { x, y, ux: -ux * side, uy: -uy * side, ground: meshAt(x, y), h: 2.4 + hh * 1.6, w: 2.2 + (hh * 7 % 1) * 0.6, d: 2.8, col: MARBLE[Math.floor(hh * 13) % 4], trim: TRIM, cap });
+          nT++;
+        }
+        if (plant) for (let s = 3.5; s < L - 2; s += 7) {   // cypresses between path and tombs
+          const x = a[0] + ux * s + nx * (hw + 0.5), y = a[1] + uy * s + ny * (hw + 0.5);
+          if (inside(x, y) && hash(`${x.toFixed(1)}c`) < 0.6) { addTree(x, y, 0.75 + hash(`${y.toFixed(1)}c`) * 0.5, 3); nC++; }
+        }
+      }
+    }
+  }
+  if (cems.length) log(`cemeteries: ${cems.length}, jazigos ${nT}, cypresses ${nC}`);
+}
 for (const t of treeNodes) if (t.id !== 'n3761456264') addTree(t.p[0], t.p[1], treeScale(t.tags, hash(t.id)), treeKind(t.tags));   // the Príncipe Real cedar is authored
 for (const r of treeRows) for (let i = 0; i + 1 < r.pts.length; i++) {
   const [x1, y1] = r.pts[i], [x2, y2] = r.pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);

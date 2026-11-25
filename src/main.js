@@ -241,12 +241,12 @@ function addTrees(buf) {
   const d = new Float32Array(buf), n = d.length / 4;
   if (!KINDS) KINDS = treeKinds();
   // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
-  const cellsOf = (CH) => { const cells = new Map(); for (let i = 0; i < n; i++) { const kind = Math.min(2, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); } return cells.values(); };
+  const cellsOf = (CH) => { const cells = new Map(); for (let i = 0; i < n; i++) { const kind = Math.min(3, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); } return cells.values(); };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
   const place = (meshes, K, ids) => ids.forEach((i, j) => {
     const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
-    const k = d[i * 4 + 3] - Math.min(2, Math.floor(d[i * 4 + 3] / 10)) * 10;
+    const k = d[i * 4 + 3] - Math.min(3, Math.floor(d[i * 4 + 3] / 10)) * 10;
     s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
     m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
     for (const mesh of meshes) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
@@ -326,10 +326,19 @@ function treeKinds() {
     lumpy(2.2, 1, 0, 7.8, 0, 0xd0d0d0, 0.5, 0.45), lumpy(1.9, 1, 1.9, 8.1, 0.6, 0xf0f0f0, 1.5, 0.42), lumpy(1.8, 1, -1.8, 8.0, -0.6, 0xe6e6e6, 2.5, 0.42), lumpy(1.7, 1, 0.2, 8.1, -1.9, 0xeaeaea, 3.5, 0.42), lumpy(1.6, 1, -0.4, 8.4, 1.8, 0xffffff, 4.5, 0.4), lumpy(1.3, 1, 0.5, 8.7, 0.3, 0xffffff, 5.5, 0.4)]);
   soften(pineHi, 0, 8, 0, 0.5);
   const pineFar = mergeGeometries([pineTrunk(3), flat(3.6, 0, 7.8, 0, 0xf0f0f0, 0.3, 0.45)]); pineFar.computeVertexNormals(); soften(pineFar, 0, 7.8, 0, 0.4);
+  // Mediterranean cypresses (Prazeres, Alto de São João, the Estrela gardens): a tall dark spindle on a stub of trunk
+  const spindle = (r, y, sy, shade, ry) => paint(new THREE.IcosahedronGeometry(r, 0).rotateY(ry).scale(1, sy, 1).translate(0, y, 0).toNonIndexed(), shade);
+  const cyTrunk = (sides) => paint(new THREE.CylinderGeometry(0.14, 0.22, 1.8, sides, 1, true).translate(0, 0.9, 0).toNonIndexed(), 0x5a4434);
+  const cypress = mergeGeometries([cyTrunk(4), spindle(1.25, 5.2, 3.4, 0xe0e0e0, 0), spindle(0.9, 9.2, 3.2, 0xffffff, 1.2)]);
+  cypress.computeVertexNormals(); soften(cypress, 0, 7, 0, 0.35);
+  const cypressHi = mergeGeometries([cyTrunk(6), lumpy(1.2, 1, 0, 4.6, 0, 0xcfcfcf, 0.4, 2.6), lumpy(1.05, 1, 0.08, 7.4, 0.05, 0xebebeb, 1.4, 2.6), lumpy(0.75, 1, 0, 10.3, 0, 0xffffff, 2.4, 2.8), lumpy(0.4, 1, 0, 12.4, 0, 0xffffff, 3.3, 2.5)]);
+  soften(cypressHi, 0, 7, 0, 0.4);
+  const cypressFar = mergeGeometries([cyTrunk(3), spindle(1.2, 6.5, 5, 0xf0f0f0, 0.3)]); cypressFar.computeVertexNormals(); soften(cypressFar, 0, 6.5, 0, 0.35);
   return [
     { hi, near: geo, far, mat, matHi, greens: [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c] },
     { hi: palmHi, near: palm, far: palmFar, mat: palmMat, matHi: palmHiMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
     { hi: pineHi, near: pine, far: pineFar, mat, matHi, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
+    { hi: cypressHi, near: cypress, far: cypressFar, mat, matHi, greens: [0x3d5a30, 0x456337, 0x37512b] },
   ];
 }
 // foliage shading: leaf clumps (3D value noise in world space, faded out with distance so it never shimmers).

@@ -29,7 +29,7 @@
     2391.6941382635796,
     1915.377469864526
    ],
-   "bytes": 289584,
+   "bytes": 315576,
    "balconies": "bal_0_0.bin",
    "detail": "d_0_0.glb"
   },
@@ -722,19 +722,19 @@
   "miradouros": 0,
   "ponte": 0,
   "waterSource": "osm-coastline",
-  "trees": 3832,
-  "treesMapped": 908,
+  "trees": 4061,
+  "treesMapped": 1137,
   "lamps": 2741,
   "cars": 4974,
   "water": 0.5871,
-  "bytes": 9753360,
-  "detailTris": 224850,
-  "triangles": 674542
+  "bytes": 10205568,
+  "detailTris": 258890,
+  "triangles": 708582
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T09:51:24.230Z",
+ "built": "2026-11-25T10:57:58.742Z",
  "far": {
-  "bytes": 405940,
+  "bytes": 405948,
   "tris": 60022
  }
 }
