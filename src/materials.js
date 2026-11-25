@@ -110,6 +110,20 @@ if (kind < .5) {                                  // plain trims, chimneys
     float inWin = rect(vec2(-ww * .5, y0), vec2(ww * .5, y1), p, aa) * step(.01, ww);
     float fr = (variant > 2.5 && variant < 3.5) ? .04 : .13;
     float inGlass = rect(vec2(-ww * .5 + fr, y0 + fr), vec2(ww * .5 - fr, y1 - fr), p, aa);
+    // the opening is a real recess: the glass stands ~22 cm back, so seen at an angle the ray meets a jamb, the head or the
+    // sill before it reaches the glass (parallax from the view direction on the wall's own frame)
+    vec3 dPx = dFdx(vWP), dPy = dFdy(vWP);
+    vec3 Nw = normalize(cross(dPx, dPy)); vec3 Vw = normalize(cameraPosition - vWP); if (dot(Nw, Vw) < 0.) Nw = -Nw;
+    float dux = dFdx(ux), duy = dFdy(ux);
+    vec3 Tu = abs(dux) > abs(duy) ? (dPx - vec3(0., dFdx(y), 0.)) / dux : (dPy - vec3(0., dFdy(y), 0.)) / duy;
+    Tu = normalize(Tu - Nw * dot(Tu, Nw) + 1e-5);
+    float vn = max(dot(Vw, Nw), .12), depth = (variant > 2.5 && variant < 3.5 ? .12 : .24) * (1. - far);
+    vec2 pg = p - vec2(dot(Vw, Tu), Vw.y) / vn * depth;           // where the ray meets the glass plane
+    float gx = ww * .5 - fr, inBack = rect(vec2(-gx, y0 + fr), vec2(gx, y1 - fr), pg, aa);
+    // reveal: jambs take the side light, the head is in shadow, the sill catches the sky
+    float sideL = step(pg.x, -gx), sideR = step(gx, pg.x), head = step(y1 - fr, pg.y);
+    vec3 revealC = frameC * mix(mix(.86, .72, sideR) , .5, head) * mix(1., 1.08, step(pg.y, y0 + fr) * (1. - head));
+    vec2 pf = p; float fyf = fy; fy = pg.y; p = pg;   // glass, bars and shutters are seen through the recess
     // glass: depth shading at top of the reveal, sash bars, sky reflection
     float rev = smoothstep(y1 - fr - .28, y1 - fr, fy) * .55 + smoothstep(-ww * .5 + fr + .14, -ww * .5 + fr, p.x) * .3;
     vec3 sky = mix(vec3(.30, .38, .46), vec3(.62, .70, .78), h21(vec2(bi, fi) + 3.1 + floor(vWP.y)));
@@ -120,6 +134,7 @@ if (kind < .5) {                                  // plain trims, chimneys
       vec3 sc = rB < .35 ? vec3(.22, .33, .24) : rB < .6 ? vec3(.36, .24, .16) : rB < .8 ? vec3(.45, .17, .13) : vec3(.86, .85, .8);
       glass = sc * (.82 + .18 * step(.5, fract(fy * 14.))) * (1. - .4 * box1(-.02, .02, p.x, aa));
     }
+    p = pf; fy = fyf;                                          // signs, railings and sills stand at the wall face
     if (shop > .5) {                                           // shop sign band above the opening
       vec3 sign = h21(vec2(bi, seed)) < .5 ? vec3(.12, .2, .16) : h21(vec2(bi, seed + 1.)) < .5 ? vec3(.35, .08, .09) : vec3(.08, .1, .2);
       col = mix(col, sign, rect(vec2(-ww * .5, y1 + .12), vec2(ww * .5, y1 + .55), p, aa) * step(.3, h21(vec2(bi, 7.) + seed)));
@@ -127,6 +142,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     // railing (wrought iron) over the lower metre of balcony doors
     float rail = balc * step(fy, y0 + 1.05) * step(y0 - .02, fy);
     float railM = rail * max(box1(-.012, .012, fract(p.x / .11) - .5, aa * 3.) * step(fy, y0 + 1.0), box1(y0 + .98, y0 + 1.05, fy, aa));
+    glass = mix(revealC, glass, inBack);
     vec3 winC = mix(frameC, glass, inGlass);
     winC = mix(winC, vec3(.06), railM * .9);
     // sill
@@ -193,7 +209,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v8';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v9';
   return m;
 }
 
@@ -279,8 +295,37 @@ export function terrainMaterial(map, mask, bounds) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds;')
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   vec2 muv = vec2((vWPos.x - uBounds.x) / (uBounds.z - uBounds.x), (-vWPos.z - uBounds.y) / (uBounds.w - uBounds.y));
-  if (texture2D(uMask, muv).r > 0.5) discard;`);
+  if (texture2D(uMask, muv).r > 0.5) discard;`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  {   // close-up surface: the ground map is 0.5 m a pixel, so the pavement texture itself comes from here, by world position
+    vec2 p = vec2(vWPos.x, -vWPos.z);
+    float fw = max(fwidth(p.x), fwidth(p.y)) + 1e-5;
+    vec3 c = diffuseColor.rgb; float L = dot(c, vec3(.3, .59, .11)), sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+    float grey = 1. - smoothstep(.04, .09, sat);
+    float near = 1. - smoothstep(.02, .06, fw);                    // fine patterns only while a few cm still span a pixel
+    float macro = .96 + .08 * tvn(p / 9.) + .04 * tvn(p / 2.3);
+    // calçada portuguesa: small limestone setts with dark joints
+    float wPave = smoothstep(.5, .62, L) * grey;
+    vec2 q = p / .085; q.x += .5 * mod(floor(q.y), 2.); vec2 cf = fract(q) - .5, ci = floor(q);
+    float joint = smoothstep(.36, .5, max(abs(cf.x), abs(cf.y)));
+    float stone = (.9 + .14 * th(ci)) * (1. - .28 * joint);
+    // asphalt: grain and worn patches
+    float wAsph = smoothstep(.31, .25, L) * smoothstep(.1, .15, L) * grey;
+    float grain = .93 + .12 * th(floor(p / .035));
+    // granite setts (tram streets): bigger, darker blocks
+    float wSett = smoothstep(.22, .17, L) * grey * (1. - wAsph);
+    vec2 q2 = p / .14; q2.x += .5 * mod(floor(q2.y), 2.); vec2 cf2 = fract(q2) - .5;
+    float sett = (.86 + .2 * th(floor(q2))) * (1. - .35 * smoothstep(.38, .5, max(abs(cf2.x), abs(cf2.y))));
+    // grass
+    float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
+    float blades = .88 + .2 * tvn(p / .35) + .08 * th(floor(p / .06));
+    float k = mix(1., stone, wPave * near) * mix(1., grain, wAsph * near) * mix(1., sett, wSett * near) * mix(1., blades, wGrass * (1. - smoothstep(.04, .15, fw)));
+    diffuseColor.rgb = c * k * macro;
+  }`);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
+float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-terrain-v1';
+  m.customProgramCacheKey = () => 'ilisboa-terrain-v2';
   return m;
 }

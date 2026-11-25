@@ -290,7 +290,7 @@ const tiles = new Map();
 const tileOf = (x, y) => [Math.floor((x - minX) / TILE), Math.floor((y - minY) / TILE)];
 const getTile = (i, j) => {
   const k = `${i}_${j}`;
-  if (!tiles.has(k)) tiles.set(k, { i, j, b: makeSink(), balconies: [] });
+  if (!tiles.has(k)) tiles.set(k, { i, j, b: makeSink(), d: makeSink(), balconies: [] });
   return tiles.get(k);
 };
 const stats = { authored: 0, buildings: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
@@ -444,7 +444,7 @@ function addBuilding_(p) {
   if (wallTop - bottom < 0.5) return;
   stats[mode]++;
   const spec = { ...s, shape: mode === 'planar' ? s.shape : mode === 'skeleton' ? 'skeleton-done' : 'flat' };
-  const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1] };
+  const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1], D: T.d };
   const res = buildRoofAndWalls(S, ctx);
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
@@ -517,6 +517,7 @@ function addBuilding_(p) {
   pombalineBlocks(baixa, {
     SkeletonBuilder, groundAt, lin, srgb, jitter, pick, pal, hash, stats,
     getSink: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; },
+    getDetail: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).d; },
     balconies: (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).balconies; },
   });
   stats.buildings += baixa.length; stats.authored += baixa.length;
@@ -1227,7 +1228,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   totalTris += idx.length / 3;
   // buildings
   const T = tiles.get(`${i}_${j}`);
-  let balFile = null;
+  let balFile = null, detFile = null;
   if (T && T.b.pos.length) {
     const B = T.b;
     const bmat = doc.createMaterial('buildings').setRoughnessFactor(0.9).setMetallicFactor(0);
@@ -1237,12 +1238,21 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
       TEXCOORD_0: [Float32Array.from(B.surf, (v) => Math.min(1, Math.max(0, v / 512 + 0.5))), 'VEC2'], _INFO: [Float32Array.from(B.info), 'VEC4'], _STYLE: [Float32Array.from(B.style), 'VEC4'],
     }, bmat);
     totalTris += B.pos.length / 9;
+    const Dd = T.d;   // façade relief: its own file, fetched only for tiles near the camera
+    if (Dd.pos.length) {
+      const dd = newDoc(); detFile = `d_${i}_${j}.glb`;
+      addMesh(dd.doc, dd.scene, 'detail', {
+        POSITION: [Float32Array.from(Dd.pos), 'VEC3'], NORMAL: [Float32Array.from(Dd.nrm), 'VEC3'], COLOR_0: [Uint8Array.from(Dd.col, (v) => Math.round(Math.min(1, v) * 255)), 'VEC3', true],
+      }, dd.doc.createMaterial('detail').setRoughnessFactor(0.85).setMetallicFactor(0));   // plain stonework: no façade attributes to carry
+      totalTris += Dd.pos.length / 9; stats.detailTris = (stats.detailTris || 0) + Dd.pos.length / 9;
+      totalBytes += await writeDoc(dd.doc, path.join(OUT, detFile));
+    }
     if (T.balconies.length) { balFile = `bal_${i}_${j}.bin`; fs.writeFileSync(path.join(OUT, balFile), Buffer.from(Float32Array.from(T.balconies).buffer)); totalBytes += T.balconies.length * 4; }
   }
   const file = `t_${i}_${j}.glb`;
   const bytes = await writeDoc(doc, path.join(OUT, file));
   totalBytes += bytes;
-  manifest.tiles.push({ file, i, j, bounds: [x0, y0, x1, y1], bytes, balconies: balFile });
+  manifest.tiles.push({ file, i, j, bounds: [x0, y0, x1, y1], bytes, balconies: balFile, detail: detFile });
   log(`tile ${i},${j}: ${(bytes / 1024).toFixed(0)} KB`);
 }
 
@@ -1390,6 +1400,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   totalBytes += fs.statSync(path.join(OUT, 'water.png')).size + trees.length * 4 + lamps.length * 4;
 }
 manifest.stats.bytes = totalBytes;
+manifest.stats.detailTris = stats.detailTris || 0;
 manifest.stats.triangles = totalTris;
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
 // city index: every built area's manifest in one file, first area first (the viewer streams tiles from all of them)

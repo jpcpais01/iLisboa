@@ -218,6 +218,8 @@ export function buildRoofAndWalls(S, ctx) {
     }
   });
 
+  if (ctx.D && spec.floorH > 0 && !spec.stone) facadeRelief(ctx.D, ctx, isFlat, parapet, f);
+
   // ── roof surface ──
   if (planes) {
     planes.forEach((P, i) => {
@@ -273,6 +275,64 @@ export function buildRoofAndWalls(S, ctx) {
   return out;
 }
 
+// a band standing d proud of the wall p→q (outward = right of p→q) between z0..z1; front, top and (if deep) underside
+export function reliefBand(D, a, b, z0, z1, d, col, ST, bottom = -1e9, ext = d) {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) return;
+  const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, ox = dy, oy = -dx, I0 = [0, 0, 0, 0];
+  const A = [a[0] - dx * ext, a[1] - dy * ext], B = [b[0] + dx * ext, b[1] + dy * ext];
+  const F = (p, z) => [p[0] + ox * d, z, -(p[1] + oy * d)], W = (p, z) => [p[0], z, -p[1]];
+  const nF = [ox, 0, -oy];
+  tri(D, F(A, z0), F(B, z0), F(B, z1), nF, col, [0, 0], [0, 0], [0, 0], I0, ST); tri(D, F(A, z0), F(B, z1), F(A, z1), nF, col, [0, 0], [0, 0], [0, 0], I0, ST);
+  tri(D, W(A, z1), F(A, z1), F(B, z1), [0, 1, 0], col, [0, 0], [0, 0], [0, 0], I0, ST); tri(D, W(A, z1), F(B, z1), W(B, z1), [0, 1, 0], col, [0, 0], [0, 0], [0, 0], I0, ST);
+  if (z0 > bottom + 0.3 && d > 0.15) { const cb = col.map((c) => c * 0.8); tri(D, W(A, z0), W(B, z0), F(B, z0), [0, -1, 0], cb, [0, 0], [0, 0], [0, 0], I0, ST); tri(D, W(A, z0), F(B, z0), F(A, z0), [0, -1, 0], cb, [0, 0], [0, 0], [0, 0], I0, ST); }
+}
+// a vertical strip w wide at the start (end = 0) or end (end = 1) of the wall p→q: a cunhal / pilaster
+export function reliefPilaster(D, a, b, end, w, d, z0, z1, col, ST) {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) return;
+  const dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, ox = dy, oy = -dx, s = end ? -1 : 1, P0 = end ? b : a, I0 = [0, 0, 0, 0];
+  const P1 = [P0[0] + dx * s * Math.min(w, L / 3), P0[1] + dy * s * Math.min(w, L / 3)], P0x = [P0[0] - dx * s * d, P0[1] - dy * s * d];
+  const F = (p, z) => [p[0] + ox * d, z, -(p[1] + oy * d)], W = (p, z) => [p[0], z, -p[1]];
+  tri(D, F(P0x, z0), F(P1, z0), F(P1, z1), [ox, 0, -oy], col, [0, 0], [0, 0], [0, 0], I0, ST); tri(D, F(P0x, z0), F(P1, z1), F(P0x, z1), [ox, 0, -oy], col, [0, 0], [0, 0], [0, 0], I0, ST);
+  const nS = [dx * s, 0, -dy * s];
+  tri(D, W(P1, z0), F(P1, z0), F(P1, z1), nS, col, [0, 0], [0, 0], [0, 0], I0, ST); tri(D, W(P1, z0), F(P1, z1), W(P1, z1), nS, col, [0, 0], [0, 0], [0, 0], I0, ST);
+}
+
+// ─── façade relief: the stonework that gives Lisbon fronts their depth ───
+// Socle, string course, floor bands, moulded cornice and the corner pilasters (cunhais), as real geometry standing
+// proud of the wall. Goes to its own sink: the viewer draws it only near the camera.
+const STONE_C = [0.69, 0.63, 0.53], WHITE_C = [0.86, 0.84, 0.79];   // linear: worn lioz, lime-washed trim
+function facadeRelief(D, ctx, isFlat, parapet, f) {
+  const { outer, party, ground, bottom, wallTop, spec, seed, colWall } = ctx;
+  const v = spec.variant, formal = v === 0 || v === 4 || v === 6, modern = v === 3;
+  const trim = formal ? STONE_C : WHITE_C, I0 = [0, 0, 0, 0], ST = [KIND.PLAIN / 8, v / 8, seed, 0.9];
+  const n = outer.length, gh = ground + spec.groundH, fh = spec.floorH;
+  const edges = outer.map((a, i) => { const b = outer[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]); return { a, b, L, dx: (b[0] - a[0]) / (L || 1), dy: (b[1] - a[1]) / (L || 1), on: !party[i] && L >= 1.2 }; });
+  const band = (e, z0, z1, d, col, ext = d) => reliefBand(D, e.a, e.b, z0, z1, d, col, ST, bottom, ext);
+  const pilaster = (e, end, w, d, z0, z1, col) => reliefPilaster(D, e.a, e.b, end, w, d, z0, z1, col, ST);
+  const convex = (i) => { const e0 = edges[(i - 1 + n) % n], e1 = edges[i]; return e0.dx * e1.dy - e0.dy * e1.dx > 0.25; };   // CCW: left turn
+  for (let i = 0; i < n; i++) {
+    const e = edges[i]; if (!e.on) continue;
+    const zt = Math.min(f(e.a[0], e.a[1]), f(e.b[0], e.b[1]));
+    const top = isFlat ? wallTop : Math.min(wallTop, zt);
+    if (top - ground < 3) continue;
+    if (formal) band(e, bottom, ground + 0.9, 0.07, STONE_C);   // stone socle
+    if (modern) {   // concrete slab edges at every floor
+      for (let z = gh; z < top - 1; z += fh) band(e, z - 0.32, z, 0.06, [0.62, 0.61, 0.58]);
+    } else {
+      if (formal || v === 1 && seed < 0.45) band(e, gh - 0.24, gh, 0.1, trim);            // string course over the shops
+      if (v === 4) for (let z = gh + fh; z < top - 2; z += fh) band(e, z - 0.18, z, 0.07, trim);
+      // cornice: two steps under the eave (pitched) or crowning the parapet (flat)
+      if (isFlat) { band(e, top - 0.1, top + 0.18, 0.26, trim); band(e, top - 0.42, top - 0.1, 0.12, trim); }
+      else { band(e, top - 0.34, top - 0.04, 0.16, trim); band(e, top - 0.62, top - 0.34, 0.07, trim); }
+      // cunhais at convex corners that are not against a neighbour
+      if (e.L > 2.5) {
+        if (convex(i) || !edges[(i - 1 + n) % n].on) pilaster(e, 0, formal ? 0.55 : 0.45, 0.08, bottom + 0.6, top - 0.62, trim);   // also where the front meets a neighbour
+        if (convex((i + 1) % n) || !edges[(i + 1) % n].on) pilaster(e, 1, formal ? 0.55 : 0.45, 0.08, bottom + 0.6, top - 0.62, trim);
+      }
+    }
+  }
+}
+
 // Skeleton (CGAL) roof for complex footprints, courtyards, domes.
 export function skeletonRoof(S, sk, ctx, pitchSlope, maxH, dome) {
   const { wallTop, spec, seed, colRoof } = ctx;
@@ -322,4 +382,4 @@ export function roofExtras(S, ctx, f, rng, pitched) {
   }
 }
 
-export { box, wallQuad, triUp, tri, polyArea, pip };
+export { box, wallQuad, triUp, tri, polyArea, pip, STONE_C, WHITE_C };

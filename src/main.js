@@ -75,6 +75,7 @@ const size = Math.hypot(maxX - minX, maxY - minY);
 document.getElementById('attrib').textContent = manifest.attribution;
 
 const matBuildings = buildingMaterial();
+const matDetail = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
 const maxAniso = renderer.capabilities.getMaxAnisotropy();
 let done = 0, total = 1;
 const tick = () => { progressEl.style.width = `${Math.min(1, ++done / total) * 100}%`; };
@@ -175,6 +176,7 @@ function dispose(tile) {
     });
   }
   const i = balconyChunks.indexOf(tile.bal); if (i >= 0) balconyChunks.splice(i, 1);
+  dropDetail(tile);
   tile.obj = tile.bal = null; tile.state = 0; showFar(tile, true);
 }
 async function load(tile) {
@@ -188,6 +190,20 @@ async function load(tile) {
     tile.state = 2; showFar(tile, false);
   } catch (e) { console.error(e); if (tile.gen === gen) tile.state = 0; tile.failed = (tile.failed || 0) + 1; }
 }
+// façade relief (cornices, string courses, cunhais): a separate file per tile, only within ~900 m of the camera
+function dropDetail(t) { if (t.detail) { scene.remove(t.detail); t.detail.traverse((m) => m.isMesh && m.geometry.dispose()); } t.detail = null; t.dstate = 0; }
+function detail(t, d) {
+  const DR = 900 * lodK;
+  if (t.state !== 2 || !t.t.detail) return;
+  if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
+  if (d > DR || t.dstate) return;
+  t.dstate = 1; const gen = t.gen;
+  loader.loadAsync(url(t.a, t.t.detail)).then((g) => {
+    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { g.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
+    g.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; } });
+    t.detail = g.scene; t.dstate = 2; scene.add(g.scene);
+  }).catch(() => { t.dstate = 0; });
+}
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
 const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.8 + 1100, 1500, 2800);   // beyond this the far level of detail stands in
 const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - y, 0, y - b[3]));
@@ -198,6 +214,7 @@ function stream(force) {
   const want = [];
   for (const t of tiles) {
     const d = rectDist(t.b, x, y);
+    detail(t, rectDist(t.b, camera.position.x, -camera.position.z));
     if (d > R + 900 && t.state === 2) dispose(t);
     else if (d > R + 900 && t.state === 1) t.state = 0;
     else if (d <= R && t.state === 0 && (t.failed || 0) < 3) want.push([d, t]);
@@ -410,6 +427,7 @@ window.__scene = scene; window.__view = (arr) => { camera.position.fromArray(arr
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
+const _c = new THREE.Vector3();
 let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false;
 renderer.setAnimationLoop((now) => {
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;

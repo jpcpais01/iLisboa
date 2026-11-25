@@ -5,7 +5,7 @@ import { MeshoptDecoder } from 'meshoptimizer';
 import fs from 'node:fs';
 await MeshoptDecoder.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder });
-const dir = 'public/tiles/baixa-alfama/';
+const dir = `public/tiles/${process.argv[2] || 'baixa-alfama'}/`;
 for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.glb'))) {
   const doc = await io.read(dir + f);
   for (const node of doc.getRoot().listNodes()) {

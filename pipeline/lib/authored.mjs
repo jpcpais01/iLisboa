@@ -3,7 +3,7 @@
 // Imagery was used only as visual reference; all geometry here is our own.
 import earcut from 'earcut';
 import ClipperLib from 'clipper-lib';
-import { KIND, box, wallQuad, triUp, tri as triRaw, polyArea, pip, obb } from './buildings.mjs';
+import { KIND, box, wallQuad, triUp, tri as triRaw, polyArea, pip, obb, reliefBand, reliefPilaster, STONE_C } from './buildings.mjs';
 
 // triangle with winding made to agree with the given normal (hand-built meshes stay front-facing)
 function tri(S, a, b, c, n, ...rest) {
@@ -202,11 +202,16 @@ export function profileRoof(S, sk, ctx, prof) {
   const { wallTop, seed, colRoof, ground, bayW = 2.8, variant = 0 } = ctx;
   const info = [Math.min(1, (wallTop - ground) / 128), 0, 0, 0];
   const ox = ctx.cx || 0, oy = ctx.cy || 0;
-  const bands = [[0, prof.d1, KIND.MANSARD], [prof.d1, prof.dCap, KIND.TILES], [prof.dCap, 1e9, KIND.FLAT]];
+  const bands = [[0, prof.d1, ctx.noPaintedDormers || !ctx.noDormers ? KIND.TILES : KIND.MANSARD], [prof.d1, prof.dCap, KIND.TILES], [prof.dCap, 1e9, KIND.FLAT]];   // geometric dormers replace the painted ones
   for (const poly of sk.polygons) {
     const V = poly.map((k) => sk.vertices[k]);
-    let ex = 1, ey = 0;
-    for (let i = 0; i < V.length; i++) { const a = V[i], b = V[(i + 1) % V.length]; if (a[2] < 1e-4 && b[2] < 1e-4) { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; ex = (b[0] - a[0]) / L; ey = (b[1] - a[1]) / L; break; } }
+    let ex = 1, ey = 0, eave = null;
+    for (let i = 0; i < V.length; i++) { const a = V[i], b = V[(i + 1) % V.length]; if (a[2] < 1e-4 && b[2] < 1e-4) { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; ex = (b[0] - a[0]) / L; ey = (b[1] - a[1]) / L; eave = [a, b, L]; break; } }
+    if (eave && prof.d1 > 0.9 && !ctx.noDormers) {   // one dormer per façade bay of this eave (the walls below use the same bays)
+      const [a, b, L] = eave, bw = Math.max(1.6, ctx.bayW || 2.8), n = L >= 2.2 ? Math.max(1, Math.round(L / bw)) : 0;
+      let nx = -ey, ny = ex; const far = V.find((v) => v[2] > 0.5); if (far && (far[0] - a[0]) * nx + (far[1] - a[1]) * ny < 0) { nx = -nx; ny = -ny; }
+      dormers(S, { a, ex, ey, nx, ny, us: Array.from({ length: n }, (_, k) => ((k + 0.5) / n) * L).filter((u) => u > 0.8 && u < L - 0.8), wallTop, s1: prof.s1, colRoof, seed });
+    }
     for (const [lo, hi, kind] of bands) {
       const P = clipD(V, lo, hi);
       if (P.length < 3 || Math.abs(polyArea(P)) < 0.01) continue;
@@ -245,6 +250,39 @@ export function profileRoof(S, sk, ctx, prof) {
         run([m.path], ClipperLib.ClipType.ctIntersection, m.col);
       }
       run(ctx.partsUnion, ClipperLib.ClipType.ctDifference, colRoof);
+    }
+  }
+}
+
+// Dormers (trapeiras) standing out of the steep mansard band, one per façade bay, exactly where the shader would
+// otherwise paint them: framed window, cheeks down to the slope, a small gabled roof running back into it.
+export function dormers(S, { a, ex, ey, nx, ny, us, wallTop, s1, colRoof, seed }) {
+  const white = [0.86, 0.85, 0.81], glass = [0.035, 0.045, 0.055], cheek = [0.78, 0.76, 0.72], I0 = [0, 0, 0, 0];
+  const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], TL = [KIND.TILES / 8, 5 / 8, seed, 0.5];
+  const z0 = 0.35, z1 = 1.95, zr = 2.5, hw = 0.55, d0 = z0 / s1 + 0.04;
+  for (const u of us) {
+    const P = (du, d, z) => [a[0] + ex * (u + du) + nx * d, wallTop + z, -(a[1] + ey * (u + du) + ny * d)];
+    const dB = (z) => z / s1;                                   // depth where the slope reaches height z
+    // front: white frame, glass set back 6 cm inside it
+    tri(S, P(-hw, d0, z0), P(hw, d0, z0), P(hw, d0, z1), [-nx, 0, ny], white, [0, 0], [0, 0], [0, 0], I0, PL);
+    tri(S, P(-hw, d0, z0), P(hw, d0, z1), P(-hw, d0, z1), [-nx, 0, ny], white, [0, 0], [0, 0], [0, 0], I0, PL);
+    tri(S, P(-hw + 0.13, d0 - 0.01, z0 + 0.14), P(hw - 0.13, d0 - 0.01, z0 + 0.14), P(hw - 0.13, d0 - 0.01, z1 - 0.13), [-nx, 0, ny], glass, [0, 0], [0, 0], [0, 0], I0, PL);
+    tri(S, P(-hw + 0.13, d0 - 0.01, z0 + 0.14), P(hw - 0.13, d0 - 0.01, z1 - 0.13), P(-hw + 0.13, d0 - 0.01, z1 - 0.13), [-nx, 0, ny], glass, [0, 0], [0, 0], [0, 0], I0, PL);
+    tri(S, P(-0.03, d0 - 0.012, z0 + 0.14), P(0.03, d0 - 0.012, z0 + 0.14), P(0.03, d0 - 0.012, z1 - 0.13), [-nx, 0, ny], white, [0, 0], [0, 0], [0, 0], I0, PL);   // mullion
+    tri(S, P(-0.03, d0 - 0.012, z0 + 0.14), P(0.03, d0 - 0.012, z1 - 0.13), P(-0.03, d0 - 0.012, z1 - 0.13), [-nx, 0, ny], white, [0, 0], [0, 0], [0, 0], I0, PL);
+    // pediment
+    tri(S, P(-hw - 0.08, d0 - 0.02, z1), P(hw + 0.08, d0 - 0.02, z1), P(0, d0 - 0.02, zr), [-nx, 0, ny], white, [0, 0], [0, 0], [0, 0], I0, PL);
+    // cheeks back to the slope
+    for (const sg of [-1, 1]) {
+      const n = [ex * sg, 0, -ey * sg];
+      tri(S, P(sg * hw, d0, z0), P(sg * hw, d0, z1), P(sg * hw, dB(z1), z1), n, cheek, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+    // gabled roof running back into the slope, a little proud of the front
+    const dR = dB(zr), dE = dB(z1);
+    for (const sg of [-1, 1]) {
+      const A = P(sg * (hw + 0.12), d0 - 0.1, z1 - 0.05), B = P(0, d0 - 0.1, zr), C = P(0, dR, zr), D = P(sg * (hw + 0.12), dE, z1 - 0.05);
+      const up = [0, 1, 0];
+      tri(S, A, B, C, up, colRoof, [0, 0], [0, 0], [0, 0], I0, TL); tri(S, A, C, D, up, colRoof, [0, 0], [0, 0], [0, 0], I0, TL);
     }
   }
 }
@@ -302,6 +340,17 @@ export function pombalineBlocks(blds, env) {
           const info = [Math.min(1, (wallTop - ground) / 128), floorH / 8, Math.min(1, bays / 128), groundH / 8];
           const style = [(bays ? KIND.FACADE : KIND.BLANK) / 8, variant / 8, hash(id + 'seed'), (l / Math.max(1, bays)) / 6];
           wallQuad(S, p, q, gmin - 1.5, gmin - 1.5, wallTop, wallTop, col, 0, bays, ground, info, style);
+          if (!back && bays && env.getDetail) {   // stone socle, string course over the shops, cunhais where buildings meet
+            const D = env.getDetail(cx, cy), ST = [KIND.PLAIN / 8, 0, hash(id + 'seed'), 0.9];
+            reliefBand(D, p, q, gmin - 1.5, ground + 0.9, 0.07, STONE_C, ST);
+            reliefBand(D, p, q, ground + groundH - 0.24, ground + groundH, 0.11, STONE_C, ST);
+            reliefBand(D, p, q, ground + groundH + floorH - 0.16, ground + groundH + floorH, 0.06, STONE_C, ST);
+            if (l > 2.5) { reliefPilaster(D, p, q, 0, 0.32, 0.07, ground + 0.9, wallTop - 0.35, STONE_C, ST); reliefPilaster(D, p, q, 1, 0.32, 0.07, ground + 0.9, wallTop - 0.35, STONE_C, ST); }
+          }
+          if (!back && bays) {   // trapeiras over every window bay, in the owner's roof colour
+            const ex = (q[0] - p[0]) / l, ey = (q[1] - p[1]) / l, rc = m ? lin(jitter(pick(roofs, hash(m.id + 'r')), hash(m.id + 'rj'), 9)) : roofCol;
+            dormers(S, { a: p, ex, ey, nx: -ey, ny: ex, us: Array.from({ length: bays }, (_, kk) => ((kk + 0.5) / bays) * l).filter((u) => u > 0.7 && u < l - 0.7), wallTop, s1: prof.s1, colRoof: rc, seed: hash(id + 'seed') });
+          }
           // balconies on the first floor (and often the second) of street façades
           if (!back && bays) {
             const ox = (q[1] - p[1]) / l, oy = -(q[0] - p[0]) / l;
@@ -333,7 +382,7 @@ export function pombalineBlocks(blds, env) {
       const xs = p.outer.map((v) => v[0]), ys = p.outer.map((v) => v[1]);
       return { path: toC(p.outer), bb: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], col: lin(jitter(pick(roofs, hash(p.id + 'r')), hash(p.id + 'rj'), 9)) };
     });
-    const ctx = { wallTop, seed: seedB, colRoof: roofCol, ground, cx, cy, bayW: 2.9, variant: 0, parts, partsUnion: parts.map((m) => m.path) };
+    const ctx = { wallTop, seed: seedB, colRoof: roofCol, ground, cx, cy, bayW: 2.9, variant: 0, parts, partsUnion: parts.map((m) => m.path), noDormers: true, noPaintedDormers: true };
     if (sk && sk.polygons.length) profileRoof(S, sk, ctx, prof);
     else { stats.skeletonFail++; continue; }
     // distance-to-eave → roof height, for fire walls and chimneys
@@ -444,7 +493,7 @@ export function arcoRuaAugusta(S, { cx, cy, ux, uy, ground, lin, srgb }) {
       const p = F(s * u, v, 0), x = p[0], y = -p[2];
       box(S, x, y, ux, uy, 0.95, 0.95, ground - 0.5, ground + 3.2, stone, I0, ST);
       limb(S, [x, ground + 3.2, -y], [x, ground + 14.6, -y], 0.62, 0.56, 12, stone, ST);
-      box(S, x, y, ux, uy, 0.85, 0.85, ground + 14.6, ground + 15.5, stone, I0, ST);
+      box(S, x, y, ux, uy, 0.92, 0.92, ground + 15.05, ground + 15.5, stone, I0, ST);
     }
     const sgn = v > 0 ? 1 : -1;
     const e = F(0, v - sgn * 0.15, 0);
@@ -459,78 +508,143 @@ export function arcoRuaAugusta(S, { cx, cy, ux, uy, ground, lin, srgb }) {
   box(S, cx, cy, ux, uy, 5.4, D - 2.0, ground + top + 6.8, ground + top + 7.6, stone, I0, ST);
   { const a = F(0, D - 0.45, 0); box(S, a[0], -a[2], ux, uy, 2.2, 0.25, ground + top + 1.2, ground + top + 5.4, shade, I0, ST); }
   { const c = F(0, -D + 0.45, 0); limb(S, [c[0], ground + top + 3.2, c[2]], F(0, -D + 0.15, top + 3.2), 1.25, 1.25, 16, dark, ST); }
-  // statues on the cornice above the paired columns (Viriato, Nuno Álvares, Pombal, Vasco da Gama)
-  const person = (u, v, z, sc, col, seated = false) => {
-    const b = F(u, v, z);
-    limb(S, [b[0], b[1], b[2]], [b[0], b[1] + (seated ? 0.9 : 1.6) * sc, b[2]], 0.42 * sc, 0.34 * sc, 8, col, ST);
-    limb(S, [b[0], b[1] + (seated ? 0.9 : 1.6) * sc, b[2]], [b[0], b[1] + (seated ? 1.7 : 2.35) * sc, b[2]], 0.34 * sc, 0.28 * sc, 8, col, ST);
-    limb(S, [b[0], b[1] + (seated ? 1.7 : 2.35) * sc, b[2]], [b[0], b[1] + (seated ? 2.05 : 2.72) * sc, b[2]], 0.16 * sc, 0.15 * sc, 6, col, ST);
-  };
-  for (const s of [-1, 1]) for (const u of [7.6, 10.2]) { person(s * u, D + 1.4, top + 0.2, 1.35, stone); person(s * u, -D - 1.4, top + 0.2, 1.2, stone); }
-  // reclining river figures (Tejo and Douro) at the attic corners
-  for (const s of [-1, 1]) { const a = F(s * 6.2, D - 0.6, top + 0.9), b = F(s * 4.2, D - 0.6, top + 1.6); limb(S, a, b, 0.55, 0.45, 8, stone, ST); }
-  // Glory crowning Valour and Genius
+  // statues on the cornice above the paired columns, Praça side only: Viriato, Nuno Álvares, Pombal, Vasco da Gama (≈4 m)
+  const L = (u0, v0, z0) => (a, b, z) => F(u0 + a, v0 + b, z0 + z);
+  const poses = [{ cloak: true, arms: [[-0.25, 0.1, -0.05], [0.12, 0.25, -0.55]] }, { cloak: true, helmet: true, arms: [[-0.05, 0.15, -0.6], [0.3, 0.2, 0.05]] },
+    { robe: true, cloak: true, arms: [[-0.1, 0.35, -0.3], [0.05, 0.1, -0.6]] }, { robe: true, cloak: true, arms: [[-0.05, 0.1, -0.6], [0.2, 0.4, -0.2]] }];
+  [-10.2, -7.6, 7.6, 10.2].forEach((u, k) => {
+    const [bx, by] = (() => { const p = F(u, D + 1.25, 0); return [p[0], -p[2]]; })();
+    box(S, bx, by, ux, uy, 0.75, 0.6, ground + top + 0.2, ground + top + 0.75, shade, I0, ST);
+    figure(S, L(u, D + 1.25, top + 0.75), 2.05, stone, ST, { stride: k % 2 ? 0.6 : -0.5, ...poses[k] });
+  });
+  // reclining river gods (Tejo and Douro) on the attic corners, propped on an urn
+  for (const s of [-1, 1]) {
+    const c = [s * 6.3, D - 0.5, top + 0.95], th = s * 1.2, co = Math.cos(th), si = Math.sin(th);
+    const Rg = (a, b, z) => F(c[0] + a * co + z * si, c[1] + b, c[2] - a * si + z * co);
+    figure(S, (a, b, z) => Rg(a, b, z * 0.95), 1.7, stone, ST, { robe: true, arms: [[-0.1, 0.15, -0.55], [0.35, 0.2, 0.25]] });
+    ell(S, L(s * 7.1, D - 0.5, top + 0.3), [0, 0, 0.45], [0.38, 0.38, 0.45], shade, ST, 8);
+  }
+  // royal arms on the attic (Praça side): crowned shield with laurels
+  { const A = L(0, D - 0.45, top + 3.0);
+    slab4(S, [A(-1.35, 0.1, 1.9), A(1.35, 0.1, 1.9), A(1.2, 0.1, -1.2), A(-1.2, 0.1, -1.2)], 0.22, shade, ST);
+    ell(S, A, [0, 0.12, -1.45], [1.1, 0.12, 0.65], shade, ST, 10);
+    sweep(S, A, [[-1.1, 0.25, 2.0, 0.12, 0.12], [-0.6, 0.25, 2.45, 0.2, 0.2], [0, 0.25, 2.65, 0.26, 0.26], [0.6, 0.25, 2.45, 0.2, 0.2], [1.1, 0.25, 2.0, 0.12, 0.12]], stone, ST, 7);
+    for (const t of [-1, 1]) sweep(S, A, [[t * 0.4, 0.3, -1.9, 0.12, 0.12], [t * 1.6, 0.3, -1.3, 0.2, 0.2], [t * 2.0, 0.3, 0.2, 0.22, 0.22], [t * 1.75, 0.3, 1.6, 0.16, 0.16], [t * 1.35, 0.3, 2.3, 0.05, 0.05]], shade, ST, 7);
+    ell(S, A, [0, 0.35, 0.3], [0.55, 0.12, 0.7], stone, ST, 8); }
+  // capitals and bases of the twelve columns
+  for (const v of [D + 0.9, -D - 0.9]) for (const s of [-1, 1]) for (const u of [6.6, 8.6, 10.9]) {
+    const C = L(s * u, v, 0);
+    sweep(S, C, [[0, 0, 3.2, 0.78, 0.78], [0, 0, 3.42, 0.78, 0.78], [0, 0, 3.55, 0.66, 0.66], [0, 0, 3.75, 0.7, 0.7], [0, 0, 3.9, 0.62, 0.62]], stone, ST, 14, false);   // Attic base
+    sweep(S, C, [[0, 0, 13.9, 0.58, 0.58], [0, 0, 14.25, 0.64, 0.64], [0, 0, 14.55, 0.78, 0.78], [0, 0, 14.75, 0.9, 0.9]], stone, ST, 14, false);   // bell
+    for (let k = 0; k < 8; k++) { const t = (k / 8) * Math.PI * 2, x = Math.cos(t), y = Math.sin(t);
+      sweep(S, C, [[x * 0.58, y * 0.58, 13.95, 0.09, 0.05], [x * 0.72, y * 0.72, 14.3, 0.1, 0.06], [x * 0.83, y * 0.83, 14.45, 0.06, 0.04]], shade, ST, 5); }   // acanthus leaves
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) ell(S, C, [a * 0.78, b * 0.78, 14.95], [0.13, 0.13, 0.16], stone, ST, 6);   // volutes
+  }
+  // Glory (Calmels, 7 m) on a plinth crowning Valour and Genius, seated
   const t0 = top + 7.6;
-  person(0, 0, t0, 1.9, stone);
-  { const h = F(0, 0, t0 + 5.2); for (const s of [-1, 1]) limb(S, h, F(s * 1.6, 0.3, t0 + 4.6), 0.18, 0.14, 6, stone, ST); }      // raised arms with wreaths
-  for (const s of [-1, 1]) person(s * 2.6, 0.4, t0, 1.5, stone, true);
-  for (const s of [-1, 1]) { const w0 = F(s * 0.3, -0.5, t0 + 3.6), w1 = F(s * 1.5, -0.9, t0 + 5.4); limb(S, w0, w1, 0.4, 0.08, 4, stone, ST); } // wings
+  { const p = F(0, 0, 0); box(S, p[0], -p[2], ux, uy, 2.2, 1.2, ground + t0, ground + t0 + 0.9, shade, I0, ST); }
+  figure(S, L(0, 0, t0 + 0.9), 3.4, stone, ST, { robe: true, wings: true, arms: [[-0.55, 0.15, 0.45], [0.55, 0.15, 0.45]] });
+  for (const s of [-1, 1]) {   // laurel wreaths in her raised hands
+    const pts = []; for (let k = 0; k <= 12; k++) { const t = (k / 12) * Math.PI * 2; pts.push([s * 0.78 + Math.cos(t) * 0.17, 0.15 + Math.sin(t) * 0.17, 1.44 + 0.45 + 0.02, 0.035, 0.035]); }
+    sweep(S, (a, b, z) => L(0, 0, t0 + 0.9)(a * 3.4, b * 3.4, z * 3.4), pts, stone, ST, 5, false);
+  }
+  figure(S, L(-2.75, 0.5, t0), 2.9, stone, ST, { seated: true, helmet: true, cloak: true, arms: [[-0.2, 0.3, -0.35], [0.25, 0.2, 0.4]] });   // Valour with shield and spear
+  figure(S, L(2.75, 0.5, t0), 2.9, stone, ST, { seated: true, arms: [[-0.25, 0.3, 0.15], [0.15, 0.35, -0.3]] });   // Genius
+  { const sp = L(-2.75, 0.5, t0); sweep(S, sp, [[-0.95, 0.4, 0.3, 0.05, 0.05], [-0.95, 0.5, 4.4, 0.04, 0.04]], stone, ST, 5); slab4(S, [sp(-1.4, 0.9, 0.2), sp(-0.6, 1.1, 0.2), sp(-0.6, 1.1, 1.6), sp(-1.4, 0.9, 1.6)], 0.15, stone, ST); }
   return 1;
 }
 
 // Equestrian statue of D. José I (Machado de Castro, 1775): bronze king on horseback
 // trampling serpents, on a tall lioz pedestal flanked by sculpture groups, on an oval stepped base.
 export function equestrianJose(S, { cx, cy, ground, heading, lin, srgb, plain = false }) {
-  const bronze = lin(srgb('#4e5a4b')), bronzeHi = lin(srgb('#66735f')), stone = lin(srgb('#e6dfcf')), shade = lin(srgb('#cfc6b2'));
+  const bronze = lin(srgb('#4e5a4b')), bronzeHi = lin(srgb('#5f6d5b')), stone = lin(srgb('#e6dfcf')), shade = lin(srgb('#cfc6b2'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.61, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.61, 1], I0 = [0, 0, 0, 0];
   const fx = Math.sin(heading), fy = Math.cos(heading);   // facing direction (heading 180° = south)
   const F = frame(cx, cy, fy, -fx, ground);               // u = statue's right, v = forward
-  // oval stepped platform: four steps
-  const steps = plain ? [[6.5, 5.0, 0.4], [5.8, 4.4, 0.8], [5.2, 3.9, 1.4]] : [[12.5, 9.5, 0.35], [11.6, 8.7, 0.7], [10.7, 7.9, 1.05], [9.8, 7.1, 1.4]];
+  const L = (a0, b0, z0, flip = 1) => (a, b, z) => F(a0 + a * flip, b0 + b * flip, z0 + z);   // local frame at an offset (flip = face backwards)
+  // oval stepped platform
+  const steps = plain ? [[6.5, 5.0, 0.4], [5.8, 4.4, 0.8], [5.2, 3.9, 1.4]] : [[9.5, 12.5, 0.35], [8.7, 11.6, 0.7], [7.9, 10.7, 1.05], [7.1, 9.8, 1.4]];
   let z = -0.6;
   for (const [ra, rb, zt] of steps) {
-    const n = 28, ring = Array.from({ length: n }, (_, k) => { const a = (k / n) * Math.PI * 2; return [Math.cos(a) * ra, Math.sin(a) * rb]; });
+    const n = 36, ring = Array.from({ length: n }, (_, k) => { const a = (k / n) * Math.PI * 2; return [Math.cos(a) * ra, Math.sin(a) * rb]; });
     for (let k = 0; k < n; k++) { const a = ring[k], b = ring[(k + 1) % n]; const pa = F(a[0], a[1], 0), pb = F(b[0], b[1], 0); wallQuad(S, [pa[0], -pa[2]], [pb[0], -pb[2]], ground + z, ground + z, ground + zt, ground + zt, stone, 0, 1, ground, I0, ST); }
     const flat = ring.flat(), idx = earcut(flat);
     for (let k = 0; k < idx.length; k += 3) triUp(S, ...[idx[k], idx[k + 1], idx[k + 2]].map((q) => F(ring[q][0], ring[q][1], zt)), stone, [0, 0], [0, 0], [0, 0], I0, ST);
     z = zt - 0.05;
   }
-  // pedestal: plinth, die, cornice
+  // pedestal, long along the horse: plinth, moulded die with sunk panels, cornice
   const P = (u, v) => { const p = F(u, v, 0); return [p[0], -p[2]]; };
-  const [px, py] = P(0, 0);
-  box(S, px, py, fy, -fx, 4.2, 2.9, ground + 1.4, ground + 2.6, shade, I0, ST);
-  box(S, px, py, fy, -fx, 3.6, 2.4, ground + 2.6, ground + 7.6, stone, I0, ST);
-  box(S, px, py, fy, -fx, 4.0, 2.75, ground + 7.6, ground + 8.3, shade, I0, ST);
-  box(S, px, py, fy, -fx, 3.5, 2.3, ground + 8.3, ground + 8.8, stone, I0, ST);
-  // allegorical groups on both flanks (Triumph with a horse, Fame with an elephant), bronze
-  if (!plain) for (const s of [-1, 1]) {
-    const [gx, gy] = P(s * 5.2, 0.4);
-    box(S, gx, gy, fy, -fx, 1.6, 1.9, ground + 1.4, ground + 2.4, stone, I0, ST);
-    limb(S, F(s * 5.2, -0.9, 2.4), F(s * 5.2, 1.2, 3.6), 0.95, 0.7, 8, bronze, PL);
-    limb(S, F(s * 5.0, 0.2, 2.4), F(s * 4.9, 0.1, 5.4), 0.45, 0.3, 8, bronzeHi, PL);
-    limb(S, F(s * 4.9, 0.1, 5.4), F(s * 4.9, 0.1, 5.9), 0.2, 0.18, 6, bronzeHi, PL);
+  const [px, py] = P(0, 0), U = [fy, -fx];
+  const hw = plain ? 1.6 : 2.3, hl = plain ? 2.6 : 3.9, z1 = 1.4;
+  box(S, px, py, ...U, hw + 0.7, hl + 0.7, ground + z1, ground + z1 + 0.6, shade, I0, ST);
+  box(S, px, py, ...U, hw + 0.45, hl + 0.45, ground + z1 + 0.6, ground + z1 + 1.1, stone, I0, ST);
+  box(S, px, py, ...U, hw + 0.25, hl + 0.25, ground + z1 + 1.1, ground + z1 + 1.35, shade, I0, ST);
+  box(S, px, py, ...U, hw, hl, ground + 2.75, ground + 7.4, stone, I0, ST);
+  for (const s of [-1, 1]) {                       // raised frames around sunk panels on the long sides and ends
+    for (const [z0, z1b] of [[2.95, 3.15], [7.0, 7.2]]) { const [qx, qy] = P(s * (hw + 0.06), 0); box(S, qx, qy, ...U, 0.08, hl - 0.35, ground + z0, ground + z1b, shade, I0, ST); }
+    for (const v of [-1, 1]) { const [qx, qy] = P(s * (hw + 0.06), v * (hl - 0.45)); box(S, qx, qy, ...U, 0.08, 0.12, ground + 3.15, ground + 7.0, shade, I0, ST); }
+    const [ex, ey] = P(0, s * (hl + 0.06)); box(S, ex, ey, ...U, hw - 0.35, 0.08, ground + 3.0, ground + 3.18, shade, I0, ST); box(S, ex, ey, ...U, hw - 0.35, 0.08, ground + 7.0, ground + 7.18, shade, I0, ST);
   }
-  // horse (walking, near fore-leg raised) and rider, scale ≈ 1.8× life
+  for (const [a, b, c, d] of [[7.4, 7.65, 0.12, shade], [7.65, 8.05, 0.32, stone], [8.05, 8.35, 0.5, shade], [8.35, 8.8, 0.25, stone]]) box(S, px, py, ...U, hw + c, hl + c, ground + a, ground + b, d, I0, ST);
   const h0 = 8.8;
-  const Bp = (u, v, zz) => F(u, v, h0 + zz);
-  limb(S, Bp(0, -2.1, 3.0), Bp(0, 1.9, 3.35), 1.05, 1.15, 10, bronze, PL);                 // barrel
-  limb(S, Bp(0, -2.4, 3.0), Bp(0, -2.1, 3.0), 0.75, 1.05, 10, bronze, PL);                 // rump
-  limb(S, Bp(0, 1.7, 3.4), Bp(0, 2.9, 5.2), 0.75, 0.45, 8, bronze, PL);                    // neck
-  limb(S, Bp(0, 2.8, 5.3), Bp(0, 3.95, 4.55), 0.42, 0.26, 8, bronze, PL);                  // head
-  limb(S, Bp(0, 2.2, 5.0), Bp(0, 2.6, 5.6), 0.12, 0.05, 4, bronze, PL);                    // mane crest
-  limb(S, Bp(0, -2.5, 3.3), Bp(0, -3.0, 1.6), 0.28, 0.12, 6, bronze, PL);                  // tail
-  for (const [u, v, raised] of [[-0.55, 1.55, false], [0.55, 1.55, true], [-0.55, -1.7, false], [0.55, -1.7, false]]) {
-    if (raised) { limb(S, Bp(u, v, 2.6), Bp(u, v + 0.75, 1.55), 0.24, 0.17, 6, bronze, PL); limb(S, Bp(u, v + 0.75, 1.55), Bp(u, v + 0.45, 0.85), 0.17, 0.14, 6, bronze, PL); }
-    else limb(S, Bp(u, v, 2.6), Bp(u, v + (v > 0 ? 0.1 : -0.15), 0), 0.26, 0.15, 6, bronze, PL);
+  if (!plain) {
+    // front: bronze medallion of Pombal in a wreath; back: royal arms
+    const fm = L(0, hl + 0.05, 5.1);
+    sweep(S, fm, [[0, 0, -0.01, 0.01, 0.01], [0, 0.04, 0, 0.95, 0.95], [0, 0.14, 0, 0.9, 0.9], [0, 0.18, 0, 0.01, 0.01]].map(([a, b, zz, r, q]) => [a, b, zz, r, q]), bronze, PL, 18, false);
+    for (let k = 0; k < 14; k++) { const t = (k / 14) * Math.PI * 2; ell(S, fm, [Math.cos(t) * 1.05, 0.1, Math.sin(t) * 1.05], [0.16, 0.1, 0.12], bronzeHi, PL, 5); }
+    ell(S, fm, [0, 0.18, 0.1], [0.32, 0.12, 0.4], bronzeHi, PL, 8);
+    const bm = L(0, -hl - 0.05, 5.1, -1);
+    slab4(S, [bm(-0.8, 0.08, 0.9), bm(0.8, 0.08, 0.9), bm(0.7, 0.08, -0.6), bm(-0.7, 0.08, -0.6)], 0.16, bronze, PL);
+    ell(S, bm, [0, 0.12, -0.85], [0.45, 0.1, 0.35], bronze, PL, 8);
+    sweep(S, bm, [[-0.55, 0.12, 1.0, 0.08, 0.08], [0, 0.12, 1.25, 0.14, 0.14], [0.55, 0.12, 1.0, 0.08, 0.08]], bronzeHi, PL, 6);   // crown
+    // flank groups on lioz bases: Triumph leading a horse over the fallen (statue's right), Fame with an elephant (left)
+    for (const s of [-1, 1]) {
+      const gu = s * (hw + 2.3);
+      const [gx, gy] = P(gu, 0.2);
+      box(S, gx, gy, ...U, 1.55, 3.0, ground + 1.35, ground + 2.4, shade, I0, ST);
+      box(S, gx, gy, ...U, 1.4, 2.85, ground + 2.4, ground + 2.65, stone, I0, ST);
+      const G = L(gu, 0.2, 2.65);
+      ell(S, G, [0, 0, 0.1], [1.2, 2.5, 0.35], bronze, PL, 12);                    // rocky ground of the group
+      if (s > 0) {
+        horse(S, L(gu - 0.25, -0.1, 2.7), 1.35, bronze, PL, { raise: true });
+        figure(S, L(gu + 0.85, 1.1, 2.7), 1.2, bronzeHi, PL, { robe: true, arms: [[-0.3, 0.45, 0.0], [0.15, 0.3, 0.75]], helmet: true });
+        figure(S, L(gu - 0.5, 1.9, 2.75, 1), 0.9, bronze, PL, { seated: true, arms: [[-0.2, 0.2, -0.45], [0.25, 0.25, 0.1]] });   // fallen captive
+      } else {
+        const E = L(gu - 0.2, -0.2, 2.7), sc = 1.0;
+        const e = (a, b, zz) => E(a * sc, b * sc, zz * sc);
+        sweep(S, e, [[0, -1.35, 1.65, 0.2, 0.2], [0, -1.15, 1.7, 0.62, 0.66], [0, -0.5, 1.75, 0.78, 0.82], [0, 0.3, 1.8, 0.8, 0.85], [0, 0.95, 1.85, 0.66, 0.72], [0, 1.2, 1.85, 0.3, 0.3]], bronze, PL, 14);
+        ell(S, e, [0, 1.4, 2.15], [0.5, 0.55, 0.55], bronze, PL, 10);              // head
+        sweep(S, e, [[0, 1.78, 2.1, 0.17, 0.2], [0, 2.0, 1.6, 0.12, 0.12], [0, 2.02, 1.05, 0.09, 0.09], [0, 2.2, 0.75, 0.07, 0.06], [0, 2.35, 0.8, 0.05, 0.04]], bronze, PL, 8);   // trunk
+        for (const t of [-1, 1]) {
+          sweep(S, e, [[t * 0.25, 1.7, 1.85, 0.06, 0.06], [t * 0.33, 2.1, 1.75, 0.045, 0.045], [t * 0.3, 2.3, 1.95, 0.02, 0.02]], bronzeHi, PL, 5);   // tusks
+          slab4(S, [e(t * 0.4, 1.3, 2.55), e(t * 1.1, 1.0, 2.35), e(t * 1.05, 0.9, 1.5), e(t * 0.42, 1.2, 1.7)], 0.08, bronze, PL);   // ears
+          for (const v of [-0.75, 0.75]) sweep(S, e, [[t * 0.45, v, 1.5, 0.27, 0.27], [t * 0.45, v + 0.03, 0.7, 0.24, 0.24], [t * 0.45, v + 0.05, 0.05, 0.27, 0.27]], bronze, PL, 9);
+        }
+        sweep(S, e, [[0, -1.35, 1.8, 0.05, 0.05], [0, -1.5, 1.2, 0.04, 0.04], [0, -1.48, 0.8, 0.06, 0.06]], bronze, PL, 5);   // tail
+        slab4(S, [e(-0.75, -0.6, 2.5), e(0.75, -0.6, 2.5), e(0.85, 0.6, 2.45), e(-0.85, 0.6, 2.45)], 0.1, bronzeHi, PL);   // saddle cloth
+        figure(S, L(gu + 0.95, 1.4, 2.7), 1.2, bronzeHi, PL, { robe: true, wings: true, arms: [[-0.15, 0.2, 0.8], [0.25, 0.35, 0.05]] });   // Fame with her trumpet raised
+      }
+    }
   }
-  limb(S, Bp(0.2, 3.2, 0.05), Bp(-0.8, 2.2, 0.25), 0.18, 0.1, 5, bronze, PL);              // serpents
-  limb(S, Bp(-0.6, -0.1, 3.9), Bp(0.6, -0.1, 3.9), 0.3, 0.3, 6, bronze, PL, false);        // rider's legs / saddle cloth
-  for (const s of [-1, 1]) limb(S, Bp(s * 0.95, 0, 3.9), Bp(s * 1.0, 0.45, 2.4), 0.2, 0.15, 6, bronze, PL);
-  limb(S, Bp(0, -0.05, 3.95), Bp(0, 0.1, 5.5), 0.55, 0.45, 8, bronze, PL);                 // torso
-  limb(S, Bp(0, -0.25, 4.6), Bp(0, -0.9, 3.5), 0.55, 0.85, 8, bronze, PL);                 // cloak
-  limb(S, Bp(0, 0.1, 5.5), Bp(0, 0.15, 5.95), 0.24, 0.24, 8, bronzeHi, PL);                // head
-  limb(S, Bp(0, 0.15, 5.95), Bp(0, 0.1, 6.6), 0.36, 0.08, 8, bronzeHi, PL);                // plumed helmet
-  limb(S, Bp(0.45, 0.2, 5.2), Bp(0.75, 1.1, 5.0), 0.12, 0.1, 5, bronze, PL);               // sceptre arm
+  // horse walking over serpents, right fore raised; the king in armour, plumed helmet, mantle, baton forward
+  const hs = plain ? 1.75 : 2.6, rs = plain ? 1.55 : 2.3;
+  const H = L(0, 0, h0);
+  horse(S, H, hs, bronze, PL, { raise: true });
+  // harness: breast strap, reins, saddle cloth with fringe, stirrups
+  sweep(S, H, [[-0.33 * hs, 0.85 * hs, 1.28 * hs, 0.04, 0.04], [0, 1.03 * hs, 1.3 * hs, 0.05, 0.05], [0.33 * hs, 0.85 * hs, 1.28 * hs, 0.04, 0.04]], bronzeHi, PL, 5);
+  slab4(S, [H(-0.47 * hs, -0.45 * hs, 1.5 * hs), H(-0.47 * hs, 0.3 * hs, 1.5 * hs), H(-0.5 * hs, 0.32 * hs, 0.98 * hs), H(-0.5 * hs, -0.5 * hs, 0.98 * hs)], 0.08, bronzeHi, PL);
+  slab4(S, [H(0.47 * hs, 0.3 * hs, 1.5 * hs), H(0.47 * hs, -0.45 * hs, 1.5 * hs), H(0.5 * hs, -0.5 * hs, 0.98 * hs), H(0.5 * hs, 0.32 * hs, 0.98 * hs)], 0.08, bronzeHi, PL);
+  // serpents writhing under the raised hoof
+  for (const [o, t] of [[0, 1], [0.6, -1]]) {
+    const pts = []; for (let k = 0; k <= 10; k++) { const q = k / 10; pts.push([t * (0.5 - q) * 1.6 * hs * 0.5 + o, (0.9 + 0.5 * q) * hs + Math.sin(q * 9 + o) * 0.25, 0.12 + 0.1 * Math.sin(q * 6), 0.13 * (1 - 0.6 * q), 0.11 * (1 - 0.6 * q)]); }
+    sweep(S, H, pts, bronzeHi, PL, 6);
+  }
+  const sd = -0.05 * hs, sz = 1.62 * hs;
+  const R = L(0, sd, h0 + sz - 0.52 * rs);
+  figure(S, R, rs, bronze, PL, { seated: true, rider: true, helmet: true, cloak: true, arms: [[-0.12, 0.42, -0.25], [0.32, 0.55, -0.02]] });
+  sweep(S, H, [[0.53 * rs, sd + 0.55 * rs, sz + 0.5 * rs, 0.04, 0.04], [0.62 * rs, sd + 1.2 * rs, sz + 0.25 * rs, 0.035, 0.035]], bronzeHi, PL, 5);   // baton
+  slab4(S, [R(-0.3, -0.1, 1.0), R(0.3, -0.1, 1.0), R(0.6, -0.55, 0.15), R(-0.6, -0.55, 0.15)], 0.06 * rs, bronze, PL);   // mantle over the croup
+  for (let k = 0; k < 7; k++) { const t = (k / 6 - 0.5) * 1.6; sweep(S, R, [[t * 0.06, -0.02, 1.38, 0.025, 0.025], [t * 0.13, -0.12 - 0.05 * Math.abs(t), 1.6, 0.03, 0.02], [t * 0.2, -0.32, 1.55, 0.01, 0.01]], bronzeHi, PL, 4); }   // plumes
   return 1;
 }
 
@@ -1576,4 +1690,85 @@ function frustumAB(S, W, a0, b0, a1, b1, z0, z1, col, st) {
     if (n[0] * out[0] + n[2] * out[2] < 0) { tri(S, p0, p2, p1, n.map((q) => -q), col, [0, 0], [1, 1], [1, 0], I0, st); tri(S, p0, p3, p2, n.map((q) => -q), col, [0, 0], [0, 1], [1, 1], I0, st); }
     else { tri(S, p0, p1, p2, n, col, [0, 0], [1, 0], [1, 1], I0, st); tri(S, p0, p2, p3, n, col, [0, 0], [1, 1], [0, 1], I0, st); }
   }
+}
+
+// ─── sculpture kit 2: swept tubes, human figures, horses ─────────────────
+// All in a local frame W(a, b, z): a = right, b = forward, z = up (metres before scaling).
+const v3 = { sub: (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]], cross: (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]], norm: (p) => { const l = Math.hypot(...p) || 1; return p.map((c) => c / l); } };
+// tube through path points [a, b, z, rw, rh]: elliptical sections, rw across (horizontal side), rh in the section's up
+export function sweep(S, W, path, col, st, sides = 10, caps = true) {
+  const I0 = [0, 0, 0, 0], o = W(0, 0, 0), WV = (v) => { const w = W(v[0], v[1], v[2]); return [w[0] - o[0], w[1] - o[1], w[2] - o[2]]; };
+  const P = path.map((p) => p.slice(0, 3));
+  const rings = path.map((p, i) => {
+    const T = v3.norm(v3.sub(P[Math.min(P.length - 1, i + 1)], P[Math.max(0, i - 1)]));
+    let side = v3.cross(T, [0, 0, 1]); if (Math.hypot(...side) < 0.2) side = v3.cross(T, [0, 1, 0]); side = v3.norm(side);
+    const up = v3.norm(v3.cross(side, T));
+    return Array.from({ length: sides }, (_, k) => {
+      const t = (k / sides) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      const q = [p[0] + side[0] * c * p[3] + up[0] * s * p[4], p[1] + side[1] * c * p[3] + up[1] * s * p[4], p[2] + side[2] * c * p[3] + up[2] * s * p[4]];
+      const nl = v3.norm([side[0] * c * p[4] + up[0] * s * p[3], side[1] * c * p[4] + up[1] * s * p[3], side[2] * c * p[4] + up[2] * s * p[3]]);
+      return { w: W(...q), n: v3.norm(WV(nl)) };
+    });
+  });
+  for (let i = 0; i + 1 < rings.length; i++) for (let k = 0; k < sides; k++) {
+    const k2 = (k + 1) % sides, A = rings[i][k], B = rings[i][k2], C = rings[i + 1][k2], D = rings[i + 1][k];
+    const n = v3.norm([A.n[0] + B.n[0] + C.n[0] + D.n[0], A.n[1] + B.n[1] + C.n[1] + D.n[1], A.n[2] + B.n[2] + C.n[2] + D.n[2]]);
+    tri(S, A.w, B.w, C.w, n, col, [0, 0], [0, 0], [0, 0], I0, st); tri(S, A.w, C.w, D.w, n, col, [0, 0], [0, 0], [0, 0], I0, st);
+  }
+  if (caps) for (const [i, j] of [[0, 1], [rings.length - 1, rings.length - 2]]) {
+    const c = W(...P[i]), d = v3.norm(v3.sub(c, W(...P[j])));
+    for (let k = 0; k < sides; k++) tri(S, c, rings[i][k].w, rings[i][(k + 1) % sides].w, d, col, [0, 0], [0, 0], [0, 0], I0, st);
+  }
+}
+const ell = (S, W, c, r, col, st, sides = 10) => sweep(S, W, [[c[0], c[1], c[2] - r[2], 0.01, 0.01], [c[0], c[1], c[2] - r[2] * 0.7, r[0] * 0.71, r[1] * 0.71], [c[0], c[1], c[2], r[0], r[1]], [c[0], c[1], c[2] + r[2] * 0.7, r[0] * 0.71, r[1] * 0.71], [c[0], c[1], c[2] + r[2], 0.01, 0.01]], col, st, sides, false);
+// a human figure about 1.8 m tall before scaling: pose = { seated, robe, cloak, arms: [[a,b,z] left hand, right hand] relative to the shoulder, helmet, wings, stride }
+export function figure(S, W0, sc, col, st, pose = {}) {
+  const W = (a, b, z) => W0(a * sc, b * sc, z * sc);
+  const seated = !!pose.seated, hip = seated ? 0.52 : 0.94, stride = pose.stride || 0;
+  // legs (hidden by a robe when it falls to the feet)
+  for (const s of [-1, 1]) {
+    if (pose.rider) { sweep(S, W, [[s * 0.11, 0, hip, 0.095, 0.095], [s * 0.27, 0.3, hip - 0.2, 0.075, 0.075], [s * 0.3, 0.18, hip - 0.62, 0.055, 0.055], [s * 0.3, 0.38, hip - 0.68, 0.045, 0.04]], col, st, 7); }
+    else if (seated) { sweep(S, W, [[s * 0.11, 0, hip, 0.09, 0.09], [s * 0.13, 0.42, hip + 0.02, 0.075, 0.075], [s * 0.13, 0.46, 0.08, 0.055, 0.055], [s * 0.13, 0.6, 0.03, 0.05, 0.04]], col, st, 7); }
+    else if (!pose.robe) { const f = s * stride; sweep(S, W, [[s * 0.1, 0, hip, 0.085, 0.085], [s * 0.1, f * 0.16, 0.5, 0.06, 0.06], [s * 0.1, f * 0.28, 0.08, 0.045, 0.045], [s * 0.1, f * 0.28 + 0.16, 0.03, 0.045, 0.035]], col, st, 7); }
+  }
+  // robe / skirt to the feet, or a short tunic
+  if (pose.robe) sweep(S, W, [[0, 0.02, 0.0, 0.27, 0.22], [0, 0.02, 0.35, 0.24, 0.19], [0, 0.0, 0.75, 0.2, 0.15], [0, 0, 1.0, 0.17, 0.12]], col, st, 12, true);
+  else if (seated && !pose.rider) sweep(S, W, [[0, 0.32, hip - 0.12, 0.25, 0.1], [0, 0.05, hip, 0.2, 0.15], [0, 0, hip + 0.12, 0.17, 0.12]], col, st, 10, true);
+  // torso: pelvis → chest → shoulders
+  const z0 = seated ? hip : 0.94;
+  sweep(S, W, [[0, 0, z0, 0.16, 0.11], [0, 0.01, z0 + 0.2, 0.15, 0.1], [0, 0.02, z0 + 0.4, 0.18, 0.11], [0, 0.0, z0 + 0.5, 0.2, 0.1], [0, -0.01, z0 + 0.56, 0.08, 0.06]], col, st, 10, true);
+  const sh = z0 + 0.5, head = z0 + 0.7;
+  ell(S, W, [0, 0.01, head], [0.1, 0.115, 0.125], col, st, 9);                                         // head
+  sweep(S, W, [[0, 0, sh, 0.05, 0.05], [0, 0.01, head - 0.08, 0.045, 0.045]], col, st, 6, false);   // neck
+  if (pose.helmet) sweep(S, W, [[0, 0, head + 0.06, 0.115, 0.125], [0, -0.02, head + 0.16, 0.09, 0.1], [0, -0.06, head + 0.36, 0.05, 0.03]], col, st, 8);
+  if (pose.crown) for (let k = 0; k < 6; k++) { const t = (k / 6) * Math.PI * 2; sweep(S, W, [[Math.cos(t) * 0.09, Math.sin(t) * 0.1, head + 0.1, 0.02, 0.02], [Math.cos(t) * 0.1, Math.sin(t) * 0.11, head + 0.19, 0.012, 0.012]], col, st, 4); }
+  // arms: shoulder → elbow → hand, hands given relative to the shoulder
+  const arms = pose.arms || [[-0.05, 0.05, -0.6], [0.05, 0.05, -0.6]];
+  for (const [k, s] of [[0, -1], [1, 1]]) {
+    const S0 = [s * 0.21, 0, sh - 0.02], h = arms[k], H = [S0[0] + s * Math.abs(h[0]) * (h[0] * s >= 0 ? 1 : -1), S0[1] + h[1], S0[2] + h[2]];
+    const M = [(S0[0] + H[0]) / 2 + s * 0.06, (S0[1] + H[1]) / 2 - 0.04, (S0[2] + H[2]) / 2 - 0.03];
+    sweep(S, W, [[...S0, 0.055, 0.055], [...M, 0.045, 0.045], [...H, 0.035, 0.035]], col, st, 6);
+    ell(S, W, H, [0.04, 0.05, 0.06], col, st, 5);
+  }
+  if (pose.cloak) slab4(S, [W(-0.22, -0.08, sh), W(0.22, -0.08, sh), W(0.3, -0.22, seated ? hip - 0.1 : 0.25), W(-0.3, -0.22, seated ? hip - 0.1 : 0.25)], 0.04 * sc, col, st);
+  if (pose.wings) for (const s of [-1, 1]) slab4(S, [W(s * 0.08, -0.1, sh - 0.05), W(s * 0.5, -0.4, sh + 0.55), W(s * 0.62, -0.42, sh + 0.2), W(s * 0.2, -0.16, sh - 0.55)], 0.03 * sc, col, st);
+  return { head: W(0, 0, head), hands: arms.map((h, k) => W((k ? 1 : -1) * 0.21 + h[0], h[1], sh + h[2])) };
+}
+// a horse ~1.6 m at the withers before scaling; pose.raise = lift the right foreleg (walking statue pose)
+export function horse(S, W0, sc, col, st, pose = {}) {
+  const W = (a, b, z) => W0(a * sc, b * sc, z * sc);
+  sweep(S, W, [[0, -1.12, 1.3, 0.12, 0.12], [0, -1.02, 1.3, 0.3, 0.3], [0, -0.75, 1.27, 0.38, 0.41], [0, -0.35, 1.2, 0.38, 0.42], [0, 0.05, 1.16, 0.39, 0.46],
+    [0, 0.42, 1.2, 0.35, 0.45], [0, 0.75, 1.27, 0.3, 0.38], [0, 0.93, 1.3, 0.2, 0.28], [0, 1.0, 1.32, 0.06, 0.08]], col, st, 14);               // body
+  sweep(S, W, [[0, 0.72, 1.45, 0.19, 0.3], [0, 0.98, 1.78, 0.15, 0.25], [0, 1.18, 2.07, 0.12, 0.19], [0, 1.3, 2.22, 0.11, 0.14]], col, st, 10, false);   // neck
+  sweep(S, W, [[0, 1.27, 2.26, 0.1, 0.12], [0, 1.42, 2.15, 0.11, 0.13], [0, 1.6, 1.92, 0.085, 0.1], [0, 1.7, 1.78, 0.07, 0.085], [0, 1.73, 1.74, 0.03, 0.04]], col, st, 9);   // head
+  for (const s of [-1, 1]) sweep(S, W, [[s * 0.06, 1.28, 2.3, 0.025, 0.03], [s * 0.07, 1.25, 2.44, 0.005, 0.01]], col, st, 4);   // ears
+  slab4(S, [W(0, 0.7, 1.68), W(0, 1.28, 2.33), W(0, 1.2, 2.18), W(0, 0.65, 1.5)], 0.06 * sc, col, st);                                   // mane
+  sweep(S, W, [[0, -1.1, 1.36, 0.07, 0.08], [0, -1.24, 1.15, 0.09, 0.09], [0, -1.27, 0.85, 0.1, 0.08], [0, -1.2, 0.6, 0.06, 0.05]], col, st, 7);   // tail
+  const leg = (pts) => sweep(S, W, pts, col, st, 7);
+  for (const s of [-1, 1]) {
+    if (s > 0 && pose.raise) leg([[s * 0.17, 0.68, 1.05, 0.13, 0.15], [s * 0.17, 0.86, 0.72, 0.075, 0.08], [s * 0.17, 0.8, 0.45, 0.055, 0.055], [s * 0.17, 0.92, 0.36, 0.065, 0.06]]);
+    else leg([[s * 0.17, 0.68, 1.05, 0.13, 0.15], [s * 0.17, 0.7 + (s < 0 && pose.raise ? 0.06 : 0), 0.55, 0.075, 0.08], [s * 0.17, 0.72, 0.18, 0.055, 0.055], [s * 0.17, 0.74, 0.03, 0.07, 0.07]]);
+    leg([[s * 0.19, -0.78, 1.05, 0.15, 0.18], [s * 0.19, -0.6, 0.75, 0.1, 0.11], [s * 0.18, -0.86, 0.5, 0.065, 0.07], [s * 0.18, -0.8, 0.18, 0.055, 0.055], [s * 0.18, -0.78, 0.03, 0.07, 0.07]]);
+  }
+  return { saddle: W(0, -0.05, 1.62) };
 }
