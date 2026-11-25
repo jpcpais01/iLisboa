@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -308,6 +308,7 @@ const VERNACULAR = pal([['#f5f2eb', 34], ['#f0e3c4', 11], ['#efcc7e', 12], ['#ec
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
 const ROOFS = pal([['#a05c46', 5], ['#a9664f', 4], ['#925444', 3], ['#ad735b', 3], ['#844e41', 2], ['#9b604d', 3]]);   // weathered terracotta
+const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
 
@@ -344,6 +345,7 @@ function buildingSpec(p) {
     else if (church) shape = 'gabled';
     else if (roofLevels >= 1) shape = 'mansard';
     else if ((p.area > 3000 && (levels >= 6 || h > 22)) || h > 34) shape = 'flat';   // big low blocks in the old city are convents and palaces under hip roofs
+    else if (p.area > 2500 && !p.holes.length && !church && !palace && obb(p.outer).hw > 16) shape = 'flat';   // halls, malls, warehouses: a single hip over a 30 m+ span is not how anything here is roofed
     else if (utility && p.area < 40) shape = 'flat';
     else if ((variant === 1 || variant === 2) && p.area < 350) { const r = u('rs'); shape = r < 0.1 ? 'flat' : r < 0.3 ? 'gabled' : 'hipped'; }   // old-town mix: terraces (açoteias), gables, hips
     else shape = 'hipped';
@@ -359,7 +361,7 @@ function buildingSpec(p) {
   const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(ROOFS, u('r'));
-  const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(FLAT_ROOF, u('f'));
+  const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(p.area > 2500 ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
@@ -629,6 +631,14 @@ function addBuilding_(p) {
   for (const id of ['w683006891', 'w1268291335', 'w1268291336', 'w1268291337']) {   // Campo Pequeno's four gate towers
     const t = byId.get(id); if (!t || !inArea(t.c)) continue; const ob = obb(t.outer);
     campoPequenoTower(tileB(...t.c), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, hw: Math.min(ob.hl, ob.hw), ground: t.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark();
+  }
+  { const tv = byId.get('w1387099961');   // Torre Vasco da Gama: core, lattice sail and pod
+    if (tv && inArea(tv.c)) {
+      const arcs = [['w1387099965', 23.5], ['w1387100762', 40.5], ['w1387100761', 58.5], ['w1387099966', 75.5], ['w1387099964', 91.5], ['w1387099963', 108.5], ['w1387099962', 125.5]].map(([id, z]) => ({ z, ring: byId.get(id)?.outer })).filter((a) => a.ring);
+      torreVascoGama(tileB(...tv.c), { core: tv.outer, pod: byId.get('w709779004')?.outer, arcs, ground: Math.max(LAND_MIN, groundAt(...tv.c)), lin, srgb }); mark(); } }
+  for (const id of ['w96502765', 'w96502767', 'w96502775']) {   // Amoreiras: pylons, cornice and glass pyramids on the three towers
+    const t = byId.get(id); if (!t || !inArea(t.c)) continue;
+    amoreirasCrown(tileB(...t.c), { ring: t.outer, ground: t.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / t.outer.length, zTop: 58, lin, srgb }); mark();
   }
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms
     if (cn && inArea(cn.c)) { oriente(tileB(...cn.c), { canopy: cn.outer, ground: groundAt(...cn.c), deck: 11.6, lin, srgb }); mark(); } }

@@ -41,6 +41,10 @@ export const OVERRIDES = {
   w821784762: { shape: 'flat', h: 9, wall: '#c8ccce', flatCol: [176, 180, 182], variant: 3 },   // Altice (MEO) Arena: the podium…
   w821784760: { shape: 'dome', minH: 9, h: 14, roofH: 24, roofCol: '#8f969b', wall: '#9aa0a4', variant: 3, floorH: 0 },   // …and the long zinc shell
   r8872281_0: { wall: '#a4473a', variant: 4, stone: false, h: 15, floorH: 4.6, groundH: 5.2, bayW: 4.2, shape: 'flat', parapet: 1.0, balconyFloors: [] },   // Campo Pequeno: red brick ring
+  w709779008: { variant: 3, wall: '#a7b9c4', floorH: 3.3 },   // Myriad hotel at the Torre Vasco da Gama: glass sail
+  w709779005: { shape: 'flat', h: 3, wall: '#cfccc4', flatCol: [196, 193, 186], variant: 3, floorH: 0, parapet: 0.9 },   // the tower's pier
+  w1388115274: { shape: 'flat', h: 1.6, wall: '#cfccc4', flatCol: [200, 197, 190], variant: 3, floorH: 0, parapet: 0.9 },   // the hotel's river terrace
+  ...Object.fromEntries(['w96502765', 'w96502767', 'w96502775'].map((id) => [id, { h: 58, shape: 'flat', wall: '#d99a93', variant: 3, floorH: 3.6, groundH: 4.4, parapet: 0 }])),   // Amoreiras towers: pink shafts (crowns authored)
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
@@ -107,7 +111,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2454,4 +2458,104 @@ export function campoPequenoTower(S, { cx, cy, ux, uy, hw, ground, lin, srgb }) 
   sweep(S, W3, on.map(([dz, rr]) => [0, 0, H + 4.9 + dz, rr, rr]), domeC, ST, 12);
   for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; sweep(S, W3, on.slice(0, 6).map(([dz, rr]) => [Math.cos(a) * rr, Math.sin(a) * rr, H + 4.9 + dz, 0.07, 0.07]), cream, ST, 4, false); }   // gilded ribs
   sweep(S, W3, [[0, 0, H + 11.2, 0.12, 0.12], [0, 0, H + 13.0, 0.03, 0.03]], cream, ST, 5);
+}
+
+// Torre Vasco da Gama (1998): a 145 m concrete blade with a white steel lattice "sail" curving out from it toward
+// the river, the restaurant pod (blue glass band under a white cap) near the top. The sail is built from the mapped
+// lattice rings (outer edge read by rays from the core), joined by verticals and alternating diagonals every ~4 m.
+export function torreVascoGama(S, { core, pod, arcs, ground, lin, srgb }) {
+  const white = lin(srgb('#eef0ef')), white2 = lin(srgb('#d6dad9')), conc = lin(srgb('#c9c6bd')), glass = lin(srgb('#47698f')), dark = lin(srgb('#2e3a46'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.8, 1], I0 = [0, 0, 0, 0];
+  const W = (x, y, z) => [x, ground + z, -y];
+  const cen = (r) => r.reduce((a, p) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0]);
+  const cc = cen(core), oc = obb(core);
+  // tip direction from the biggest ring
+  const big = arcs.reduce((a, b) => (Math.abs(polyArea(b.ring)) > Math.abs(polyArea(a.ring)) ? b : a));
+  let far = big.ring[0]; for (const p of big.ring) if (Math.hypot(p[0] - cc[0], p[1] - cc[1]) > Math.hypot(far[0] - cc[0], far[1] - cc[1])) far = p;
+  const t0 = Math.atan2(far[1] - cc[1], far[0] - cc[0]);
+  const hit = (ring, a) => {   // farthest crossing of the ray from the core centre at angle a
+    const dx = Math.cos(a), dy = Math.sin(a); let best = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i], q = ring[(i + 1) % ring.length], ex = q[0] - p[0], ey = q[1] - p[1], den = dx * ey - dy * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      const wx = p[0] - cc[0], wy = p[1] - cc[1], t = (wx * ey - wy * ex) / den, s = (wx * dy - wy * dx) / den;
+      if (t > 0 && s >= 0 && s <= 1) best = Math.max(best, t);
+    }
+    return best;
+  };
+  const phi = Math.min(...arcs.map(({ ring }) => Math.max(...ring.map((p) => { let d = Math.atan2(p[1] - cc[1], p[0] - cc[0]) - t0; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d); })))) * 0.97;
+  const N = 15, ang = Array.from({ length: N }, (_, k) => t0 - phi + (2 * phi * k) / (N - 1));
+  const curve = (ring) => ang.map((a) => { const r = Math.max(hit(ring, a), 2.2); return [cc[0] + Math.cos(a) * r, cc[1] + Math.sin(a) * r]; });
+  const lv = arcs.slice().sort((a, b) => a.z - b.z).map((a) => ({ z: a.z, pts: curve(a.ring) }));
+  lv.unshift({ z: 0, pts: lv[0].pts.map((p) => [cc[0] + (p[0] - cc[0]) * 0.92, cc[1] + (p[1] - cc[1]) * 0.92]) });
+  const top = lv[lv.length - 1]; lv.push({ z: 139, pts: top.pts.map((p) => [cc[0] + (p[0] - cc[0]) * 0.45, cc[1] + (p[1] - cc[1]) * 0.45]) });
+  // rows every ~4 m, linearly between the mapped rings
+  const rows = [];
+  for (let i = 0; i + 1 < lv.length; i++) {
+    const A = lv[i], B = lv[i + 1], n = Math.max(1, Math.round((B.z - A.z) / 4.2));
+    for (let s = 0; s < n; s++) { const t = s / n; rows.push({ z: A.z + (B.z - A.z) * t, main: s === 0, pts: A.pts.map((p, k) => [p[0] + (B.pts[k][0] - p[0]) * t, p[1] + (B.pts[k][1] - p[1]) * t]) }); }
+  }
+  rows.push({ ...lv[lv.length - 1], main: true });
+  const P3 = (p, z) => W(p[0], p[1], z);
+  for (let r = 0; r < rows.length; r++) {
+    const R = rows[r], rr = R.main ? 0.42 : 0.15;
+    for (let k = 0; k + 1 < N; k++) limb(S, P3(R.pts[k], R.z), P3(R.pts[k + 1], R.z), rr, rr, 4, R.main ? white : white2, PL, false);
+    if (R.main && r) for (let k = 0; k + 1 < N; k++) {   // the walkway deck at each mapped ring
+      const a = R.pts[k], b = R.pts[k + 1], ia = [cc[0] + (a[0] - cc[0]) * 0.93, cc[1] + (a[1] - cc[1]) * 0.93], ib = [cc[0] + (b[0] - cc[0]) * 0.93, cc[1] + (b[1] - cc[1]) * 0.93];
+      slab4(S, [P3(a, R.z), P3(b, R.z), P3(ib, R.z), P3(ia, R.z)], 0.3, white2, PL);
+    }
+    if (r + 1 < rows.length) {
+      const Q = rows[r + 1];
+      for (let k = 0; k < N; k++) limb(S, P3(R.pts[k], R.z), P3(Q.pts[k], Q.z), 0.22, 0.22, 4, white, PL, false);
+      for (let k = 0; k + 1 < N; k++) { const f = (k + r) % 2; limb(S, P3(R.pts[k + f], R.z), P3(Q.pts[k + 1 - f], Q.z), 0.11, 0.11, 4, white2, PL, false); }
+    }
+  }
+  // the concrete blade, its top cut on a slant
+  const B = (u, v, z) => W(oc.cx + oc.ux * u - oc.uy * v, oc.cy + oc.uy * u + oc.ux * v, z);
+  const hu = oc.hl, hv = Math.max(1.4, oc.hw);
+  box(S, oc.cx, oc.cy, oc.ux, oc.uy, hu, hv, ground - 2, ground + 136, conc, I0, PL);
+  frustumAB(S, B, hu, hv, hu * 0.25, hv * 0.8, 136, 145, conc, PL);
+  for (let z = 6; z < 132; z += 3.4) box(S, oc.cx, oc.cy, oc.ux, oc.uy, hu + 0.06, hv + 0.06, ground + z, ground + z + 0.18, white2, I0, PL);   // lift-shaft openings read as fine bands
+  // restaurant pod
+  if (pod) {
+    const pc = cen(pod), r = Math.max(...pod.map((p) => Math.hypot(p[0] - pc[0], p[1] - pc[1]))) * 0.96;
+    const L = (secs, col) => loft(S, W, secs.map(([z, k]) => ({ a: pc[0], b: pc[1], z, rx: r * k, ry: r * k })), col, PL, { sides: 28 });
+    L([[104.5, 0.35], [107, 0.72], [109, 0.93], [111, 1]], white);
+    L([[111, 1.01], [114.3, 1.01]], glass);
+    L([[114.3, 1], [117, 1], [117.6, 0.97]], white);
+    L([[117.6, 0.97], [119.6, 0.86], [121.5, 0.62], [122.8, 0.3], [123.2, 0.02]], white2);
+    for (let k = 0; k < 28; k++) { const a = (k / 28) * Math.PI * 2, x = pc[0] + Math.cos(a) * r * 1.02, y = pc[1] + Math.sin(a) * r * 1.02; limb(S, W(x, y, 111), W(x, y, 114.3), 0.07, 0.07, 4, dark, PL, false); }
+    loft(S, W, [{ a: pc[0], b: pc[1], z: 111.9, rx: r * 1.02, ry: r * 1.02 }, { a: pc[0], b: pc[1], z: 112.1, rx: r * 1.02, ry: r * 1.02 }], dark, PL, { sides: 28, cap: false });
+  }
+}
+
+// Amoreiras (Tomás Taveira, 1985): postmodern office towers in salmon pink banded with dark glass. The mapped
+// shaft keeps the generic curtain-wall façade (lit windows at night); this adds what makes them Amoreiras:
+// dark corner pylons running past the roof, a black cornice, a pink setback storey and the blue glass pyramid.
+export function amoreirasCrown(S, { ring, ground, zTop, H = 75, lin, srgb }) {
+  const pink = lin(srgb('#d99a93')), pink2 = lin(srgb('#c98a84')), black = lin(srgb('#2b2d33')), glass = lin(srgb('#3a5a84'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], I0 = [0, 0, 0, 0];
+  const o = obb(ring), F = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+  const sg = polyArea(ring) > 0 ? 1 : -1;
+  const grow = (r, d) => { const c = [o.cx, o.cy]; return r.map((p) => { const dx = p[0] - c[0], dy = p[1] - c[1], l = Math.hypot(dx, dy) || 1; return [p[0] + (dx / l) * d, p[1] + (dy / l) * d]; }); };
+  const band = (r, z0, z1, col) => { for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; const [p, q] = sg > 0 ? [a, b] : [b, a]; wallQuad(S, p, q, ground + z0, ground + z0, ground + z1, ground + z1, col, 0, 1, ground, I0, PL); } };
+  const R = grow(ring, 0.35);
+  band(R, zTop - 0.2, zTop + 1.3, black);   // cornice
+  const flat = (r, z, col) => { const flatArr = r.flat(), idx = earcut(flatArr); for (let k = 0; k < idx.length; k += 3) { const [a, b, c] = [idx[k], idx[k + 1], idx[k + 2]].map((i) => [r[i][0], ground + z, -r[i][1]]); tri(S, a, b, c, [0, 1, 0], col, [0, 0], [0, 0], [0, 0], I0, PL); } };
+  flat(R, zTop + 1.3, black);
+  const a = o.hl - 3.2, b = o.hw - 3.2, zs = zTop + 1.3, zc = zs + 5.2;
+  frustumAB(S, F, a, b, a, b, zs, zc, pink, PL);
+  for (let k = 0; k < 2; k++) frustumAB(S, F, a + 0.12, b + 0.12, a + 0.12, b + 0.12, zs + 1.2 + k * 2, zs + 2.2 + k * 2, glass, PL);   // ribbon windows in the setback
+  frustumAB(S, F, a + 0.4, b + 0.4, a + 0.4, b + 0.4, zc, zc + 0.9, black, PL);
+  frustumAB(S, F, a, b, 0.35, 0.35, zc + 0.9, Math.max(H, zc + 6), glass, PL);   // glass pyramid
+  limb(S, F(0, 0, Math.max(H, zc + 6) - 0.5), F(0, 0, Math.max(H, zc + 6) + 4), 0.18, 0.05, 6, black, PL);   // finial
+  // corner pylons: dark shafts banded in pink, rising past the cornice with pyramid caps
+  const cu = o.hl - 1.2, cv = o.hw - 1.2, s = 2.3;
+  for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const W2 = (u, v, z) => F(su * cu + u, sv * cv + v, z);
+    frustumAB(S, W2, s, s, s, s, -1.5, zTop + 6, black, PL);
+    for (let z = 3.6; z < zTop + 5; z += 7.2) frustumAB(S, W2, s + 0.08, s + 0.08, s + 0.08, s + 0.08, z, z + 0.9, pink2, PL);
+    frustumAB(S, W2, s + 0.25, s + 0.25, s + 0.25, s + 0.25, zTop + 6, zTop + 6.8, pink, PL);
+    frustumAB(S, W2, s + 0.1, s + 0.1, 0.1, 0.1, zTop + 6.8, zTop + 10.5, pink, PL);
+  }
 }
