@@ -305,7 +305,7 @@ const RESI_KINDS = new Set(['residential', 'apartments', 'yes', 'flats', 'dormit
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
 // Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
-const POMBALINE = pal([['#f1ece2', 55], ['#ece0c2', 14], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
+const POMBALINE = pal([['#f1ece2', 75], ['#ece0c2', 18], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
 const VERNACULAR = pal([['#f5f2eb', 60], ['#ece8de', 14], ['#f0e3c4', 8], ['#efcc7e', 4], ['#ecb79e', 4], ['#bcd3e3', 2], ['#d3dfb8', 1], ['#e8ac84', 2], ['#e2bccb', 2], ['#c86a53', 1], ['#b8cbbb', 1], ['#f3d899', 3]]);   // re-checked 2026-11-25 against Earth over Alfama and Bairro Alto: four in five are white or off-white   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
 const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
 const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
@@ -408,6 +408,10 @@ function buildingSpec(p) {
   const instOut = !core && !church && !palace && !castle && ['school', 'university', 'college', 'hospital', 'public', 'civic', 'government', 'kindergarten'].includes(kind) && h >= 7;
   const bizOut = !core && !church && !palace && ['office', 'commercial', 'retail', 'hotel'].includes(kind) && h >= 9;
   let variant = hall ? 1 : resiTall || instOut || (newTown && RESI_KINDS.has(kind) && h >= 9 && !church) ? 8 : bizOut || (newTown && !church && !palace && h >= 9) ? 3 : (modern && !(levels >= 9 && RESI_KINDS.has(kind) && !MODERN.has(kind))) || officeTall ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
+  // 1950s–70s infill in the 19th-century grid (Arroios, Campo de Ourique, Avenidas Novas): about one 6–9 storey block in three is
+  // a plain flat-roofed apartment building among the tiled ones (checked against Earth)
+  const infill = core && Math.hypot(p.c[0], p.c[1]) > 1100 && (variant === 0 || variant === 1) && !hall && !palace && !church && RESI_KINDS.has(kind) && h >= 17 && h < 30 && !t['roof:shape'] && !t['building:part'] && u('infill') < 0.33;
+  if (infill) variant = 8;
   if ((variant === 0 || variant === 1) && !hall && u('azu') < (variant === 1 ? 0.11 : 0.08)) variant = 2; // azulejo-clad
   const stone = castle || pillar || (church && !t['building:colour']) || (monument && !UTILITY.has(kind));
   const utility = UTILITY.has(kind) || p.area < 25 || hall;
@@ -418,7 +422,7 @@ function buildingSpec(p) {
       const sport = kind === 'sports_hall' || ['sports_centre', 'sports_hall'].includes(t.leisure);
       shape = sport ? (u('hr') < 0.55 ? 'round' : 'flat') : ['warehouse', 'industrial', 'manufacture', 'factory', 'barn', 'hangar'].includes(kind) && p.area < 2500 && u('hr') < 0.6 ? 'gabled' : 'flat';   // bigger factory halls: flat outline under sawtooth teeth (see sawtoothRoof)
     }
-    else if ((newTown || instOut || bizOut) && !church) shape = 'flat';
+    else if (((newTown || instOut || bizOut) && !church) || infill) shape = 'flat';
     else if (variant === 8 && !instOut && (h < 21 ? u('rs8') < 0.72 : h < 32 && u('rs8') < 0.4) && !t['building:part']) shape = 'hipped';   // Avenidas Novas, Alvalade: about two in five 7–9 storey blocks too   // most 4–6 storey estate blocks (Olivais, Alvalade, Benfica) wear a low tile hip
     else if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument || hall || variant === 8 || variant === 3) shape = 'flat';
     else if (church) shape = 'gabled';
@@ -1173,6 +1177,7 @@ const C = {
   parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), rough: srgb('#a3b07c'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
+let openAtG = null;   // set by the ground pass below: how far a point is from anything built (0 near buildings … 1 open land)
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
 // earth and cement drifting into each other over ~20 m, with plot-sized (≈6 m) shifts in value — not one pale fill, not camouflage
 {
@@ -1196,6 +1201,7 @@ const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = co
   const openAt = (x, y) => { const fx = (x - dr.minX) / DG - 0.5, fy = (dr.maxY - y) / DG - 0.5, c = Math.max(0, Math.min(dr.w - 2, Math.floor(fx))), r = Math.max(0, Math.min(dr.h - 2, Math.floor(fy))), u = fx - c, v = fy - r, i = r * dr.w + c;
     const d = (dist[i] * (1 - u) + dist[i + 1] * u) * (1 - v) + (dist[i + dr.w] * (1 - u) + dist[i + dr.w + 1] * u) * v;
     const t = Math.min(1, Math.max(0, (d - 16) / 26)); return t * t * (3 - 2 * t); };
+  openAtG = openAt;
   const DRY = srgb('#b4ad84'), MEAD = srgb('#9ea472'), SCRUB = srgb('#8a9463'), LAWN = srgb('#8fa86c');
   for (let r = 0; r < gm.h; r++) {
     const y = maxY - (r + 0.5) * SS;
@@ -1512,6 +1518,41 @@ const nTagged = trees.length / 4;
   const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), h = (a, b) => hash(`${a},${b}gv`);
     return (h(i, j) * (1 - sx) + h(i + 1, j) * sx) * (1 - sy) + (h(i, j + 1) * (1 - sx) + h(i + 1, j + 1) * sx) * sy; };
   const grove = (x, y) => { const n = vn(x / 45, y / 45) * 0.7 + vn(x / 17 + 9.1, y / 17 + 3.7) * 0.3; const t = Math.min(1, Math.max(0, (n - 0.38) / 0.24)); return t * t * (3 - 2 * t) * 0.95; };
+  // back-yard annexes (anexos) in the old city's blocks: from the air the logradouros of Arroios, Campo de Ourique, Graça… are
+  // half built over with one- and two-storey sheds, workshops and enclosed porches against the rear walls (checked against Earth).
+  // Not in OSM: placed where a free yard spot lies within 3 m of a building, about one in two, each kept clear of the others.
+  { const AW = [srgb('#ece8df'), srgb('#e4ddcf'), srgb('#f1efe9'), srgb('#ddd5c6')].map(lin), AR = [srgb('#b9b4ab'), srgb('#ad6e59'), srgb('#a9a69f'), srgb('#9e9286'), srgb('#b27b63'), srgb('#c4c0b8')].map(lin);
+    const ST = [KIND.PLAIN / 8, 5 / 8, 0.6, 1], I0 = [0, 0, 0, 0], DIRS = Array.from({ length: 8 }, (_, k) => [Math.cos((k * Math.PI) / 4), Math.sin((k * Math.PI) / 4)]);
+    const isB = (x, y) => { const c = Math.floor(bm.px(x)), r = Math.floor(bm.py(y)); return c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c] === 1; };
+    let nA = 0;
+    const bb = new Uint8Array(bm.w * bm.h);   // real buildings only: an annex leans on a house, never on another annex
+    for (const q of polysB) bm.fillRings([q.outer], (i) => { bb[i] = 1; });
+    const isBld = (x, y) => { const c = Math.floor(bm.px(x)), r = Math.floor(bm.py(y)); return c >= 0 && r >= 0 && c < bm.w && r < bm.h && bb[r * bm.w + c] === 1; };
+    const rr = new Uint8Array(bm.w * bm.h);   // every mapped way (streets, alleys, stairs) with 6 m to spare
+    for (const r of roads) bm.strokeLine(r.pts, (ROAD_W[roadKind(r.tags)] || 3) + 12, (i) => { rr[i] = 1; });
+    const nearRoad = (x, y) => { const c = Math.floor(bm.px(x)), r = Math.floor(bm.py(y)); return c < 0 || r < 0 || c >= bm.w || r >= bm.h || rr[r * bm.w + c] === 1; };
+    for (const p of polysArea) {
+      if (p.tags.landuse !== 'residential' || Math.hypot(p.c[0], p.c[1] * 1.15) > 2500 || Math.hypot(p.c[0], p.c[1]) < 1300 || p.area < 400) continue;   // not in Alfama, Mouraria, Graça, Bairro Alto: their gaps are alleys and stairs, not yards
+      const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]);
+      for (let x = Math.min(...xs); x < Math.max(...xs); x += 4) for (let y = Math.min(...ys); y < Math.max(...ys); y += 4) {
+        const jx = x + (hash(`${x},${y}ax`) - 0.5) * 2, jy = y + (hash(`${x},${y}ay`) - 0.5) * 2;
+        if (hash(`${jx}an`) > 0.85 || Math.hypot(jx, jy) < 1300 || Math.hypot(jx, jy * 1.15) > 2500 || !pointInRing(jx, jy, p.outer) || isB(jx, jy)) continue;
+        let n = null, wd = 0; for (const r of [2.5, 4.5]) { for (const [dx, dy] of DIRS) if (isBld(jx + dx * r, jy + dy * r)) { n = [dx, dy]; wd = r; break; } if (n) break; }   // a rear wall close by
+        if (!n || isBld(jx - n[0] * 6, jy - n[1] * 6) || nearRoad(jx, jy)) continue;   // a passage between two walls, or a street edge, is no yard
+        const tx = -n[1], ty = n[0], hw = 2 + hash(`${jx}w`) * 2.2, hd = 1.5 + hash(`${jy}d`) * 1.6, cx = jx - n[0] * (hd - wd + 0.3), cy = jy - n[1] * (hd - wd + 0.3);
+        let ok = true;   // the yard side and both ends must be open ground (the wall side may touch the building)
+        for (const [a, b] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [0, 0]]) if (isB(cx + (tx * hw * a + n[0] * hd * b) * 0.95, cy + (ty * hw * a + n[1] * hd * b) * 0.95)) { ok = false; break; }
+        if (!ok) continue;
+        const two = hash(`${jx}t`) < 0.2, z0 = groundAt(cx, cy), z1 = z0 + (two ? 5.6 : 2.9) + hash(`${jy}h`) * 0.7;
+        const S = getTile(...tileOf(cx, cy)).b, wc = AW[Math.floor(hash(`${jx}c`) * AW.length)], rc = AR[Math.floor(hash(`${jy}r`) * AR.length)];
+        box(S, cx, cy, tx, ty, hw, hd, z0 - 0.5, z1 - 0.18, wc, I0, ST);
+        box(S, cx, cy, tx, ty, hw + 0.12, hd + 0.12, z1 - 0.18, z1, rc, I0, ST);
+        bm.fillRings([[[cx - tx * hw - n[0] * hd, cy - ty * hw - n[1] * hd], [cx + tx * hw - n[0] * hd, cy + ty * hw - n[1] * hd], [cx + tx * hw + n[0] * hd, cy + ty * hw + n[1] * hd], [cx - tx * hw + n[0] * hd, cy - ty * hw + n[1] * hd]]], (i) => { blocked[i] = 1; });
+        nA++;
+      }
+    }
+    log(`back-yard annexes: ${nA}`);
+  }
   for (const p of polysArea) {
     const t = p.tags;
     // estates: the lawns between post-war blocks (Olivais, Benfica, Telheiras…) are planted with big trees — thinner than a park
@@ -1532,6 +1573,7 @@ const nTagged = trees.length / 4;
         if (ok && hash(`${jx}v`) < 0.62) { const kk = hash(`${jy}vk`); addTree(jx, jy, 0.6 + hash(`${jx}`) * 0.5, kk < 0.12 ? 1 : kk < 0.27 ? 2 : kk < 0.37 ? 3 : 0); }
         continue;
       }
+      if (estate && openAtG && openAtG(jx, jy) > 0.5 && hash(`${jx}o`) > 0.12) continue;   // vacant lots and verges far from any building: rough grass, a stray tree (Benfica, checked against Earth)
       if (estate && (hash(`${jx}e`) > 0.34 || !clearAt(jx, jy))) continue;   // keep estate trees off walls and kerbs
       if (yard) {   // only where a courtyard opens up: 6 m clear of walls all round, and then about every other spot
         let ok = true; for (const [dx, dy] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [4.2, 4.2], [-4.2, 4.2], [4.2, -4.2], [-4.2, -4.2]]) { const cc = Math.floor(bm.px(jx + dx)), rr = Math.floor(bm.py(jy + dy)); if (cc < 0 || rr < 0 || cc >= bm.w || rr >= bm.h || blocked[rr * bm.w + cc]) { ok = false; break; } }

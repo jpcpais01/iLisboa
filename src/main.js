@@ -335,7 +335,7 @@ function treeKinds() {
   soften(cypressHi, 0, 7, 0, 0.4);
   const cypressFar = mergeGeometries([cyTrunk(3), spindle(1.2, 6.5, 5, 0xf0f0f0, 0.3)]); cypressFar.computeVertexNormals(); soften(cypressFar, 0, 6.5, 0, 0.35);
   return [
-    { hi, near: geo, far, mat, matHi, greens: [0x6f9a4f, 0x7ea85a, 0x5e8a45, 0x8bb064, 0x6a9a5c] },
+    { hi, near: geo, far, mat, matHi, greens: [0x5f8744, 0x6c9450, 0x527a3d, 0x779e58, 0x5c8750] },
     { hi: palmHi, near: palm, far: palmFar, mat: palmMat, matHi: palmHiMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
     { hi: pineHi, near: pine, far: pineFar, mat, matHi, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
     { hi: cypressHi, near: cypress, far: cypressFar, mat, matHi, greens: [0x3d5a30, 0x456337, 0x37512b] },

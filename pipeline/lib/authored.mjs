@@ -69,6 +69,14 @@ export const OVERRIDES = {
   w496232837: { h: 23, shape: 'flat', wall: '#d9d3c8', flatCol: [196, 196, 192], variant: 3, floorH: 0 },   // its drum terrace
   w495968846: { h: 11, minH: 0, shape: 'dome', roofH: 6, roofCol: '#5d8e93', wall: '#c98f7f', variant: 3, floorH: 0 },   // small teal dome at the front between the towers
   // Mesquita Central de Lisboa (checked against Earth): sand-coloured flat-roofed blocks, a pale blue-green dome over the prayer hall, a smaller green dome, a slender pointed minaret
+  w96719280: { msBand: [0.3, 0.68], wall: '#cfcdc6', flatCol: [158, 160, 158] },   // El Corte Inglés: pale stone with dark horizontal window ribbons, a roof full of plant (Earth)
+  // Cidade Universitária (Pardal Monteiro, 1950s–60s; checked against Earth): pale limestone, tall stone-framed windows, flat roofs
+  r3177188_0: { h: 20, variant: 4, shape: 'flat', wall: '#eee8db', flatCol: [198, 196, 190], parapet: 1 },   // Reitoria
+  r3177187_0: { h: 18, variant: 4, shape: 'flat', wall: '#ebe5d7', flatCol: [198, 196, 190], parapet: 1 },   // Faculdade de Letras
+  r3220526_0: { h: 18, variant: 4, shape: 'flat', wall: '#ece7da', flatCol: [198, 196, 190], parapet: 1 },   // Faculdade de Direito
+  w54754720: { h: 16, variant: 4, shape: 'flat', wall: '#eee8db', flatCol: [198, 196, 190], parapet: 1 },   // Aula Magna
+  w663051574: { shape: 'flat', variant: 3, wall: '#f1f0ec', flatCol: [188, 190, 190] },   // white flat-roofed block (was a red hip)
+  w54753984: { shape: 'flat', stone: true, wall: '#b8aea2', flatCol: [170, 164, 156], balconyFloors: [], parapet: 1.4 },   // Torre do Tombo: the windowless stone strongbox of the national archive
   w1420989247: { h: 13, shape: 'flat', wall: '#d8c6a3', flatCol: [212, 200, 178], variant: 4, floorH: 0, parapet: 1.2 },   // musalla
   w1240194497: { minH: 13, h: 15, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 6.6, col: '#a8c8c5' } },   // drum; the dome is authored
   w940705830: { minH: 9.5, h: 10.5, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 3.9, col: '#95b9a7' } },

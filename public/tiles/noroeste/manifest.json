@@ -725,17 +725,17 @@
   "aqueduto": 17084,
   "hedgeM": 3289.160943976048,
   "waterSource": "dem",
-  "trees": 69808,
+  "trees": 69317,
   "treesMapped": 1260,
   "lamps": 5853,
   "cars": 9769,
   "water": 0,
-  "bytes": 17106463,
+  "bytes": 17098607,
   "detailTris": 357798,
   "triangles": 967537
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T21:02:26.217Z",
+ "built": "2026-11-25T21:46:49.929Z",
  "far": {
   "bytes": 837584,
   "tris": 93456

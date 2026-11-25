@@ -726,17 +726,17 @@
   "ponte": 0,
   "hedgeM": 1787.2008249976313,
   "waterSource": "dem",
-  "trees": 22307,
+  "trees": 21508,
   "treesMapped": 5286,
   "lamps": 7470,
   "cars": 12356,
   "water": 0,
-  "bytes": 23700911,
+  "bytes": 23688127,
   "detailTris": 903001,
   "triangles": 1499917
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T21:12:52.891Z",
+ "built": "2026-11-25T21:57:25.849Z",
  "far": {
   "bytes": 880524,
   "tris": 96979

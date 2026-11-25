@@ -477,7 +477,7 @@
     2391.6941382635796,
     1084.6225301362629
    ],
-   "bytes": 352000,
+   "bytes": 383524,
    "balconies": "bal_0_4.bin",
    "detail": "d_0_4.glb"
   },
@@ -589,7 +589,7 @@
     2391.6941382635796,
     1415.377469864526
    ],
-   "bytes": 269696,
+   "bytes": 307512,
    "balconies": "bal_0_5.bin",
    "detail": "d_0_5.glb"
   },
@@ -698,20 +698,20 @@
   "height": 15,
   "levels": 42,
   "estimated": 151,
-  "planar": 134,
+  "planar": 128,
   "skeleton": 16,
-  "flat": 57,
+  "flat": 63,
   "skeletonFail": 0,
   "parts": 168,
   "skippedOutlines": 16,
   "partyEdges": 185,
-  "balconies": 1366,
+  "balconies": 1290,
   "statues": 0,
   "wallsM": 4792.734140578423,
   "pillars": 0,
   "chimneys": 165,
   "thinParts": 21,
-  "dormers": 44,
+  "dormers": 32,
   "churches": 1,
   "landmarks": 3,
   "trams": 0,
@@ -724,19 +724,19 @@
   "ponte": 0,
   "hedgeM": 674.5820563060142,
   "waterSource": "osm-coastline",
-  "trees": 380,
+  "trees": 363,
   "treesMapped": 202,
   "lamps": 336,
   "cars": 684,
   "water": 0.9445,
-  "bytes": 3297126,
-  "detailTris": 20450,
-  "triangles": 383126
+  "bytes": 3360102,
+  "detailTris": 20078,
+  "triangles": 386738
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T21:02:30.921Z",
+ "built": "2026-11-25T21:46:59.403Z",
  "far": {
-  "bytes": 111296,
+  "bytes": 111312,
   "tris": 37062
  }
 }
