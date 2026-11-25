@@ -334,6 +334,7 @@ function buildingSpec(p) {
     src = 'estimated';
     h = DEFAULT_H[kind] ?? (p.area < 30 ? 3.5 : p.area < 90 ? 9 + u('h') * 4 : 12.5 + u('h') * 5);
   }
+  if (palace && src === 'estimated') h = Math.max(h, 13 + u('ph') * 4);   // palaces tagged 'house' are not 8 m cottages
   if (kind === 'roof' && !minH) minH = Math.max(0, h - 0.8);
   const party = (p.party || []).filter(Boolean).length;
   let variant = modern ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
@@ -371,6 +372,7 @@ function buildingSpec(p) {
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); }
   const o = OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
+  if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
   return spec;
 }
 
@@ -515,6 +517,7 @@ function addBuilding_(p) {
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
   for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))]) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
   let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  if (process.env.DBG_ID) { const q = polysB.find((p) => p.id === process.env.DBG_ID); console.log('TRACE', !!q, q && q.skip, q && dropped(q), q && todo.includes(q), q && q.c); }
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
   const inZone = (x, y) => zones.some((z) => pointInRing(x, y, z));
