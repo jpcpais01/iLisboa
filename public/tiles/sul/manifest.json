@@ -29,7 +29,7 @@
     -1391.694138263734,
     -3746.132409592001
    ],
-   "bytes": 386876,
+   "bytes": 386096,
    "balconies": "bal_0_0.bin",
    "detail": "d_0_0.glb"
   },
@@ -141,7 +141,7 @@
     -1391.694138263734,
     -3246.132409592001
    ],
-   "bytes": 527704,
+   "bytes": 532444,
    "balconies": "bal_0_1.bin",
    "detail": "d_0_1.glb"
   },
@@ -155,7 +155,7 @@
     -891.694138263734,
     -3246.132409592001
    ],
-   "bytes": 413764,
+   "bytes": 415592,
    "balconies": "bal_1_1.bin",
    "detail": "d_1_1.glb"
   },
@@ -253,7 +253,7 @@
     -1391.694138263734,
     -2746.132409592001
    ],
-   "bytes": 92304,
+   "bytes": 96168,
    "balconies": "bal_0_2.bin",
    "detail": "d_0_2.glb"
   },
@@ -267,7 +267,7 @@
     -891.694138263734,
     -2746.132409592001
    ],
-   "bytes": 225308,
+   "bytes": 235872,
    "balconies": "bal_1_2.bin",
    "detail": "d_1_2.glb"
   },
@@ -699,15 +699,15 @@
   "levels": 281,
   "estimated": 1461,
   "planar": 1089,
-  "skeleton": 90,
-  "flat": 564,
+  "skeleton": 88,
+  "flat": 566,
   "skeletonFail": 0,
   "parts": 6,
   "skippedOutlines": 2,
   "partyEdges": 2952,
   "balconies": 2539,
   "statues": 17,
-  "wallsM": 4777.574168152426,
+  "wallsM": 4687.437169293654,
   "pillars": 0,
   "chimneys": 1658,
   "dormers": 59,
@@ -722,6 +722,7 @@
   "sailboats": 7,
   "miradouros": 0,
   "ponte": 0,
+  "wallHidden": 90.13699885877355,
   "hedgeM": 116.824946248889,
   "waterSource": "dem",
   "trees": 2061,
@@ -729,14 +730,14 @@
   "lamps": 1128,
   "cars": 1693,
   "water": 0.8455,
-  "bytes": 6560154,
+  "bytes": 6580394,
   "detailTris": 152969,
-  "triangles": 561879
+  "triangles": 562963
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T22:27:37.656Z",
+ "built": "2026-11-25T22:53:21.988Z",
  "far": {
-  "bytes": 300368,
+  "bytes": 300376,
   "tris": 55089
  }
 }

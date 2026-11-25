@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb, twinSpires, bullringRoof } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -275,6 +275,22 @@ const tameRoof = (v) => {
   const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
   return '#' + [R, G, B].map((q) => Math.round((q + m) * 255).toString(16).padStart(2, '0')).join('');
 };
+// façade colours tagged as paint-chart hex (#ffdd44, #80f090, #f7351b…): keep the hue but bring it to rendered-plaster
+// strength: ochres and pinks may stay warm, greens and blues are mostly a mapper's highlighter (checked against Earth, IST)
+const tameWall = (v) => {
+  if (!v) return null; v = v.toLowerCase().split(';').pop().trim();
+  if (!/^#[0-9a-f]{6}$/.test(v)) return v;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16) / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  let h = 0, l = (mx + mn) / 2, sat = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+  if (mx !== mn) h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+  h *= 60;
+  const warm = h < 62 || h > 330;
+  if (sat <= (warm ? 0.5 : 0.22) && l <= 0.94) return v;
+  sat = Math.min(sat, warm ? 0.5 : h > 75 && h < 170 ? 0.14 : 0.22); l = Math.min(0.92, Math.max(0.3, l));
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + [R, G, B].map((q) => Math.round((q + m) * 255).toString(16).padStart(2, '0')).join('');
+};
 const parseColour = (v) => { if (!v) return null; v = v.toLowerCase().trim(); if (/^#[0-9a-f]{6}$/.test(v)) return srgb(v); if (/^#[0-9a-f]{3}$/.test(v)) return srgb('#' + [...v.slice(1)].map((c) => c + c).join('')); return NAMED[v] ? srgb(NAMED[v]) : null; };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, u) => { const tot = list.reduce((s, x) => s + x[1], 0); let a = u * tot; for (const [c, w] of list) { if ((a -= w) <= 0) return c; } return list[0][0]; };
@@ -423,7 +439,7 @@ function buildingSpec(p) {
       shape = sport ? (u('hr') < 0.55 ? 'round' : 'flat') : ['warehouse', 'industrial', 'manufacture', 'factory', 'barn', 'hangar'].includes(kind) && p.area < 2500 && u('hr') < 0.6 ? 'gabled' : 'flat';   // bigger factory halls: flat outline under sawtooth teeth (see sawtoothRoof)
     }
     else if (((newTown || instOut || bizOut) && !church) || infill) shape = 'flat';
-    else if (variant === 8 && !instOut && (h < 21 ? u('rs8') < 0.72 : h < 32 && u('rs8') < 0.4) && !t['building:part']) shape = 'hipped';   // Avenidas Novas, Alvalade: about two in five 7–9 storey blocks too   // most 4–6 storey estate blocks (Olivais, Alvalade, Benfica) wear a low tile hip
+    else if (variant === 8 && !instOut && (h < 21 ? u('rs8') < 0.72 : h < 32 && u('rs8') < 0.4) && !t['building:part'] && !(p.area > 1500 && obb(p.outer).hw > 14)) shape = 'hipped';   // a 30 m-deep plan is a hall or a mall, not an estate block (Sacavém)   // Avenidas Novas, Alvalade: about two in five 7–9 storey blocks too   // most 4–6 storey estate blocks (Olivais, Alvalade, Benfica) wear a low tile hip
     else if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument || hall || variant === 8 || variant === 3) shape = 'flat';
     else if (church) shape = 'gabled';
     else if (roofLevels >= 1) shape = 'mansard';
@@ -445,7 +461,7 @@ function buildingSpec(p) {
   const balconyFloors = variant === 0 || (variant === 2 && u('p') < 0.5) ? [1, ...(u('b2') < 0.55 ? [2] : []), ...(u('b3') < 0.3 ? [3] : [])] : variant === 1 || variant === 2 ? [1, 2, 3, 4] : variant === 4 ? [1] : [];
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
   const palette = hall ? HALL_C : variant === 8 ? RESI_C : variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
-  const wall = parseColour(t['building:colour']) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(pal([['#f4f2ee', 6], ['#ece9e2', 2], ['#e8e2d4', 1]]), u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
+  const wall = parseColour(tameWall(t['building:colour'])) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(pal([['#f4f2ee', 6], ['#ece9e2', 2], ['#e8e2d4', 1]]), u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(hall && shape !== 'hipped' ? BIG_ROOF : variant === 8 ? ESTATE_ROOFS : ROOFS, u('r'));
   const flatCol = castle ? [170, 162, 148] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
@@ -799,6 +815,10 @@ function addBuilding_(p) {
     if (r && body && inArea(r.c)) { arenaShell(tileB(...r.c), { ring: r.outer, ground: body.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), z0: 20, z1: 38, lin, srgb }); mark(); } }
   { const r = byId.get('r11318401_0');   // Jerónimos monastery range: Manueline cornice, buttresses and pinnacles over the generic walls
     if (r && inArea(r.c)) { jeronimosWing(tileB(...r.c), { ring: r.outer, ground: r.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H: OVERRIDES['r11318401_0'].h, lin, srgb }); } }
+  { const cpq = byId.get('r8872281_0');   // Campo Pequeno: the arena's covered roof on the ring
+    if (cpq && cpq.holes.length && inArea(cpq.c)) { const hl = cpq.holes[0], hc = [hl.reduce((a, q) => a + q[0], 0) / hl.length, hl.reduce((a, q) => a + q[1], 0) / hl.length];
+      const r = hl.reduce((a, q) => a + Math.hypot(q[0] - hc[0], q[1] - hc[1]), 0) / hl.length, g = cpq.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity);
+      bullringRoof(tileB(...hc), { cx: hc[0], cy: hc[1], r, z0: g + OVERRIDES['r8872281_0'].h + 0.6, lin, srgb }); mark(); } }
   for (const id of ['w683006891', 'w1268291335', 'w1268291336', 'w1268291337']) {   // Campo Pequeno's four gate towers
     const t = byId.get(id); if (!t || !inArea(t.c)) continue; const ob = obb(t.outer);
     campoPequenoTower(tileB(...t.c), { cx: ob.cx, cy: ob.cy, ux: ob.ux, uy: ob.uy, hw: Math.min(ob.hl, ob.hw), ground: t.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), lin, srgb }); mark();
@@ -862,6 +882,12 @@ function addBuilding_(p) {
   {
     const pel = els.find((e) => e.type === 'node' && e.id === 1120633222);
     if (pel) { const [x, y] = proj.fwd(pel.lat, pel.lon); pelourinho(tileB(x, y), { cx: x, cy: y, ground: groundAt(x, y), lin, srgb }); mark(); }
+  }
+  const sjd = byId.get('r16201238_0');   // São João de Deus: the twin belfries on the front to Praça de Londres (ENE)
+  if (sjd && inArea(sjd.c)) {
+    const dx = 0.866, dy = 0.5; let f = sjd.outer[0]; for (const q of sjd.outer) if (q[0] * dx + q[1] * dy > f[0] * dx + f[1] * dy) f = q;
+    const k = (f[0] - sjd.c[0]) * dx + (f[1] - sjd.c[1]) * dy - 3.5, x = sjd.c[0] + dx * k, y = sjd.c[1] + dy * k;
+    twinSpires(tileB(x, y), { cx: x, cy: y, ux: dx, uy: dy, ground: groundAt(x, y), half: 1.75, gap: 6, h: 29, spire: 6.5, lin, srgb }); mark();
   }
   const mercado = byId.get('w39729235');
   if (mercado) {
@@ -1114,11 +1140,20 @@ const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), 
   }
   // historic city / castle walls with merlons; ordinary walls low and whitewashed
   const wallLines = extractLines(els, proj, (t) => t.barrier === 'city_wall' || t.historic === 'citywalls' || t.historic === 'city_wall' || (t.barrier === 'wall' && !['fountain', 'arch', 'retaining_wall'].includes(t.historic || t.wall || '')));
+  // the Moorish and Fernandine walls survive mostly inside later houses: where the mapped line runs through or between
+  // buildings it stays hidden, and only the free stretches stand (Alfama, checked against Earth)
+  const wb = new Raster(minX, minY, maxX, maxY, 1);
+  for (const p of polysB) if (!p.tags['building:part'] && !/city_?wall/.test(p.tags.barrier || p.tags.historic || '')) wb.fillRings([p.outer], (i) => { wb.data[i] = 1; });
+  const inB = (x, y) => { const c = Math.floor(wb.px(x)), r = Math.floor(wb.py(y)); return c >= 0 && r >= 0 && c < wb.w && r < wb.h && wb.data[r * wb.w + c] === 1; };
   for (const w of wallLines) {
     const city = w.tags.barrier === 'city_wall' || /citywall|city_wall/.test(w.tags.historic || '');
     const H = parseMeters(w.tags.height) ?? (city ? 9 : 1.6), th = city ? 2.4 : 0.35, col = city ? wallC : whiteC;
-    for (let i = 0; i + 1 < w.pts.length; i++) {
-      const a = w.pts[i], b = w.pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue;
+    const pts = []; for (let i = 0; i + 1 < w.pts.length; i++) { const a = w.pts[i], b = w.pts[i + 1], n = city ? Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 3)) : 1;
+      for (let k = 0; k < n; k++) pts.push([[a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], [a[0] + (b[0] - a[0]) * (k + 1) / n, a[1] + (b[1] - a[1]) * (k + 1) / n]]); }
+    for (let i = 0; i < pts.length; i++) {
+      const [a, b] = pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue;
+      if (city) { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, nx = -(b[1] - a[1]) / L * 3, ny = (b[0] - a[0]) / L * 3;
+        if (inB(mx, my) || (inB(mx + nx, my + ny) && inB(mx - nx, my - ny))) { stats.wallHidden = (stats.wallHidden || 0) + L; continue; } }
       const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
       if (mx < minX || mx > maxX || my < minY || my > maxY) continue;
       const [ti, tj] = tileOf(mx, my), S = getTile(ti, tj).b, seed = hash(w.id + i);
@@ -1140,6 +1175,28 @@ const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), 
       }
       stats.wallsM += L;
     }
+  }
+  // round fountain basins (amenity=fountain drawn as a circle): a dark stone kerb ring round the water and a stepped
+  // centre drum, as at Belém's Fonte Luminosa (checked against Earth); the water itself is painted on the ground map
+  for (const p of polysArea) {
+    if (p.tags.amenity !== 'fountain' || p.area < 60 || p.area > 2500 || p.holes.length || p.id === 'w663311514' || p.id === 'w663311518') continue;   // Rossio's two are authored
+    const ob = obb(p.outer), fill = ob && p.area / (4 * ob.hl * ob.hw); if (!ob || ob.hw / ob.hl < 0.85 || fill < 0.72 || fill > 0.87) continue;   // round, not a square chafariz
+    const [cx, cy] = p.c; if (cx < minX || cx > maxX || cy < minY || cy > maxY) continue;
+    const r = Math.sqrt(p.area / Math.PI), z0 = groundAt(cx, cy), S = getTile(...tileOf(cx, cy)).b, st = ST(hash(p.id));
+    const kerb = lin(srgb('#8f8a82')), drum = lin(srgb('#b9b2a5')), water = lin(srgb('#5f97a6')), N = 36, P = (k, rr) => [cx + Math.cos((k / N) * 2 * Math.PI) * rr, cy + Math.sin((k / N) * 2 * Math.PI) * rr];
+    const kw = Math.min(1.4, Math.max(0.5, r * 0.08));
+    const cyl = (rr, za, zb, col) => { for (let k = 0; k < N; k++) { const a = P(k, rr), b = P(k + 1, rr); wallQuad(S, a, b, za, za, zb, zb, col, 0, 1, za, SI, st); }
+      for (let k = 0; k < N; k++) { const a = P(k, rr), b = P(k + 1, rr); triUp(S, [cx, zb, -cy], [a[0], zb, -a[1]], [b[0], zb, -b[1]], col, [0, 0], [0, 0], [0, 0], SI, st); } };
+    for (let k = 0; k < N; k++) {   // kerb ring: outer wall, inner wall, flat top
+      const a = P(k, r), b = P(k + 1, r), c = P(k, r - kw), d = P(k + 1, r - kw);
+      wallQuad(S, a, b, z0 - 0.4, z0 - 0.4, z0 + 0.7, z0 + 0.7, kerb, 0, 1, z0, SI, st);
+      wallQuad(S, d, c, z0, z0, z0 + 0.7, z0 + 0.7, kerb, 0, 1, z0, SI, st);
+      triUp(S, [a[0], z0 + 0.7, -a[1]], [b[0], z0 + 0.7, -b[1]], [d[0], z0 + 0.7, -d[1]], kerb, [0, 0], [0, 0], [0, 0], SI, st);
+      triUp(S, [a[0], z0 + 0.7, -a[1]], [d[0], z0 + 0.7, -d[1]], [c[0], z0 + 0.7, -c[1]], kerb, [0, 0], [0, 0], [0, 0], SI, st);
+      triUp(S, [cx, z0 + 0.35, -cy], [c[0], z0 + 0.35, -c[1]], [d[0], z0 + 0.35, -d[1]], water, [0, 0], [0, 0], [0, 0], SI, st);
+    }
+    if (r > 6) { cyl(r * 0.22, z0, z0 + 0.9, drum); cyl(r * 0.12, z0 + 0.9, z0 + 1.9, drum); }   // tiered centre
+    stats.fountains = (stats.fountains || 0) + 1;
   }
   // clipped hedges (barrier=hedge): box and laurel along garden edges, the parterres of Parque Eduardo VII and Belém
   const hedges = extractLines(els, proj, (t) => t.barrier === 'hedge' && t.area !== 'yes');
@@ -1466,7 +1523,8 @@ const treeScale = (t, h) => {
   const g = `${t.genus || ''} ${t.species || ''}`;
   if (/Chamaerops/i.test(g)) return 0.45 + h * 0.15;                               // dwarf fan palm
   if (/Phoenix|Washingtonia/i.test(g)) return 1.3 + h * 0.5;                       // the tall Canary date palms of the squares
-  if (/Platanus|Ulmus|Tipuana|Ficus|Populus/i.test(g)) return 1.45 + h * 0.45;
+  if (/Platanus|Ulmus|Populus/i.test(g)) return 2.2 + h * 0.5;   // the Avenida's planes are 20–25 m with crowns that close over the side lanes (checked against Earth)
+  if (/Tipuana|Ficus/i.test(g)) return 1.7 + h * 0.45;
   if (/Celtis|Tilia|Jacaranda|Melia/i.test(g)) return 1.05 + h * 0.35;
   return 0.8 + h * 0.6;
 };
@@ -1520,7 +1578,8 @@ const nTagged = trees.length / 4;
   const bm = new Raster(minX, minY, maxX, maxY, 1);
   const blocked = new Uint8Array(bm.w * bm.h);
   for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });
-  for (const p of polysB) if (/^(monastery|convent|church|cathedral|palace|castle)$/.test(p.tags.building) && p.holes.length) bm.fillRings([p.outer], (i) => { blocked[i] = 1; });   // cloisters and palace courts: clipped box and gravel, not a grove (Jerónimos, checked against Earth)
+  for (const p of polysB) if (/^(monastery|convent|church|cathedral|palace|castle)$/.test(p.tags.building) && p.holes.length) bm.fillRings([p.outer], (i) => { blocked[i] = 1; });
+  for (const p of polysArea) if (/^(claustro|cloister|pátio|patio)\b/i.test(p.tags.name || '')) bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });   // cloisters and palace courts: clipped box and gravel, not a grove (Jerónimos, checked against Earth)
   for (const r of roads) if (ROAD_W[roadKind(r.tags)]) bm.strokeLine(r.pts, ROAD_W[roadKind(r.tags)] + 2, (i) => { blocked[i] = 1; });
   for (let i = 0; i < trees.length; i += 4) bm.disc(trees[i], -trees[i + 2], 5, (k) => { blocked[k] = 1; });
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); bm.disc(x, y, 15, (k) => { blocked[k] = 1; }); }   // under the Príncipe Real cedar's canopy
@@ -1570,7 +1629,7 @@ const nTagged = trees.length / 4;
     const estate = (t.landuse === 'residential' || t.landuse === 'grass') && Math.hypot(p.c[0], p.c[1] * 1.15) > 2500;
     // courtyards (logradouros) of the inner-city blocks: gardens with a tree or two, citrus, a palm (Avenidas Novas, Campo de Ourique, Estrela)
     const yard = t.landuse === 'residential' && !estate;
-    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : estate ? 7 : yard ? 9 : 0;   // estates sample at 7 m (villa gardens use it all; the rest thins to the old 12 m density)
+    const wood = t.natural === 'wood' || t.landuse === 'forest' || /^(Jardim Gulbenkian|Jardim Botânico|Tapada das Necessidades|Jardim da Estrela|Jardim Guerra Junqueiro)/.test(t.name || ''), dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : estate ? 7 : yard ? 9 : 0;   // estates sample at 7 m (villa gardens use it all; the rest thins to the old 12 m density)
     if (!dense || p.area < 150) continue;
     const clearAt = (x, y) => { for (const [dx, dy] of [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4]]) { const c = Math.floor(bm.px(x + dx)), r = Math.floor(bm.py(y + dy)); if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) return false; } return true; };
     const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]);

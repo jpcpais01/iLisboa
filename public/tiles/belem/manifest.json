@@ -113,7 +113,7 @@
     -5958.470691318362,
     -3746.132409592001
    ],
-   "bytes": 244520,
+   "bytes": 309292,
    "balconies": null,
    "detail": "d_6_0.glb"
   },
@@ -435,7 +435,7 @@
     -6458.470691318362,
     -2246.132409592001
    ],
-   "bytes": 271928,
+   "bytes": 294856,
    "balconies": "bal_5_3.bin",
    "detail": "d_5_3.glb"
   },
@@ -547,7 +547,7 @@
     -6458.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 445732,
+   "bytes": 444936,
    "balconies": "bal_5_4.bin",
    "detail": "d_5_4.glb"
   },
@@ -575,7 +575,7 @@
     -5675.082414791048,
     -1746.1324095920008
    ],
-   "bytes": 613620,
+   "bytes": 619548,
    "balconies": null,
    "detail": "d_7_4.glb"
   },
@@ -631,7 +631,7 @@
     -7458.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 273000,
+   "bytes": 271916,
    "balconies": "bal_3_5.bin",
    "detail": "d_3_5.glb"
   },
@@ -645,7 +645,7 @@
     -6958.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 256484,
+   "bytes": 256000,
    "balconies": "bal_4_5.bin",
    "detail": "d_4_5.glb"
   },
@@ -699,15 +699,15 @@
   "levels": 19,
   "estimated": 374,
   "planar": 934,
-  "skeleton": 137,
-  "flat": 410,
+  "skeleton": 134,
+  "flat": 413,
   "skeletonFail": 0,
   "parts": 46,
   "skippedOutlines": 3,
   "partyEdges": 1430,
   "balconies": 2388,
   "statues": 39,
-  "wallsM": 14944.408091732568,
+  "wallsM": 14890.531067665645,
   "pillars": 0,
   "chimneys": 1091,
   "thinParts": 2,
@@ -722,19 +722,21 @@
   "sailboats": 7,
   "miradouros": 0,
   "ponte": 0,
+  "wallHidden": 48.15840386577882,
+  "fountains": 1,
   "hedgeM": 2988.287786694582,
   "waterSource": "dem",
-  "trees": 5820,
+  "trees": 5722,
   "treesMapped": 778,
   "lamps": 1981,
   "cars": 3421,
   "water": 0.7304,
-  "bytes": 8439772,
+  "bytes": 8529628,
   "detailTris": 152823,
-  "triangles": 658248
+  "triangles": 663420
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T22:19:57.571Z",
+ "built": "2026-11-25T22:46:13.801Z",
  "far": {
   "bytes": 352548,
   "tris": 57286

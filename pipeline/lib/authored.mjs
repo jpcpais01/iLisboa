@@ -50,9 +50,6 @@ export const OVERRIDES = {
   // Museu Nacional dos Coches (Paulo Mendes da Rocha, 2015): blank white concrete-and-metal boxes
   ...Object.fromEntries(['r5363219_0', 'r5363219_1', 'r5363219_2', 'r5363219_3', 'r15475185_0'].map((id) => [id, { wall: '#ebeae6', shape: 'flat', flatCol: [206, 206, 202], variant: 3, floorH: 0, parapet: 0.4 }])),
   w230062385: { h: 15, minH: 0, shape: 'flat', wall: '#97a9b6', flatCol: [214, 216, 214], variant: 3, floorH: 0, parapet: 1.2 },   // Oceanário: the box in the dock (roof authored)
-  // Fundação Gulbenkian (1969): brutalist concrete under flat, partly planted roofs; CAM under Kengo Kuma's pale tiled eaves
-  ...Object.fromEntries(['r17036063_0', 'w39784735'].map((id) => [id, { shape: 'flat', wall: '#bbb6ab', flatCol: [148, 156, 128], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.8 }])),
-  w188143627: { shape: 'flat', wall: '#c4c0b6', flatCol: [208, 208, 204], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.6 },
   w174189905: { shape: 'flat', wall: '#d9dcd9', variant: 3, parapet: 0.8 },   // Sporting's multisports pavilion
   // modern institutions with courtyards that the rules read as old (tiled hips): flat-roofed, as built
   r17651166_0: { shape: 'flat', wall: '#dfe2e1', flatCol: [196, 199, 200], variant: 3, parapet: 0.8 },   // Aeroporto Terminal 1: light cladding and glass, metal roof
@@ -101,6 +98,14 @@ export const OVERRIDES = {
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
   // Mosteiro dos Jerónimos: the monastery ranges in golden lioz under crested parapets (the church is authored)
   r11318401_0: { stone: false, wall: '#ddd0b1', shape: 'hipped', roofCol: '#b86a4e', h: 17, floorH: 5.2, groundH: 6.2, bayW: 4.4, variant: 4, parapet: 1.1, balconyFloors: [] },
+  // Fundação Gulbenkian (1969): exposed-concrete pavilions low in the woods — the Sede's roof terraces planted, the museum's
+  // stepped roofs and the Grande Auditório in red-brown, the Centro de Arte Moderno pale (checked against Earth)
+  r17036063_0: { shape: 'flat', h: 10, wall: '#a9a397', flatCol: [164, 104, 96], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.6, stone: false },
+  w39784735: { shape: 'flat', h: 13, wall: '#aaa59b', flatCol: [126, 140, 98], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.6, stone: false },
+  w675059024: { shape: 'flat', h: 12, wall: '#aaa59b', flatCol: [126, 140, 98], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.6, stone: false },
+  w188143626: { shape: 'flat', h: 19, wall: '#a9a397', flatCol: [170, 108, 90], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.5, stone: false },
+  w188143627: { shape: 'flat', h: 11, wall: '#d8d6d0', flatCol: [212, 211, 206], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.4, stone: false },
+  w92354265: { wall: '#e8e6e0' },   // IST Pavilhão de Civil: white render (OSM's green is the glazing)
   w1272872175: { shape: 'hipped', h: 13, wall: '#eeeae0', roofCol: '#b5694f', variant: 4, stone: false },   // Casa Pia (Belém): tiled hip roofs round its courts, not a flat hall
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
   w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
@@ -2488,7 +2493,7 @@ export function oriente(S, { canopy, ground, deck, lin, srgb }) {
 // gate towers (mapped as plain boxes) are modelled: horseshoe-arched openings, a stepped crest, corner
 // turrets with little cupolas, and the big onion dome on an octagonal drum.
 export function campoPequenoTower(S, { cx, cy, ux, uy, hw, ground, lin, srgb }) {
-  const brick = lin(srgb('#a4473a')), cream = lin(srgb('#e3d2ae')), dark = lin(srgb('#2f2a26')), domeC = lin(srgb('#8a3d33'));
+  const brick = lin(srgb('#a4473a')), cream = lin(srgb('#e3d2ae')), dark = lin(srgb('#2f2a26')), domeC = lin(srgb('#93abb1'));   // the onion domes are weathered blue-grey (checked against Earth)
   const ST = [KIND.STONE / 8, 4 / 8, 0.33, 0.9], TL = [KIND.TILES / 8, 4 / 8, 0.33, 1];
   const K = kit(S, { cx, cy, ux, uy, ground, zb: -1, wall: brick, roof: domeC, ST, TL }), { W3, blk } = K;
   const O = openings(S, K.P2, W3, ux, uy, ground, cream, dark, ST);
@@ -3141,4 +3146,32 @@ export function vaultAlong(S, { path, hw, rise, z0, col = '#8fa9ad', rib = '#d8d
   for (let i = 0; i < path.length; i += 3) for (let j = 0; j < nV; j++) limb(S, P(i, j), P(i, j + 1), 0.13, 0.13, 4, m, PL, false);
   for (const i of [0, path.length - 1]) { const pts = Array.from({ length: nV + 1 }, (_, j) => P(i, j)), cc = [path[i][0], z0, -path[i][1]];   // glazed end walls
     for (let j = 0; j < nV; j++) { let n = norm(cc, pts[j], pts[j + 1]); tri(S, cc, pts[j], pts[j + 1], n, g2, [0, 0], [0, 0], [0, 0], I0, PL); } }
+}
+
+// a pair of slender belfries with pyramid spires either side of a front (São João de Deus, 1953): white render, dark louvres
+export function twinSpires(S, { cx, cy, ux, uy, gap = 6.5, half = 2.1, h = 27, spire = 7, ground, lin, srgb }) {
+  const white = lin(srgb('#f1eee7')), trim = lin(srgb('#dcd6ca')), dark = lin(srgb('#34363a'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.52, 1], ST = [KIND.STONE / 8, 5 / 8, 0.52, 0.9], I0 = [0, 0, 0, 0];
+  for (const s of [-1, 1]) {
+    const x = cx - uy * gap * s, y = cy + ux * gap * s;
+    box(S, x, y, ux, uy, half, half, ground - 1, ground + h, white, I0, PL);
+    box(S, x, y, ux, uy, half + 0.2, half + 0.2, ground + h - 0.5, ground + h, trim, I0, ST);
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {   // tall louvred belfry slits
+      const nx = ux * a - uy * b, ny = uy * a + ux * b;
+      box(S, x + nx * (half + 0.02), y + ny * (half + 0.02), nx, ny, 0.05, 0.5, ground + h - 6.5, ground + h - 1.2, dark, I0, PL);
+    }
+    frustum(S, x, y, ux, uy, half + 0.1, 0.05, ground + h, ground + h + spire, white, ST, false);
+  }
+}
+
+// Campo Pequeno's roof (2006 refit): a shallow pale membrane cone over the whole arena, sixteen radial ribs and a raised
+// central drum, sitting on the ring's parapet (checked against Earth)
+export function bullringRoof(S, { cx, cy, r, z0, rise = 4, lin, srgb }) {
+  const memb = lin(srgb('#d3d1ca')), rib = lin(srgb('#a9a69f')), cap = lin(srgb('#bdbab2'));
+  const ST = [KIND.PLAIN / 8, 5 / 8, 0.41, 1];
+  const K = kit(S, { cx, cy, ux: 1, uy: 0, ground: z0, zb: 0, wall: memb, roof: memb, ST, TL: ST }), W = K.W3;
+  sweep(S, W, [[0, 0, -0.6, r + 0.4, r + 0.4], [0, 0, 0, r + 0.4, r + 0.4], [0, 0, rise * 0.8, r * 0.2, r * 0.2], [0, 0, rise * 0.8 + 0.01, 0.01, 0.01]], memb, ST, 48, false);
+  sweep(S, W, [[0, 0, rise * 0.8 - 0.3, r * 0.2, r * 0.2], [0, 0, rise + 0.4, r * 0.2, r * 0.2], [0, 0, rise + 0.9, r * 0.14, r * 0.14], [0, 0, rise + 1.0, 0.05, 0.05]], cap, ST, 24, false);
+  for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a);
+    sweep(S, W, [[c * (r + 0.3), s2 * (r + 0.3), 0.15], [c * r * 0.21, s2 * r * 0.21, rise * 0.8 + 0.12]].map(([u, v, z]) => [u, v, z, 0.3, 0.3]), rib, ST, 4, false); }
 }
