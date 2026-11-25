@@ -312,6 +312,8 @@ const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd'
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
 
+// complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
+const STONE_SITES = polysArea.filter((a) => ['r10093261_0'].includes(a.id)).map((a) => ({ ring: a.outer, wall: '#dccbb2', flat: [205, 193, 172] }));
 function buildingSpec(p) {
   const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] && t['building:part'] !== 'yes' ? t['building:part'] : t.building || 'yes';
   const u = (k) => hash(p.id + k);
@@ -365,6 +367,8 @@ function buildingSpec(p) {
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
+  const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
+  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); }
   const o = OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   return spec;
