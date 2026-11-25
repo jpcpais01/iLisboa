@@ -721,17 +721,17 @@
   "miradouros": 0,
   "ponte": 0,
   "waterSource": "dem",
-  "trees": 8571,
+  "trees": 8436,
   "treesMapped": 298,
   "lamps": 6990,
   "cars": 14681,
   "water": 0,
-  "bytes": 24589627,
+  "bytes": 24587467,
   "detailTris": 657172,
   "triangles": 1281075
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T06:16:38.151Z",
+ "built": "2026-11-25T07:03:08.943Z",
  "far": {
   "bytes": 1016040,
   "tris": 110007

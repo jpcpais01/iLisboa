@@ -57,7 +57,7 @@
     -4175.082414791048,
     4746.132409592789
    ],
-   "bytes": 268608,
+   "bytes": 275272,
    "balconies": "bal_2_0.bin",
    "detail": "d_2_0.glb"
   },
@@ -211,7 +211,7 @@
     -2675.082414791048,
     5246.132409592789
    ],
-   "bytes": 177880,
+   "bytes": 178224,
    "balconies": "bal_5_1.bin",
    "detail": "d_5_1.glb"
   },
@@ -225,7 +225,7 @@
     -2175.082414791048,
     5246.132409592789
    ],
-   "bytes": 404464,
+   "bytes": 404624,
    "balconies": "bal_6_1.bin",
    "detail": "d_6_1.glb"
   },
@@ -309,7 +309,7 @@
     -3175.082414791048,
     5746.132409592789
    ],
-   "bytes": 276832,
+   "bytes": 276500,
    "balconies": "bal_4_2.bin",
    "detail": "d_4_2.glb"
   },
@@ -337,7 +337,7 @@
     -2175.082414791048,
     5746.132409592789
    ],
-   "bytes": 305232,
+   "bytes": 306380,
    "balconies": "bal_6_2.bin",
    "detail": "d_6_2.glb"
   },
@@ -695,21 +695,22 @@
  "stats": {
   "authored": 10,
   "buildings": 4461,
-  "height": 540,
-  "levels": 241,
-  "estimated": 3670,
-  "planar": 3387,
-  "skeleton": 424,
-  "flat": 642,
+  "height": 541,
+  "levels": 243,
+  "estimated": 3667,
+  "planar": 3392,
+  "skeleton": 426,
+  "flat": 635,
   "skeletonFail": 0,
   "parts": 80,
-  "skippedOutlines": 20,
-  "partyEdges": 5442,
-  "balconies": 65931,
+  "skippedOutlines": 8,
+  "partyEdges": 5460,
+  "balconies": 66225,
   "statues": 33,
   "wallsM": 34799.87595736316,
   "pillars": 0,
   "chimneys": 4122,
+  "thinParts": 12,
   "churches": 8,
   "landmarks": 4,
   "trams": 0,
@@ -721,19 +722,19 @@
   "miradouros": 0,
   "ponte": 0,
   "waterSource": "dem",
-  "trees": 13036,
+  "trees": 13126,
   "treesMapped": 2488,
   "lamps": 7425,
   "cars": 12356,
   "water": 0,
-  "bytes": 22523899,
-  "detailTris": 542964,
-  "triangles": 1163182
+  "bytes": 22549559,
+  "detailTris": 543680,
+  "triangles": 1164243
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T06:18:24.012Z",
+ "built": "2026-11-25T06:54:01.665Z",
  "far": {
-  "bytes": 922548,
-  "tris": 97492
+  "bytes": 922976,
+  "tris": 97561
  }
 }

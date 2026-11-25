@@ -481,10 +481,19 @@ function addBuilding_(p) {
   const multiOuter = new Set(polysB.filter((p) => /^r\d+_[1-9]/.test(p.id)).map((p) => p.id.split('_')[0]));
   const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && !multiOuter.has(p.id.split('_')[0]) &&
     (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
-  const parts = polysB.filter((p) => p.tags['building:part']);
+  const parts = polysB.filter((p) => p.tags['building:part']), thinDrop = new Set();
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
-    o.skip = parts.some((pt) => pt.area > 4 && pointInRing(pt.c[0], pt.c[1], o.outer) && Math.abs(pt.c[0] - o.c[0]) < 400);
+    // …but only when the parts actually fill it: a lone mapped sliver (a lift shaft, a roof stair) must not stand in for a whole tower
+    const inside = parts.filter((pt) => pt.area > 4 && Math.abs(pt.c[0] - o.c[0]) < 400 && pointInRing(pt.c[0], pt.c[1], o.outer));
+    const special = OVERRIDES[o.id] || DROP.has(o.id) || o.tags.historic || o.tags.amenity === 'place_of_worship' || ['church', 'cathedral', 'chapel', 'basilica', 'castle', 'palace'].includes(o.tags.building);
+    o.skip = inside.length > 0 && (special || inside.reduce((a, pt) => a + Math.abs(pt.area), 0) >= 0.45 * Math.abs(o.area));
+    if (inside.length && !o.skip) {   // the outline stands for the building; parts that do not rise clear of it are redundant (and would z-fight its walls)
+      stats.thinParts = (stats.thinParts || 0) + 1;
+      const top = (t) => parseMeters(t.height) ?? (isFinite(parseFloat(t['building:levels'])) ? parseFloat(t['building:levels']) * LEVEL_H + 1.2 : null);
+      const oTop = top(o.tags) ?? 14;
+      for (const pt of inside) if ((top(pt.tags) ?? 0) <= oTop + 4) thinDrop.add(pt);
+    }
     if (o.skip && churchy(o) && !['r19372558_0', 'w9253917'].includes(o.id)) { o.skip = false; o.ownParts = true; }   // churches: the outline is modelled whole
     if (o.skip) stats.skippedOutlines++;
   }
@@ -500,8 +509,8 @@ function addBuilding_(p) {
   const ptOutline = polysB.find((p) => p.id === 'w9253917');
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
-  for (const p of [...outlines.filter((o) => !o.skip), ...parts]) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
-  let todo = [...outlines.filter((o) => !o.skip), ...parts].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))]) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
+  let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
   const inZone = (x, y) => zones.some((z) => pointInRing(x, y, z));
@@ -1118,9 +1127,13 @@ const nTagged = trees.length / 4;
   for (const r of roads) if (ROAD_W[roadKind(r.tags)]) bm.strokeLine(r.pts, ROAD_W[roadKind(r.tags)] + 2, (i) => { blocked[i] = 1; });
   for (let i = 0; i < trees.length; i += 4) bm.disc(trees[i], -trees[i + 2], 5, (k) => { blocked[k] = 1; });
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); bm.disc(x, y, 15, (k) => { blocked[k] = 1; }); }   // under the Príncipe Real cedar's canopy
+  // grove field: value noise at ~45 m, sharpened, so trees gather in clumps with lawns between (about half the park planted)
+  const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), h = (a, b) => hash(`${a},${b}gv`);
+    return (h(i, j) * (1 - sx) + h(i + 1, j) * sx) * (1 - sy) + (h(i, j + 1) * (1 - sx) + h(i + 1, j + 1) * sx) * sy; };
+  const grove = (x, y) => { const n = vn(x / 45, y / 45) * 0.7 + vn(x / 17 + 9.1, y / 17 + 3.7) * 0.3; const t = Math.min(1, Math.max(0, (n - 0.38) / 0.24)); return t * t * (3 - 2 * t) * 0.95; };
   for (const p of polysArea) {
     const t = p.tags;
-    const dense = t.natural === 'wood' || t.landuse === 'forest' ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 11 : 0;
+    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : 0;
     if (!dense || p.area < 150) continue;
     const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]);
     for (let x = Math.min(...xs); x < Math.max(...xs); x += dense) for (let y = Math.min(...ys); y < Math.max(...ys); y += dense) {
@@ -1128,7 +1141,8 @@ const nTagged = trees.length / 4;
       if (!pointInRing(jx, jy, p.outer) || p.holes.some((h) => pointInRing(jx, jy, h))) continue;
       const c = Math.floor(bm.px(jx)), r = Math.floor(bm.py(jy));
       if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) continue;
-      addTree(jx, jy, 0.75 + hash(`${jx}`) * 0.6, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
+      if (!wood && hash(`${jx}g`) > grove(jx, jy)) continue;   // parks: groves and open lawns, not an orchard
+      addTree(jx, jy, (wood ? 0.8 : 0.75) + hash(`${jx}`) * 0.65, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
     }
   }
 }
