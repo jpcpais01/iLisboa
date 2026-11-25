@@ -61,6 +61,8 @@ export const OVERRIDES = {
   // Colombo's twin office towers: salmon-brick slabs, each with a blue-glass drum at its corner (mapped as building=roof) under a pale disc
   ...Object.fromEntries(['w495968848', 'w495968849'].map((id) => [id, { h: 58, shape: 'flat', wall: '#b86a5c', flatCol: [176, 172, 166], variant: 3, floorH: 3.7, groundH: 5, parapet: 1.2 }])),
   ...Object.fromEntries(['w1453809581', 'w1453809582'].map((id) => [id, { h: 61, minH: 0, shape: 'flat', wall: '#3f6c86', flatCol: [214, 216, 214], variant: 3, floorH: 3.7, groundH: 5, parapet: 0.6 }])),
+  ...Object.fromEntries(['w240817325', 'w1015870543'].map((id) => [id, { h: 96, shape: 'flat', wall: '#c9d6db', flatCol: [200, 205, 205], variant: 3, floorH: 3.6, parapet: 0 }])),   // São Rafael / São Gabriel (crowns authored)
+  w240816973: { h: 21, shape: 'flat', wall: '#e3e1dc', flatCol: [214, 214, 210], variant: 3, floorH: 0, parapet: 1 },   // Centro Vasco da Gama (glass vault authored)
   w495968845: { h: 27, minH: 0, shape: 'dome', roofH: 10, roofCol: '#9db1b8', wall: '#d9d3c8', variant: 3, floorH: 0 },   // the glass dome over Praça Central
   w496232837: { h: 23, shape: 'flat', wall: '#d9d3c8', flatCol: [196, 196, 192], variant: 3, floorH: 0 },   // its drum terrace
   w495968846: { h: 11, minH: 0, shape: 'dome', roofH: 6, roofCol: '#5d8e93', wall: '#c98f7f', variant: 3, floorH: 0 },   // small teal dome at the front between the towers
@@ -135,7 +137,7 @@ export const AREAS = [
     [38.71192, -9.13330], [38.71176, -9.13370], [38.71176, -9.13415], [38.71223, -9.13445], [38.71282, -9.13453], [38.71332, -9.13443]]],
 ];
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w821784760', 'w496232838', 'w1257751599', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
+export const DROP = new Set(['w821784760', 'w297727868', 'w297727871', 'w39735031', 'w496232838', 'w1257751599', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
   'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633', 'r9159876_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
@@ -2766,9 +2768,14 @@ export function arenaShell(S, { ring, ground, z0, z1, lin, srgb }) {
     for (const [A, B, C] of [[a, b, e], [a, e, d]]) {
       const e1 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], e2 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
       let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; n = n.map((q) => q / l); if (n[1] < 0) n = n.map((q) => -q);
-      tri(S, A, B, C, n, k & 1 ? zinc : zinc2, [0, 0], [0, 0], [0, 0], I0, PL);
+      tri(S, A, B, C, n, (k >> 2) & 1 ? zinc : zinc2, [0, 0], [0, 0], [0, 0], I0, PL);
     }
   }
+  // the row of skylight slats across the crown (dark glass louvres), as seen from above
+  { const o = obb(pts), glass = lin(srgb('#3d4a52')), zs = (u, v) => ground + z0 + (z1 - z0) * Math.pow(Math.max(0, 1 - (u / o.hl) ** 2 - (v / o.hw) ** 2), 0.62);
+    for (let i = 0; i < 8; i++) { const u = -0.42 * o.hl + (0.84 * o.hl * i) / 7, hv = 0.3 * o.hw * Math.sqrt(1 - (u / o.hl) ** 2);
+      const x = o.cx + o.ux * u, y = o.cy + o.uy * u, z = zs(u, 0);
+      box(S, x, y, o.ux, o.uy, 1.6, hv, z - 0.4, z + 0.5, glass, I0, PL); } }
   // a pale rim beam where the shell meets the drum
   for (let k = 0; k < N; k++) { const p = pts[k], q = pts[(k + 1) % N], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l < 0.05) continue;
     box(S, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (q[0] - p[0]) / l, (q[1] - p[1]) / l, l / 2 + 0.1, 0.5, ground + z0 - 0.6, ground + z0 + 0.5, rimC, I0, PL); }
@@ -2855,6 +2862,117 @@ export function barrelRoof(S, { ob, z0, rise, col, under, N = 12 }) {
       const nE = [ob.ux * su, 0, -ob.uy * su];
       tri(S, P(su * hl, t0 * hw, z0), P(su * hl, t1 * hw, z0), P(su * hl, t1 * hw, zAt(t1)), nE, under, [0, 0], [0, 0], [0, 0], I0, PL);
       tri(S, P(su * hl, t0 * hw, z0), P(su * hl, t1 * hw, zAt(t1)), P(su * hl, t0 * hw, zAt(t0)), nE, under, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+  }
+}
+
+// Pavilhão de Portugal (Siza, 1998): the "pala", a 20 cm concrete sheet hung in a shallow catenary 65 m between two
+// porticoes of parallel concrete fins. Built over its mapped outline (u along the span).
+export function palaSiza(S, { ring, ground, lin, srgb, top = 13.5, sag = 3.2 }) {
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.5, 1], I0 = [0, 0, 0, 0];
+  const conc = lin(srgb('#d9d5cc')), under = lin(srgb('#bdb8ae'));
+  const o = obb(ring), hl = o.hl, hw = o.hw;
+  const P = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+  const N = 24, zAt = (u) => top - sag * (1 - (u / hl) ** 2);
+  for (let i = 0; i < N; i++) {
+    const u0 = -hl + (2 * hl * i) / N, u1 = -hl + (2 * hl * (i + 1)) / N;
+    const a = P(u0, -hw, zAt(u0)), b = P(u1, -hw, zAt(u1)), c = P(u1, hw, zAt(u1)), d = P(u0, hw, zAt(u0));
+    tri(S, a, b, c, [0, 1, 0], conc, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, c, d, [0, 1, 0], conc, [0, 0], [0, 0], [0, 0], I0, PL);
+    const a2 = P(u0, -hw, zAt(u0) - 0.25), b2 = P(u1, -hw, zAt(u1) - 0.25), c2 = P(u1, hw, zAt(u1) - 0.25), d2 = P(u0, hw, zAt(u0) - 0.25);
+    tri(S, a2, c2, b2, [0, -1, 0], under, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a2, d2, c2, [0, -1, 0], under, [0, 0], [0, 0], [0, 0], I0, PL);
+    for (const sv of [-1, 1]) { const n = [o.uy * -sv, 0, -o.ux * sv];   // thin edges
+      tri(S, P(u0, sv * hw, zAt(u0) - 0.25), P(u1, sv * hw, zAt(u1) - 0.25), P(u1, sv * hw, zAt(u1)), [-o.uy * sv, 0, -o.ux * sv], conc, [0, 0], [0, 0], [0, 0], I0, PL);
+      tri(S, P(u0, sv * hw, zAt(u0) - 0.25), P(u1, sv * hw, zAt(u1)), P(u0, sv * hw, zAt(u0)), [-o.uy * sv, 0, -o.ux * sv], conc, [0, 0], [0, 0], [0, 0], I0, PL); }
+  }
+  // porticoes: nine parallel fins at each end, the sheet's anchors
+  for (const su of [-1, 1]) for (let k = 0; k < 9; k++) {
+    const v = -hw + (2 * hw * (k + 0.5)) / 9;
+    const c = P(su * (hl + 4), v, 0);
+    box(S, c[0], -c[2], o.ux, o.uy, 4.2, 0.6, ground - 1, ground + top + 0.6, conc, I0, PL);
+  }
+}
+
+// Torres São Gabriel and São Rafael (1998–2004): the 110 m twins by the Vasco da Gama centre end in a raked glass crown
+// that climbs to a point at one end of their lens-shaped plan
+export function sailCrown(S, { ring, z0, rise, toward = 1, col, lin, srgb }) {
+  const PL = [KIND.PLAIN / 8, 3 / 8, 0.4, 1], I0 = [0, 0, 0, 0];
+  const o = obb(ring), apex = [o.cx + o.ux * o.hl * 0.78 * toward, o.cy + o.uy * o.hl * 0.78 * toward];
+  const K = 8, c = lin(srgb(col));
+  const at = (p, t) => [p[0] + (apex[0] - p[0]) * t, p[1] + (apex[1] - p[1]) * t];
+  for (let k = 0; k < K; k++) {
+    const t0 = k / K, t1 = (k + 1) / K;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i], q = ring[(i + 1) % ring.length];
+      const A = at(p, t0), B = at(q, t0), C = at(q, t1), D = at(p, t1);
+      const W = (xy, t) => [xy[0], z0 + rise * t, -xy[1]];
+      const a = W(A, t0), b = W(B, t0), cc = W(C, t1), d = W(D, t1);
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+      let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; n = n.map((x) => x / l);
+      const mid = [(a[0] + cc[0]) / 2 - apex[0], 0, (a[2] + cc[2]) / 2 + apex[1]];
+      if (n[0] * mid[0] + n[2] * mid[2] < 0 && n[1] < 0.98) n = n.map((x) => -x);
+      tri(S, a, b, cc, n, c.map((x, j) => x * (0.92 + 0.08 * (k % 2))), [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, cc, d, n, c, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+  }
+}
+
+// Ponte Vasco da Gama (1998), the stretch inside the diorama: the north viaduct from Sacavém, the cable-stayed main
+// bridge (420 m span between two H pylons 148 m tall, 203 m side spans, deck ~50 m over the channel) and the long
+// low viaduct heading for Montijo. Centreline averaged from both mapped carriageways; pylons where they are mapped.
+export const VG_LINE = [[38.786526, -9.099728], [38.786635, -9.098699], [38.786688, -9.097675], [38.786703, -9.096621], [38.786665, -9.095593], [38.786592, -9.094564], [38.786471, -9.093533], [38.786357, -9.092505], [38.786233, -9.091469], [38.786119, -9.090408], [38.786, -9.089392], [38.785878, -9.08836], [38.78576, -9.087324], [38.785646, -9.086283], [38.78553, -9.085248], [38.785408, -9.084218], [38.785296, -9.083186], [38.785164, -9.082138], [38.785045, -9.081115], [38.784905, -9.080093], [38.784732, -9.079056], [38.784523, -9.078013], [38.78427, -9.076963], [38.784006, -9.075945], [38.783703, -9.074898], [38.783353, -9.073862], [38.782977, -9.072839], [38.782551, -9.071793], [38.782085, -9.070759], [38.78178, -9.070123]];
+const VG_PYLONS = [[38.78583, -9.09057], [38.78529, -9.08578]];
+export function ponteVascoGama(S, { fwd, ground, lin, srgb }) {
+  const conc = lin(srgb('#d2cec6')), concD = lin(srgb('#aaa59c')), asphalt = lin(srgb('#5a5853')), cable = lin(srgb('#e6e6e2'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0];
+  const pts = VG_LINE.map(([la, lo]) => fwd(la, lo));
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const L = cum.at(-1);
+  const at = (s) => { let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
+    const t = Math.max(0, Math.min(1, (s - cum[i - 1]) / (cum[i] - cum[i - 1]))), [ax, ay] = pts[i - 1], [bx, by] = pts[i], d = Math.hypot(bx - ax, by - ay);
+    return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, ux: (bx - ax) / d, uy: (by - ay) / d }; };
+  const sOf = ([x, y]) => { let best = 0, bd = Infinity; for (let s = 0; s <= L; s += 1) { const a = at(s), d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = s; } } return best; };
+  const [s1, s2] = VG_PYLONS.map(([la, lo]) => sOf(fwd(la, lo))).sort((a, b) => a - b), sm = (s1 + s2) / 2, half = (s2 - s1) / 2;
+  const HW = 15, deckZ = (s) => {
+    const z = s >= s1 && s <= s2 ? 50.5 - 2.5 * ((s - sm) / half) ** 2 : s < s1 ? Math.max(12, 48 - 0.036 * (s1 - s)) : Math.max(14, 48 - 0.036 * (s - s2));
+    const a = at(s); return Math.max(z, ground(a.x, a.y) + 7);
+  };
+  const P3 = (s, v, z) => { const a = at(s); return [a.x - a.uy * v, z, -(a.y + a.ux * v)]; };
+  const quad = (A, B, C, D, col, want) => { let n = norm(A, B, C); if (n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) { [B, D] = [D, B]; n = n.map((q) => -q); }
+    triRaw(S, A, B, C, n, col, [0, 0], [0, 0], [0, 0], I0, PL); triRaw(S, A, C, D, n, col, [0, 0], [0, 0], [0, 0], I0, PL); };
+  const lat = (s, sign) => { const a = at(s); return [-a.uy * sign, 0, -a.ux * sign]; };
+  // deck: a 30 m box girder, road on top, parapets and a central barrier
+  const STEP = 12;
+  for (let s = 0; s < L - 0.1; s += STEP) {
+    const e = Math.min(L, s + STEP), z0 = deckZ(s), z1 = deckZ(e), dep = s > s1 - 210 && s < s2 + 210 ? 3.2 : 2.6;
+    quad(P3(s, -HW, z0), P3(e, -HW, z1), P3(e, HW, z1), P3(s, HW, z0), asphalt, [0, 1, 0]);
+    quad(P3(s, -HW, z0 - dep), P3(e, -HW, z1 - dep), P3(e, -HW, z1 + 1), P3(s, -HW, z0 + 1), conc, lat(s, -1));
+    quad(P3(s, HW, z0 - dep), P3(e, HW, z1 - dep), P3(e, HW, z1 + 1), P3(s, HW, z0 + 1), conc, lat(s, 1));
+    quad(P3(s, -HW + 2, z0 - dep), P3(e, -HW + 2, z1 - dep), P3(e, HW - 2, z1 - dep), P3(s, HW - 2, z0 - dep), concD, [0, -1, 0]);
+    quad(P3(s, -HW, z0 - dep), P3(e, -HW, z1 - dep), P3(e, -HW + 2, z1 - dep), P3(s, -HW + 2, z0 - dep), concD, [0, -1, 0]);
+    quad(P3(s, HW - 2, z0 - dep), P3(e, HW - 2, z1 - dep), P3(e, HW, z1 - dep), P3(s, HW, z0 - dep), concD, [0, -1, 0]);
+    limb(S, P3(s, 0, z0 + 0.5), P3(e, 0, z1 + 0.5), 0.35, 0.35, 4, conc, PL, false);   // central barrier
+  }
+  // piers: twin columns with a cap, every 78 m on the viaducts and twice in each side span
+  const piers = [];
+  for (let s = s1 - 78; s > 20; s -= 78) if (s < s1 - 60) piers.push(s);
+  for (let s = s2 + 78; s < L - 10; s += 78) piers.push(s);
+  for (const s of piers) {
+    const a = at(s), g = ground(a.x, a.y), zt = deckZ(s) - 3.2;
+    if (zt - g < 3) continue;
+    for (const v of [-8, 8]) { const c = P3(s, v, 0); box(S, c[0], -c[2], a.ux, a.uy, 1.4, 2.2, g - 3, zt, conc, I0, PL); }
+    const c = P3(s, 0, 0); box(S, c[0], -c[2], a.ux, a.uy, 1.6, 11.5, zt - 2, zt, conc, I0, PL);
+  }
+  // pylons: two legs outside the deck, rising to 148 m, crossbeams under the deck and at the head
+  const TOP = 148;
+  for (const sp of [s1, s2]) {
+    const a = at(sp), g = Math.min(0, ground(a.x, a.y)), zd = deckZ(sp);
+    for (const v of [-(HW + 3.5), HW + 3.5]) { const c = P3(sp, v, 0);
+      limb(S, [c[0], g - 3, c[2]], [c[0], zd - 4, c[2]], 3.4, 3.0, 4, conc, PL, true);
+      limb(S, [c[0], zd - 4, c[2]], [c[0], TOP, c[2]], 3.0, 2.0, 4, conc, PL, true); }
+    for (const z of [zd - 6, TOP - 12]) { const c = P3(sp, 0, 0); box(S, c[0], -c[2], a.ux, a.uy, 2.2, HW + 3.5, z - (z < 60 ? 3 : 2.5), z, conc, I0, PL); }
+    // stays: two planes of semi-harp cables, 12 each way from each leg
+    for (const v of [-(HW + 3.5), HW + 3.5]) for (const dir of [-1, 1]) for (let k = 0; k < 12; k++) {
+      const sd = sp + dir * (24 + k * 15.5), zp = 92 + k * 4.4, vd = v > 0 ? HW - 0.6 : -HW + 0.6;
+      limb(S, P3(sp, v * 0.92, zp), P3(sd, vd, deckZ(sd) + 0.6), 0.16, 0.16, 3, cable, PL, false);
     }
   }
 }

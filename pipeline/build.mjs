@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -142,7 +142,7 @@ log(`OSM elements: ${els.length}`);
 const isBuilding = (t) => (t.building && t.building !== 'no') || (t['building:part'] && t['building:part'] !== 'no');
 const underground = (t) => t.location === 'underground' || (t.layer && +t.layer < 0) || t.tunnel === 'yes' || t.tunnel === 'building_passage';
 const polysB = (() => {   // the same footprint mapped twice (a convent relation over its hospital ways) z-fights: keep one
-  const all = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t)), seen = new Map(), out = [];
+  const all = extractPolygons(els, proj, (t) => isBuilding(t) && !underground(t)).filter((p) => !(p.tags['bridge:support'] && DROP.has(p.id))), seen = new Map(), out = [];   // authored bridges' pylons: not buildings, not land
   const score = (p) => (OVERRIDES[p.id] ? 4 : 0) + (p.tags.height || p.tags['building:levels'] ? 2 : 0) + (p.tags.name ? 1 : 0);
   for (const p of all) {
     if (p.tags['building:part']) { out.push(p); continue; }
@@ -758,6 +758,12 @@ function addBuilding_(p) {
   for (const [id, centre] of BLEACH) { const p = byId.get(id); if (!p || !inArea(p.c)) continue;
     const H = parseMeters(p.tags.height) ?? Math.min(20, Math.max(5, Math.sqrt(Math.abs(p.area)) / 9));
     if (bleachers(tileB(...p.c), { ring: p.outer, centre, ground: p.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H, lin, srgb })) mark(); }
+  { const pl = byId.get('w39735031');   // Pavilhão de Portugal: Siza's concrete pala between its porticoes
+    if (pl && inArea(pl.c)) { palaSiza(tileB(...pl.c), { ring: pl.outer, ground: groundAt(...pl.c), lin, srgb }); mark(); } }
+  for (const id of ['w240817325', 'w1015870543']) { const tw = byId.get(id);   // São Rafael / São Gabriel crowns
+    if (tw && inArea(tw.c)) { const o = obb(tw.outer); sailCrown(tileB(...tw.c), { ring: tw.outer, z0: groundAt(...tw.c) + OVERRIDES[id].h, rise: 18, toward: o.ux > 0 ? 1 : -1, col: '#b9cdd6', lin, srgb }); mark(); } }
+  { const vg = byId.get('w240816973');   // Centro Vasco da Gama: the long glass vault (with water running over it) down its spine
+    if (vg && inArea(vg.c)) { const o = obb(vg.outer), gl = lin(srgb('#6f9db0')); barrelRoof(tileB(...vg.c), { ob: { ...o, hl: o.hl * 0.82, hw: o.hw * 0.26 }, z0: groundAt(...vg.c) + OVERRIDES['w240816973'].h + 0.6, rise: 4, col: gl, under: gl }); mark(); } }
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms
     if (cn && inArea(cn.c)) { oriente(tileB(...cn.c), { canopy: cn.outer, ground: groundAt(...cn.c), deck: 11.6, lin, srgb }); mark(); } }
   { const rf = byId.get('r16349886_0');   // Estádio da Luz: seats and the four arches
@@ -972,6 +978,11 @@ if (AQUEDUTO_LINE.some(([la, lo]) => { const [x, y] = proj.fwd(la, lo); return x
   const T = makeSink();
   aqueduto(T, { fwd: proj.fwd, groundAt: (x, y) => Math.max(LAND_MIN, dem.ground(x, y)), lin, srgb, log });
   stats.aqueduto = distribute(T);
+}
+if (VG_LINE.some(([la, lo]) => { const [x, y] = proj.fwd(la, lo); return x >= minX - 50 && x < maxX + 50 && y >= minY - 50 && y < maxY + 50; })) {
+  const T = makeSink();
+  ponteVascoGama(T, { fwd: proj.fwd, ground: (x, y) => dem.ground(x, y), lin, srgb });
+  stats.ponteVG = distribute(T);
 }
 // ─── statues, columns & historic walls ──────────────────────────────────
 const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
