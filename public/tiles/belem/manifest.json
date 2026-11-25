@@ -693,11 +693,11 @@
   }
  ],
  "stats": {
-  "authored": 6,
+  "authored": 7,
   "buildings": 1491,
   "height": 1091,
   "levels": 19,
-  "estimated": 375,
+  "estimated": 374,
   "planar": 1088,
   "skeleton": 152,
   "flat": 241,
@@ -727,12 +727,12 @@
   "lamps": 1973,
   "cars": 3421,
   "water": 0.7304,
-  "bytes": 8987572,
-  "detailTris": 140520,
-  "triangles": 635528
+  "bytes": 8984844,
+  "detailTris": 140386,
+  "triangles": 635394
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T07:16:10.620Z",
+ "built": "2026-11-25T07:49:52.820Z",
  "far": {
   "bytes": 365228,
   "tris": 57286

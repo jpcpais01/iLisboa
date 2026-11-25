@@ -54,6 +54,12 @@ export const OVERRIDES = {
   ...Object.fromEntries(['r17036063_0', 'w39784735'].map((id) => [id, { shape: 'flat', wall: '#bbb6ab', flatCol: [148, 156, 128], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.8 }])),
   w188143627: { shape: 'flat', wall: '#c4c0b6', flatCol: [208, 208, 204], variant: 3, floorH: 4.2, groundH: 4.6, parapet: 0.6 },
   w174189905: { shape: 'flat', wall: '#d9dcd9', variant: 3, parapet: 0.8 },   // Sporting's multisports pavilion
+  // modern institutions with courtyards that the rules read as old (tiled hips): flat-roofed, as built
+  w155331041: { shape: 'flat', wall: '#efefeb', flatCol: [222, 222, 218], variant: 3, parapet: 0.8 },   // Fundação Champalimaud (Charles Correa)
+  r3232954_0: { shape: 'flat', wall: '#ebebe6', flatCol: [214, 214, 210], variant: 3, parapet: 0.6 },   // Pavilhão do Conhecimento (Carrilho da Graça)
+  r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
+  r6902258_0: { shape: 'flat', wall: '#e4e0d8', variant: 3, parapet: 0.8 },   // Hospital Fernando Fonseca
+  ...Object.fromEntries(['r5742899_0', 'r21949748_0'].map((id) => [id, { shape: 'flat', variant: 3, parapet: 0.8 }])),   // Campus XXI, Edifício Fidelidade
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
