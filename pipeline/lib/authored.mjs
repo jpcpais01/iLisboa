@@ -63,9 +63,9 @@ export const OVERRIDES = {
   // Mosteiro de São Vicente de Fora: white mannerist monastery, tiled hip roofs
   'r3310877_0': { variant: 4, wall: '#f0ece2', roofCol: '#a8624c', stone: false, h: 24, roofH: 5, floorH: 4.6, groundH: 5, bayW: 4.4, balconyFloors: [], parapet: 0 },
   // Castelo de São Jorge, Castelejo: bare crenellated walls and square towers in weathered limestone
-  'r19072300_0': { castle: true, stone: true, wall: '#cdbd9f', shape: 'flat', h: 12, floorH: 0, parapet: 0, crenel: true, variant: 5 },
+  'r19072300_0': { castle: true, stone: true, wall: '#cdbd9f', shape: 'flat', h: 12, floorH: 0, parapet: 0, crenel: true, variant: 5, flatCol: [178, 166, 140] },
   ...Object.fromEntries(['r19072289_0', 'r19072290_0', 'r19072291_0', 'r19072292_0', 'r19072293_0', 'r19072294_0', 'r19072296_0', 'r19072297_0', 'r19072298_0', 'r19072299_0']
-    .map((id, k) => [id, { castle: true, stone: true, wall: '#c9b898', shape: 'flat', h: id === 'r19072289_0' ? 22 : 16 + (k % 3), floorH: 0, parapet: 0, crenel: true, variant: 5 }])),
+    .map((id, k) => [id, { castle: true, stone: true, wall: '#c9b898', shape: 'flat', h: id === 'r19072289_0' ? 22 : 16 + (k % 3), floorH: 0, parapet: 0, crenel: true, variant: 5, flatCol: [178, 166, 140] }])),
   // Casa dos Bicos (1523): façade of diamond-pointed stones (shader variant 7), four storeys since the 1983 rebuild
   w96628628: { variant: 7, wall: '#e4ddcc', roofCol: '#a5604b', stone: false, shape: 'hipped', pitch: 24, h: 14.5, roofH: 3, floorH: 3.3, groundH: 4.4, bayW: 3.4, balconyFloors: [], parapet: 0 },
   // Santa Apolónia station: long pale neoclassical front (OSM paints it sky blue), tiled hip roof

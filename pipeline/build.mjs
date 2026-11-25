@@ -361,7 +361,7 @@ function buildingSpec(p) {
   const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(ROOFS, u('r'));
-  const flatCol = shape === 'flat' && parseColour(t['roof:colour']) || pick(p.area > 2500 ? BIG_ROOF : FLAT_ROOF, u('f'));
+  const flatCol = castle ? [178, 166, 140] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
