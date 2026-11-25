@@ -29,7 +29,7 @@
     -1391.694138263734,
     -3746.132409592001
    ],
-   "bytes": 388572,
+   "bytes": 386596,
    "balconies": "bal_0_0.bin",
    "detail": "d_0_0.glb"
   },
@@ -43,7 +43,7 @@
     -891.694138263734,
     -3746.132409592001
    ],
-   "bytes": 277572,
+   "bytes": 277516,
    "balconies": "bal_1_0.bin",
    "detail": "d_1_0.glb"
   },
@@ -57,7 +57,7 @@
     -391.694138263734,
     -3746.132409592001
    ],
-   "bytes": 106748,
+   "bytes": 106668,
    "balconies": "bal_2_0.bin",
    "detail": "d_2_0.glb"
   },
@@ -141,7 +141,7 @@
     -1391.694138263734,
     -3246.132409592001
    ],
-   "bytes": 528528,
+   "bytes": 527480,
    "balconies": "bal_0_1.bin",
    "detail": "d_0_1.glb"
   },
@@ -155,7 +155,7 @@
     -891.694138263734,
     -3246.132409592001
    ],
-   "bytes": 416768,
+   "bytes": 415224,
    "balconies": "bal_1_1.bin",
    "detail": "d_1_1.glb"
   },
@@ -169,7 +169,7 @@
     -391.694138263734,
     -3246.132409592001
    ],
-   "bytes": 127196,
+   "bytes": 127172,
    "balconies": "bal_2_1.bin",
    "detail": "d_2_1.glb"
   },
@@ -267,7 +267,7 @@
     -891.694138263734,
     -2746.132409592001
    ],
-   "bytes": 224952,
+   "bytes": 224712,
    "balconies": "bal_1_2.bin",
    "detail": "d_1_2.glb"
   },
@@ -281,7 +281,7 @@
     -391.694138263734,
     -2746.132409592001
    ],
-   "bytes": 216728,
+   "bytes": 216720,
    "balconies": "bal_2_2.bin",
    "detail": "d_2_2.glb"
   },
@@ -723,19 +723,19 @@
   "miradouros": 0,
   "ponte": 0,
   "waterSource": "dem",
-  "trees": 2376,
+  "trees": 2097,
   "treesMapped": 591,
-  "lamps": 1136,
+  "lamps": 1128,
   "cars": 1693,
   "water": 0.8455,
-  "bytes": 6347170,
-  "detailTris": 132555,
-  "triangles": 541451
+  "bytes": 6560378,
+  "detailTris": 152755,
+  "triangles": 561651
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T19:53:58.154Z",
+ "built": "2026-11-25T20:25:06.593Z",
  "far": {
-  "bytes": 300580,
+  "bytes": 300356,
   "tris": 55089
  }
 }

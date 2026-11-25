@@ -447,6 +447,7 @@ function buildingSpec(p) {
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
+  if (variant === 3 && ['office', 'commercial', 'bank'].includes(kind) && h >= 15 && u('cw') < 0.45) spec.msBand = [0.02, 0.26];   // offices: nearly half in curtain-wall glass (Avenidas Novas, Marquês, Parque das Nações)
   if (variant === 8) {   // era of the block, by district: 0 punched + shutters, 1 balcony bands (60s–70s), 2 Português Suave (40s–50s), 3 aluminium + marquises (80s–90s)
     const [x, y] = p.c, w = instOut ? [0.6, 0.4, 0, 0]
       : x > -880 && x < 1030 && y > 2690 && y < 4800 ? [0.35, 0.1, 0.55, 0]     // Alvalade, Areeiro, Av. de Roma
@@ -563,6 +564,14 @@ function addBuilding_(p) {
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  // solar panels on about a third of the flat-roofed villas (Restelo, Belém from above)
+  if (mode === 'flat' && isVilla(p) && hash(p.id + 'pv') < 0.35) {
+    const o = obb(p.outer), pc = srgb('#2d3a4c').map((v) => v), PVS = [KIND.PLAIN / 8, 5 / 8, 0.2, 1];
+    if (o && o.hl > 4 && o.hw > 3) { const nU = Math.min(6, Math.floor((o.hl * 1.2) / 1.1)), nV = Math.min(3, Math.floor((o.hw * 0.9) / 1.8));
+      for (let a = 0; a < nU; a++) for (let b = 0; b < nV; b++) { const du = (a - (nU - 1) / 2) * 1.1, dv = (b - (nV - 1) / 2) * 1.8;
+        const x = o.cx + o.ux * du + o.vx * dv, y = o.cy + o.uy * du + o.vy * dv; if (!pointInRing(x, y, p.outer)) continue;
+        box(ctx.D || S, x, y, o.ux, o.uy, 0.5, 0.85, wallTop + 0.25, wallTop + 0.4, lin(pc), [0, 0, 0, 0], PVS); } }
+  }
   // trapeiras: the old town's attic dormers on the street slopes of tiled roofs (about two Pombaline-type buildings in five, one vernacular in four)
   if (mode === 'planar' && (s.shape === 'hipped' || s.shape === 'gabled') && [0, 1, 2].includes(s.variant) && s.floorH && s.h - (s.minH || 0) >= 9 &&
       hash(p.id + 'trap') < (s.variant === 0 ? 0.42 : 0.25)) {
@@ -1112,7 +1121,12 @@ if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); p
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const VR = new Raster(minX - 40, minY - 40, maxX + 40, maxY + 40, 4), villaF = new Uint8Array(VR.w * VR.h);
-for (const p of polysB) if (isVilla(p)) VR.disc(p.c[0], p.c[1], 16 + Math.sqrt(Math.abs(p.area)) * 0.5, (i) => { villaF[i] = 1; });
+{ // only where houses dominate: a small 'yes' among apartment blocks (Amadora, Odivelas) is an annexe, not a villa in its garden
+  const BIG = new Map(), key = (x, y) => `${Math.floor(x / 60)},${Math.floor(y / 60)}`;
+  for (const p of polysB) if (!isVilla(p) && Math.abs(p.area) >= 150) { const k = key(...p.c); BIG.set(k, (BIG.get(k) || 0) + Math.abs(p.area)); }
+  const bigNear = (x, y) => { let a = 0; for (const dx of [-60, 0, 60]) for (const dy of [-60, 0, 60]) a += BIG.get(key(x + dx, y + dy)) || 0; return a; };
+  for (const p of polysB) if (isVilla(p) && bigNear(...p.c) < 4000) VR.disc(p.c[0], p.c[1], 16 + Math.sqrt(Math.abs(p.area)) * 0.5, (i) => { villaF[i] = 1; });
+}
 const villaAt = (x, y) => { const c = Math.floor(VR.px(x)), r = Math.floor(VR.py(y)); return c >= 0 && r >= 0 && c < VR.w && r < VR.h && villaF[r * VR.w + c] === 1; };
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
