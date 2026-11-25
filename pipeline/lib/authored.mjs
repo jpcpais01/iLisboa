@@ -40,6 +40,7 @@ export const OVERRIDES = {
   w96315909: { wall: '#efe7d6' },
   w821784762: { shape: 'flat', h: 9, wall: '#c8ccce', flatCol: [176, 180, 182], variant: 3 },   // Altice (MEO) Arena: the podium…
   w821784760: { shape: 'dome', minH: 9, h: 14, roofH: 24, roofCol: '#8f969b', wall: '#9aa0a4', variant: 3, floorH: 0 },   // …and the long zinc shell
+  r8872281_0: { wall: '#a4473a', variant: 4, stone: false, h: 15, floorH: 4.6, groundH: 5.2, bayW: 4.2, shape: 'flat', parapet: 1.0, balconyFloors: [] },   // Campo Pequeno: red brick ring
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
@@ -106,7 +107,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2416,4 +2417,41 @@ export function oriente(S, { canopy, ground, deck, lin, srgb }) {
   // ridge and valley ribs: the lines where the vaults meet
   for (let j = 0; j <= rows; j++) { const v = -o.hw + dv * j; limb(S, F(-o.hl, v, zc), F(o.hl, v, zc), 0.16, 0.16, 5, white2, PL, false); }
   for (let i = 0; i <= nU; i++) { const u = -o.hl + du * i; limb(S, F(u, -o.hw, zc), F(u, o.hw, zc), 0.16, 0.16, 5, white2, PL, false); }
+}
+
+// Praça de Touros do Campo Pequeno (1892): neo-Mudéjar bullring in red brick with cream bands. Its four
+// gate towers (mapped as plain boxes) are modelled: horseshoe-arched openings, a stepped crest, corner
+// turrets with little cupolas, and the big onion dome on an octagonal drum.
+export function campoPequenoTower(S, { cx, cy, ux, uy, hw, ground, lin, srgb }) {
+  const brick = lin(srgb('#a4473a')), cream = lin(srgb('#e3d2ae')), dark = lin(srgb('#2f2a26')), domeC = lin(srgb('#8a3d33'));
+  const ST = [KIND.STONE / 8, 4 / 8, 0.33, 0.9], TL = [KIND.TILES / 8, 4 / 8, 0.33, 1];
+  const K = kit(S, { cx, cy, ux, uy, ground, zb: -1, wall: brick, roof: domeC, ST, TL }), { W3, blk } = K;
+  const O = openings(S, K.P2, W3, ux, uy, ground, cream, dark, ST);
+  const H = 21;
+  blk(-hw, hw, -hw, hw, -1, H, brick);
+  for (const z of [0.9, 7.6, 14.2, H - 0.5]) blk(-hw - 0.15, hw + 0.15, -hw - 0.15, hw + 0.15, z, z + 0.4, cream);   // cream bands
+  for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    O.win(nu * hw, nv * hw, nu, nv, 0.5, 3.2, 5.2, 'arch', 0.2);                                     // gate
+    for (const d of [-2.4, 2.4]) { const tu = -nv, tv = nu; O.win(nu * hw + tu * d, nv * hw + tv * d, nu, nv, 9.0, 1.3, 3.4, 'arch', 0.16); O.win(nu * hw + tu * d, nv * hw + tv * d, nu, nv, 15.4, 1.1, 3.0, 'arch', 0.16); }
+  }
+  // stepped (Mudéjar) crest
+  const m = Math.max(3, Math.floor((2 * hw) / 1.6));
+  for (const [nu, nv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 0; k < m; k++) {
+    const t = -hw + (2 * hw * (k + 0.5)) / m, u = nu ? nu * (hw - 0.25) : t, v = nv ? nv * (hw - 0.25) : t;
+    blk(u - 0.35, u + 0.35, v - 0.35, v + 0.35, H, H + 0.9, brick); blk(u - 0.2, u + 0.2, v - 0.2, v + 0.2, H + 0.9, H + 1.5, cream);
+  }
+  // corner turrets with small cupolas
+  for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const u = su * (hw - 0.2), v = sv * (hw - 0.2);
+    sweep(S, W3, [[u, v, H - 2, 0.9, 0.9], [u, v, H + 2.6, 0.9, 0.9], [u, v, H + 2.8, 1.05, 1.05]], brick, ST, 8, false);
+    sweep(S, W3, [[u, v, H + 2.8, 0.95, 0.95], [u, v, H + 3.5, 1.08, 1.08], [u, v, H + 4.3, 0.7, 0.7], [u, v, H + 4.9, 0.12, 0.12], [u, v, H + 5.4, 0.04, 0.04]], domeC, ST, 8);
+  }
+  // octagonal drum with arched windows and the onion dome
+  const r = hw * 0.62;
+  sweep(S, W3, [[0, 0, H - 0.5, r, r], [0, 0, H + 4.2, r, r], [0, 0, H + 4.6, r + 0.25, r + 0.25], [0, 0, H + 4.9, r, r]], brick, ST, 8, false);
+  for (let k = 0; k < 8; k++) { const a = ((k + 0.5) / 8) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a); O.win(ca * r * 0.93, sa * r * 0.93, ca, sa, H + 1.0, 0.9, 2.2, 'arch', 0.12); }
+  const on = [[0, r * 1.0], [0.9, r * 1.18], [2.0, r * 1.22], [3.3, r * 1.0], [4.6, r * 0.55], [5.6, r * 0.2], [6.4, 0.08]];
+  sweep(S, W3, on.map(([dz, rr]) => [0, 0, H + 4.9 + dz, rr, rr]), domeC, ST, 12);
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; sweep(S, W3, on.slice(0, 6).map(([dz, rr]) => [Math.cos(a) * rr, Math.sin(a) * rr, H + 4.9 + dz, 0.07, 0.07]), cream, ST, 4, false); }   // gilded ribs
+  sweep(S, W3, [[0, 0, H + 11.2, 0.12, 0.12], [0, 0, H + 13.0, 0.03, 0.03]], cream, ST, 5);
 }
