@@ -49,6 +49,7 @@ export const OVERRIDES = {
   ...Object.fromEntries(['r15475183_0', 'r15482569_0', 'r15482569_1'].map((id) => [id, { wall: '#e3a69c', roofCol: '#a9644e', variant: 4, stone: false }])),
   // Museu Nacional dos Coches (Paulo Mendes da Rocha, 2015): blank white concrete-and-metal boxes
   ...Object.fromEntries(['r5363219_0', 'r5363219_1', 'r5363219_2', 'r5363219_3', 'r15475185_0'].map((id) => [id, { wall: '#ebeae6', shape: 'flat', flatCol: [206, 206, 202], variant: 3, floorH: 0, parapet: 0.4 }])),
+  w230062385: { h: 15, minH: 0, shape: 'flat', wall: '#97a9b6', flatCol: [214, 216, 214], variant: 3, floorH: 0, parapet: 1.2 },   // Oceanário: the box in the dock (roof authored)
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
@@ -115,7 +116,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2609,4 +2610,26 @@ export function maat(S, { ring, holes = [], ground, lin, srgb }) {
     }
   };
   wall(ring, true); for (const h of holes) wall(h, false);
+}
+
+// Oceanário (Peter Chermayeff, 1998): a box standing in the dock, blue-grey below and white above, with the four
+// habitats on its upper level under glazed corner roofs around the raised central tank.
+export function oceanario(S, { corners, core, ground, zTop = 15, lin, srgb }) {
+  const glass = lin(srgb('#8fb4c8')), frame = lin(srgb('#eef0ef')), white = lin(srgb('#e4e6e5')), blue = lin(srgb('#5d7f99'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.5, 1];
+  for (const r of corners) {
+    const o = obb(r), F = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+    const a = o.hl * 0.92, b = o.hw * 0.92;
+    frustumAB(S, F, a, b, a, b, zTop - 0.5, zTop + 2.2, white, PL);                       // parapet ring of the habitat
+    frustumAB(S, F, a * 0.97, b * 0.97, a * 0.3, b * 0.3, zTop + 2.2, zTop + 9.5, glass, PL);   // glazed hip
+    for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) limb(S, F(su * a * 0.97, sv * b * 0.97, zTop + 2.2), F(su * a * 0.3, sv * b * 0.3, zTop + 9.5), 0.18, 0.18, 4, frame, PL, false);   // hip ribs
+    for (const t of [-0.5, 0, 0.5]) { limb(S, F(t * a * 0.97, -b * 0.97, zTop + 2.2), F(t * a * 0.3, -b * 0.3, zTop + 9.5), 0.1, 0.1, 4, frame, PL, false); limb(S, F(t * a * 0.97, b * 0.97, zTop + 2.2), F(t * a * 0.3, b * 0.3, zTop + 9.5), 0.1, 0.1, 4, frame, PL, false);
+      limb(S, F(-a * 0.97, t * b * 0.97, zTop + 2.2), F(-a * 0.3, t * b * 0.3, zTop + 9.5), 0.1, 0.1, 4, frame, PL, false); limb(S, F(a * 0.97, t * b * 0.97, zTop + 2.2), F(a * 0.3, t * b * 0.3, zTop + 9.5), 0.1, 0.1, 4, frame, PL, false); }
+    frustumAB(S, F, a * 0.3, b * 0.3, a * 0.3, b * 0.3, zTop + 9.5, zTop + 9.9, frame, PL);
+  }
+  if (core) {
+    const o = obb(core), F = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+    frustumAB(S, F, o.hl, o.hw, o.hl, o.hw, zTop - 0.5, zTop + 6, blue, PL);
+    frustumAB(S, F, o.hl + 0.3, o.hw + 0.3, o.hl + 0.3, o.hw + 0.3, zTop + 6, zTop + 7, white, PL);
+  }
 }
