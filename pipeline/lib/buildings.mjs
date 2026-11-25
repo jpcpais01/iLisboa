@@ -377,8 +377,14 @@ export function roofExtras(S, ctx, f, rng, pitched) {
     }
   } else if (area > 220) {
     const x = b.cx + b.ux * b.hl * 0.25, y = b.cy + b.uy * b.hl * 0.25;
-    if (pip(x, y, outer)) box(S, x, y, b.ux, b.uy, 1.8, 1.4, wallTop, wallTop + 2.6, colTrim, info, st);
-    if (area > 600) { const x2 = b.cx - b.ux * b.hl * 0.4, y2 = b.cy - b.uy * b.hl * 0.4; if (pip(x2, y2, outer)) box(S, x2, y2, b.ux, b.uy, 1.1, 0.8, wallTop, wallTop + 1.3, colTrim, info, st); }
+    // stair/lift housing in the wall render (not a bright white cube), and on bigger roofs a couple of grey plant units
+    const house = (ctx.colWall || colTrim).map((c) => c * 0.93), plant = [0.42, 0.43, 0.43];
+    if (pip(x, y, outer)) box(S, x, y, b.ux, b.uy, 1.8, 1.4, wallTop, wallTop + 2.6, house, info, st);
+    if (area > 600) { const x2 = b.cx - b.ux * b.hl * 0.4, y2 = b.cy - b.uy * b.hl * 0.4; if (pip(x2, y2, outer)) box(S, x2, y2, b.ux, b.uy, 1.1, 0.8, wallTop, wallTop + 1.3, house, info, st); }
+    if (area > 400) for (let k = 0; k < 2; k++) {
+      const u = (rng(`ac${k}u`) - 0.5) * 1.5 * (b.hl - 2), v = (rng(`ac${k}v`) - 0.5) * 1.3 * (b.hw - 2), x3 = b.cx + b.ux * u + b.vx * v, y3 = b.cy + b.uy * u + b.vy * v;
+      if (pip(x3, y3, outer)) box(S, x3, y3, b.ux, b.uy, 0.6, 0.45, wallTop, wallTop + 0.8, plant, info, st);
+    }
   }
 }
 

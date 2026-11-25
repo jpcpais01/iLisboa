@@ -80,7 +80,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     }
     col = wallC;
     // stone plinth, string course, cornice band, corner pilasters (Pombaline / palatial)
-    float formal = step(variant, .5) + step(3.5, variant);
+    float formal = (step(variant, .5) + step(3.5, variant)) * step(variant, 7.5);
     float dEnd = min(bx, bays - bx) * bw;
     col = mix(col, stoneC * (.95 + .05 * grime), formal * (box1(-9., .85, y, aa) + box1(gh - .22, gh, y, aa) + box1(top - .45, top, y, aa) * .8 + step(dEnd, .42) * step(.9, y)));
     col = mix(col, base * .78, box1(top - .6, top - .45, y, aa) * formal);     // cornice shadow line
@@ -88,7 +88,12 @@ if (kind < .5) {                                  // plain trims, chimneys
     float ww, y0, y1; float door = 0., shop = 0., balc = 0., shutters = 0.;
     float jit = variant > .5 && variant < 2.5 ? (rB - .5) * .25 * bw : 0.;
     float ms = fract(seed * 23.17);                             // modern sub-style: curtain wall, ribbons or punched windows
-    if (variant > 2.5 && variant < 3.5) {                       // modern: ribbons / curtain wall
+    float balc8 = 0.;
+    if (variant > 7.5) {                                        // apartment block: punched windows with roller shutters, balcony columns
+      ww = min(1.5, bw * .5); y0 = isG > .5 ? .1 : flH * .3; y1 = flH * .86; shop = isG;
+      balc8 = step(h21(vec2(floor(bi / (1. + step(.5, ms))), seed * 13.)), .4 + .25 * ms) * (1. - isG);
+      if (balc8 > .5) { ww = bw * .78; y0 = .06; y1 = flH * .86; shutters = 0.; }
+    } else if (variant > 2.5 && variant < 3.5) {                       // modern: ribbons / curtain wall
       if (ms < .28) { ww = bw * .97; y0 = .05; y1 = flH * .96; }
       else if (ms < .7) { ww = bw * .86; y0 = isG > .5 ? .1 : flH * .22; y1 = flH * .9; }
       else { ww = bw * .5; y0 = isG > .5 ? .1 : flH * .27; y1 = flH * .84; }
@@ -137,6 +142,11 @@ if (kind < .5) {                                  // plain trims, chimneys
     if (variant > 2.5 && variant < 3.5 && ms < .28) glass = glass * (fract(seed * 5.9) < .5 ? vec3(.8, 1.06, 1.08) : vec3(1.08, 1., .86)) + vec3(.02, .04, .045) * (1. - rev);   // tinted curtain glass, teal or bronze
     float bars = (variant > 2.5 && variant < 3.5) ? box1(-.025, .025, fract(bx * 2.) - .5, aa) : max(box1(-.03, .03, p.x, aa), box1(-.03, .03, fy - mix(y0, y1, .62), aa));
     glass = mix(glass, frameC * .9, bars * (1. - shop) * .85);
+    if (variant > 7.5) {                                       // roller shutters (estores) part-way down, slats catching the light
+      float sh = y1 - fr - (y1 - y0 - 2. * fr) * (.15 + .7 * h21(vec2(bi * 3.1, fi) + seed));
+      vec3 rc = fract(seed * 7.7) < .5 ? vec3(.80, .78, .73) : vec3(.62, .60, .56);
+      glass = mix(glass, rc * (.86 + .14 * step(.5, fract(fy * 16.))), step(sh, fy));
+    }
     if (shutters > .5) {                                       // closed wooden shutters (portadas)
       vec3 sc = rB < .35 ? vec3(.22, .33, .24) : rB < .6 ? vec3(.36, .24, .16) : rB < .8 ? vec3(.45, .17, .13) : vec3(.86, .85, .8);
       glass = sc * (.82 + .18 * step(.5, fract(fy * 14.))) * (1. - .4 * box1(-.02, .02, p.x, aa));
@@ -157,6 +167,14 @@ if (kind < .5) {                                  // plain trims, chimneys
     col = mix(col, winC, inWin);
     glassAmt = inGlass * (1. - shutters);
     glow = glassAmt * step(h21(vec2(bi * 1.7, fi) + seed * 5.), .42) * (1. - shop * .3);
+    if (balc8 > .5) {                                          // the balcony: a solid parapet to 1.05 m, its slab edge, the shadow it casts
+      float bxw = bw * .47, inB = box1(-bxw, bxw, ux, aa);
+      vec3 parC = fract(seed * 3.3) < .6 ? wallC * 1.04 : mix(wallC, vec3(.92, .91, .88), .6);
+      col = mix(col, parC, inB * box1(-.05, 1.05, fy, aa));
+      col = mix(col, parC * .82, inB * box1(-.2, -.05, fy, aa));
+      col *= 1. - .25 * inB * box1(1.05, 1.3, fy, aa) * step(.5, glassAmt);
+      glassAmt *= 1. - inB * step(fy, 1.05); glow *= 1. - inB * step(fy, 1.05);
+    }
     if (variant > 5.5 && variant < 6.5 && isG > .5) {                           // Praça do Comércio: arcade of round arches on square piers
       float hwA = bw * .5 - .9, spring = gh - .8 - hwA;
       float sd = y < spring ? abs(ux) - hwA : length(vec2(ux, y - spring)) - hwA;
@@ -217,7 +235,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v12';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v13';
   return m;
 }
 

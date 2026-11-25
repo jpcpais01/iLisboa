@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -300,18 +300,63 @@ const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8
 // institutions (hospital, school, university, government, public, civic) in the old centre are mostly convents and palaces
 // under tiled roofs; only built-for-purpose types default to flat-roofed modern boxes
 const MODERN = new Set(['office', 'commercial', 'hotel', 'industrial', 'warehouse', 'transportation', 'train_station', 'parking']);
+const HALLS = new Set(['sports_hall', 'warehouse', 'hangar', 'riding_hall', 'manufacture', 'storage_tank', 'silo', 'greenhouse', 'barn', 'factory']);
+const RESI_KINDS = new Set(['residential', 'apartments', 'yes', 'flats', 'dormitory']);
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
 // Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
-const POMBALINE = pal([['#f1ece2', 24], ['#ece0c2', 14], ['#e9c97f', 22], ['#e8b9a0', 12], ['#e2c3c4', 6], ['#c9d7e0', 7], ['#d6dcb9', 5], ['#c27a62', 3], ['#f0dcaa', 8]]);
-const VERNACULAR = pal([['#f5f2eb', 34], ['#f0e3c4', 11], ['#efcc7e', 12], ['#ecb79e', 10], ['#bcd3e3', 8], ['#d3dfb8', 5], ['#e8ac84', 5], ['#e2bccb', 5], ['#c86a53', 3], ['#b8cbbb', 3], ['#f3d899', 5]]);
+const POMBALINE = pal([['#f1ece2', 30], ['#ece0c2', 14], ['#e9c97f', 20], ['#e8b9a0', 11], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 8]]);
+const VERNACULAR = pal([['#f5f2eb', 46], ['#ece8de', 12], ['#f0e3c4', 10], ['#efcc7e', 8], ['#ecb79e', 7], ['#bcd3e3', 4], ['#d3dfb8', 2], ['#e8ac84', 3], ['#e2bccb', 3], ['#c86a53', 2], ['#b8cbbb', 2], ['#f3d899', 4]]);   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
+const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
+const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
-const ROOFS = pal([['#a05c46', 5], ['#a9664f', 4], ['#925444', 3], ['#ad735b', 3], ['#844e41', 2], ['#9b604d', 3]]);   // weathered terracotta
+const ROOFS = pal([['#a96650', 5], ['#b3705a', 4], ['#9c5d4b', 3], ['#b77b63', 3], ['#8d5547', 2], ['#a56b58', 3]]);   // weathered terracotta, lighter with sun and lichen
+const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2]]);   // newer machine-made tiles, brighter than the old town's
 const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
 const TRIM = srgb('#f3efe6');
 
+// Height for footprints that carry none (≈70 % of them): the storey count of mapped neighbours of similar size (blocks in
+// one estate share a height), else a typed guess. (GHSL's 90 m built volume/surface grid was tried: its cells track mapped
+// heights with r = 0.23, no better than the city mean, so it is not used.)
+const KNOWN_H = (() => {
+  const G = 45, cells = new Map();
+  for (const q of polysB) {
+    if (q.tags['building:part'] || q.area < 40) continue;
+    const t = q.tags, lv = parseFloat(t['building:levels']);
+    const hh = parseMeters(t.height) ?? parseMeters(t['building:height']) ?? (isFinite(lv) && lv > 0 ? lv * LEVEL_H + 1.2 : null);
+    if (!(hh > 2.5 && hh < 120)) continue;
+    const k = Math.floor(q.c[0] / G) + ',' + Math.floor(q.c[1] / G);
+    (cells.get(k) || cells.set(k, []).get(k)).push([q.c[0], q.c[1], q.area, hh, t.building || 'yes']);
+  }
+  const HOUSE = ['house', 'detached', 'semidetached_house', 'terrace', 'bungalow', 'villa'];
+  const binKey = (area, house) => (house ? 'h' : 'b') + Math.round(Math.log2(area) * 2), bins = new Map();
+  for (const list of cells.values()) for (const r of list) { const k = binKey(r[2], HOUSE.includes(r[4])); (bins.get(k) || bins.set(k, []).get(k)).push(r[3]); }
+  for (const b of bins.values()) b.sort((x, y) => x - y);
+  const wmed = (out) => { out.sort((a, b) => a[0] - b[0]); const tot = out.reduce((s, o) => s + o[1], 0); let acc = 0;
+    for (const o of out) { acc += o[1]; if (acc >= tot / 2) return o[0]; } return out.at(-1)[0]; };
+  // leave-one-out on mapped buildings: within 90 m, median error 1.4 m (Olivais) – 3.3 m (Benfica) against 5–8 m for a typed
+  // guess; the 90–220 m ring still beats the guess (2.5–6.7 m), so it is the second tier
+  return (p) => {
+    const near = [], far = [], cx = Math.floor(p.c[0] / G), cy = Math.floor(p.c[1] / G);
+    const house = HOUSE.includes(p.tags.building);
+    for (let i = -5; i <= 5; i++) for (let j = -5; j <= 5; j++) for (const r of cells.get((cx + i) + ',' + (cy + j)) || []) {
+      if (house !== HOUSE.includes(r[4])) continue;
+      const d = Math.hypot(r[0] - p.c[0], r[1] - p.c[1]);
+      if (d <= 90 && r[2] >= p.area * 0.3 && r[2] <= p.area * 3.5) near.push([r[3], 1 / (d + 15)]);
+      else if (d <= 220 && r[2] >= p.area * 0.2 && r[2] <= p.area * 5) far.push([r[3], 1 / (d + 15)]);
+    }
+    if (near.length >= 3) return wmed(near);
+    if (far.length >= 4) return wmed(far);
+    const b = bins.get(binKey(p.area, house));   // third tier: mapped buildings of this size anywhere in the area (MAE 3.6–6.4 m vs 4–8 m)
+    return b && b.length >= 5 ? b[b.length >> 1] : null;
+  };
+})();
+const BELEM_C = proj.fwd(38.6975, -9.2045);
+const MODERN_ZONES = [[[38.7480, -9.1000], [38.7480, -9.0880], [38.8000, -9.0880], [38.8000, -9.0985], [38.7700, -9.0975], [38.7600, -9.0990]]].map((r) => r.map(([la, lo]) => proj.fwd(la, lo)));
+const inModernZone = (c) => MODERN_ZONES.some((z) => pointInRing(c[0], c[1], z));
+let heightSrc = { neighbours: 0, guess: 0 };
 // complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
 const STONE_SITES = polysArea.filter((a) => ['r10093261_0'].includes(a.id)).map((a) => ({ ring: a.outer, wall: '#dccbb2', flat: [205, 193, 172] }));
 function buildingSpec(p) {
@@ -328,23 +373,49 @@ function buildingSpec(p) {
   const church = ['church', 'cathedral', 'chapel', 'basilica'].includes(kind) || (t.amenity === 'place_of_worship' && !t['building:part']);
   const monument = t.historic === 'monument' || t.historic === 'memorial' || t.man_made === 'tower';
   const modern = !palace && !church && (MODERN.has(kind) && (p.area > 700 || levels >= 7)) || levels >= 9 || (t['building:material'] || '').match(/glass|concrete/);
-  let src = 'height';
+  let src = 'height', estLevels = NaN;
   if (h == null && isFinite(levels)) { h = levels * LEVEL_H + 1.2 + (roofLevels ? 2.8 : 0); src = 'levels'; }
   if (h == null) {
     src = 'estimated';
-    h = DEFAULT_H[kind] ?? (p.area < 30 ? 3.5 : p.area < 90 ? 9 + u('h') * 4 : 12.5 + u('h') * 5);
+    const typed = DEFAULT_H[kind];
+    const small = p.area < 30 || UTILITY.has(kind) || ['garage', 'garages', 'shed', 'kiosk', 'hut', 'roof', 'carport', 'bunker', 'service', 'ruins', 'pillar', 'construction'].includes(kind);
+    const special = ['church', 'cathedral', 'chapel', 'castle', 'tower', 'palace', 'basilica'].includes(kind) || t.amenity === 'place_of_worship';
+    const nb = small || special || t['building:part'] ? null : KNOWN_H(p);
+    if (nb != null) { h = nb * (0.94 + u('h') * 0.12); estLevels = Math.max(1, Math.round((h - 1.2) / LEVEL_H)); heightSrc.neighbours++; }   // window rows follow the borrowed storey count
+    else { h = typed ?? (p.area < 30 ? 3.5 : p.area < 90 ? 9 + u('h') * 4 : 12.5 + u('h') * 5); heightSrc.guess++; }
   }
   if (palace && src === 'estimated') h = Math.max(h, 13 + u('ph') * 4);   // palaces tagged 'house' are not 8 m cottages
   if (kind === 'roof' && !minH) minH = Math.max(0, h - 0.8);
   const party = (p.party || []).filter(Boolean).length;
-  let variant = modern ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
-  if ((variant === 0 || variant === 1) && u('azu') < (variant === 1 ? 0.16 : 0.1)) variant = 2; // azulejo-clad
+  // halls (sports halls, warehouses, hangars, big industrial sheds): blank cladding, no window grid
+  const hall = !church && !palace && (HALLS.has(kind) || (kind === 'industrial' && p.area > 600) || (['sports_centre', 'sports_hall'].includes(t.leisure) && p.area > 500));
+  // the 1950s–80s apartment blocks of Olivais, Benfica, Telheiras, Lumiar, Amadora: 8+ storeys, flat roofs, punched windows,
+  // roller shutters and balconies — not office glass
+  // outside the 18th–19th-century core (Baixa, Alfama, Bairro Alto, Lapa, Graça, Campo de Ourique) and old Belém, a 4+ storey
+  // residential block is a post-war estate block (Olivais, Benfica, Telheiras, Odivelas): cream render, flat roof, shutters
+  const newTown = inModernZone(p.c);   // Parque das Nações (built from 1995): flat roofs, white render and glass throughout
+  const core = Math.hypot(p.c[0], p.c[1] * 1.15) < 2500 || Math.hypot(p.c[0] - BELEM_C[0], p.c[1] - BELEM_C[1]) < 650;
+  const resiTall = !modern && !palace && !church && !castle && RESI_KINDS.has(kind) && h < 75 && p.area > 120 &&
+    ((isFinite(levels) ? levels >= 8 : h >= 25) || (!core && (isFinite(levels) ? levels >= 4 : h >= 13.5)));
+  const officeTall = !resiTall && (levels >= 9) && !RESI_KINDS.has(kind);
+  // post-war institutions outside the core (schools, hospitals, faculties, ministries): white punched-window blocks, flat roofs;
+  // shops and offices outside the core: modern cladding
+  const instOut = !core && !church && !palace && !castle && ['school', 'university', 'college', 'hospital', 'public', 'civic', 'government', 'kindergarten'].includes(kind) && h >= 7;
+  const bizOut = !core && !church && !palace && ['office', 'commercial', 'retail', 'hotel'].includes(kind) && h >= 9;
+  let variant = hall ? 1 : resiTall || instOut || (newTown && RESI_KINDS.has(kind) && h >= 9 && !church) ? 8 : bizOut || (newTown && !church && !palace && h >= 9) ? 3 : (modern && !(levels >= 9 && RESI_KINDS.has(kind) && !MODERN.has(kind))) || officeTall ? 3 : palace ? 4 : church || castle || monument ? 5 : (isFinite(levels) ? levels >= 4 : h >= 14) && party >= 1 ? 0 : 1;
+  if ((variant === 0 || variant === 1) && !hall && u('azu') < (variant === 1 ? 0.16 : 0.1)) variant = 2; // azulejo-clad
   const stone = castle || pillar || (church && !t['building:colour']) || (monument && !UTILITY.has(kind));
-  const utility = UTILITY.has(kind) || p.area < 25;
+  const utility = UTILITY.has(kind) || p.area < 25 || hall;
   // roof shape
   let shape = (t['roof:shape'] || '').toLowerCase().replace('half-hipped', 'hipped').replace('side_hipped', 'hipped');
   if (!shape) {
-    if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument) shape = 'flat';
+    if (hall && !t['building:part'] && p.area > 500) {   // halls: sports pavilions often under a shallow metal barrel, sheds under a low metal gable
+      const sport = kind === 'sports_hall' || ['sports_centre', 'sports_hall'].includes(t.leisure);
+      shape = sport ? (u('hr') < 0.55 ? 'round' : 'flat') : ['warehouse', 'industrial', 'manufacture', 'factory', 'barn', 'hangar'].includes(kind) && u('hr') < 0.6 ? 'gabled' : 'flat';
+    }
+    else if ((newTown || instOut || bizOut) && !church) shape = 'flat';
+    else if (variant === 8 && !instOut && (h < 21 ? u('rs8') < 0.72 : h < 32 && u('rs8') < 0.4) && !t['building:part']) shape = 'hipped';   // Avenidas Novas, Alvalade: about two in five 7–9 storey blocks too   // most 4–6 storey estate blocks (Olivais, Alvalade, Benfica) wear a low tile hip
+    else if (castle || pillar || kind === 'roof' || t['building:part'] || modern || monument || hall || variant === 8 || variant === 3) shape = 'flat';
     else if (church) shape = 'gabled';
     else if (roofLevels >= 1) shape = 'mansard';
     else if ((p.area > 3000 && (levels >= 6 || h > 22)) || h > 34) shape = 'flat';   // big low blocks in the old city are convents and palaces under hip roofs
@@ -353,21 +424,23 @@ function buildingSpec(p) {
     else if ((variant === 1 || variant === 2) && p.area < 350) { const r = u('rs'); shape = r < 0.1 ? 'flat' : r < 0.3 ? 'gabled' : 'hipped'; }   // old-town mix: terraces (açoteias), gables, hips
     else shape = 'hipped';
   }
-  if (['round', 'saltbox', 'double_saltbox', 'quadruple_saltbox', 'crosspitched'].includes(shape)) shape = 'hipped';
+  if (['saltbox', 'double_saltbox', 'quadruple_saltbox', 'crosspitched'].includes(shape)) shape = 'hipped';
+  if (['round', 'gambrel_round', 'barrel'].includes(shape)) shape = 'round';   // barrel vault (built only on near-rectangular plans)
   const floorH = utility || stone || castle ? 0
     : isFinite(levels) && levels > 0 ? Math.min(4.6, Math.max(2.7, (h - minH - (roofLevels ? 2.8 : 0)) / (levels + 0.3)))
-    : variant === 0 ? 3.4 : variant === 3 ? 3.3 : variant === 4 ? 4.4 : 3.0;
-  const groundH = variant === 0 ? Math.max(floorH, 3.9) : variant === 3 ? Math.max(floorH, 4.2) : variant === 4 ? floorH * 1.1 : Math.max(floorH, 2.9);
-  const bayW = variant === 3 ? 1.6 + u('bw') * 0.6 : variant === 4 ? 3.6 + u('bw') * 0.8 : variant === 5 ? 5.5 : variant === 0 ? 2.7 + u('bw') * 0.5 : 2.5 + u('bw') * 1.1;
+    : isFinite(estLevels) ? Math.min(4.6, Math.max(2.7, (h - minH) / (estLevels + 0.3)))
+    : variant === 0 ? 3.4 : variant === 3 ? 3.3 : variant === 8 ? 2.9 : variant === 4 ? 4.4 : 3.0;
+  const groundH = variant === 0 ? Math.max(floorH, 3.9) : variant === 8 ? Math.max(floorH, 3.6) : variant === 3 ? Math.max(floorH, 4.2) : variant === 4 ? floorH * 1.1 : Math.max(floorH, 2.9);
+  const bayW = variant === 8 ? 2.6 + u('bw') * 0.8 : variant === 3 ? 1.6 + u('bw') * 0.6 : variant === 4 ? 3.6 + u('bw') * 0.8 : variant === 5 ? 5.5 : variant === 0 ? 2.7 + u('bw') * 0.5 : 2.5 + u('bw') * 1.1;
   const balconyFloors = variant === 0 || (variant === 2 && u('p') < 0.5) ? [1, ...(u('b2') < 0.55 ? [2] : []), ...(u('b3') < 0.3 ? [3] : [])] : variant === 1 || variant === 2 ? [1, 2, 3, 4] : variant === 4 ? [1] : [];
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
-  const palette = variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
+  const palette = hall ? HALL_C : variant === 8 ? RESI_C : variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
-  const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(ROOFS, u('r'));
-  const flatCol = castle ? [178, 166, 140] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 ? BIG_ROOF : FLAT_ROOF, u('f'));
-  const pitch = shape === 'pyramidal' ? 40 : church ? 34 : 24 + u('pt') * 13;
+  const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(hall && shape !== 'hipped' ? BIG_ROOF : variant === 8 ? ESTATE_ROOFS : ROOFS, u('r'));
+  const flatCol = castle ? [178, 166, 140] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
+  const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
-    roofH: parseMeters(t['roof:height']), balconyFloors: floorH ? balconyFloors : [], balconyChance, parapet: variant === 3 ? 1.1 : castle ? 0 : 0.8 };
+    roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); }
   const o = OVERRIDES[p.id]; // hand-authored
@@ -433,7 +506,11 @@ function addBuilding_(p) {
   const planarOK = ob && !p.holes.length && fill > 0.72 && p.outer.length <= 40 && !['dome', 'onion', 'cone'].includes(s.shape);
   let wallTop = top, sk = null, mode = 'flat';
   const sl = Math.tan((s.pitch * Math.PI) / 180);
-  if (pitched && s.shape !== 'flat') {
+  let barrel = null;
+  if (s.shape === 'round') {   // barrel vault along the long axis of a near-rectangular plan; otherwise flat
+    if (planarOK && ob.hw > 6) { barrel = { ob, rise: s.roofH ?? Math.min(9, ob.hw * 0.32) }; wallTop = top - Math.min(barrel.rise, Math.max(0, s.h - s.minH - 2.5)); barrel.rise = top - wallTop; }
+  }
+  else if (pitched && s.shape !== 'flat') {
     if (planarOK) {
       mode = 'planar';
       const est = s.roofH ?? (s.shape === 'mansard' || s.shape === 'gambrel' ? 4.6 : Math.min(5.5, Math.max(2.2, ob.hw * sl)));
@@ -454,6 +531,7 @@ function addBuilding_(p) {
   const spec = { ...s, shape: mode === 'planar' ? s.shape : mode === 'skeleton' ? 'skeleton-done' : 'flat' };
   const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1], D: T.d };
   const res = buildRoofAndWalls(S, ctx);
+  if (barrel) barrelRoof(S, { ob: barrel.ob, z0: wallTop, rise: barrel.rise, col: colRoof, under: colWall });
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
@@ -487,7 +565,7 @@ function addBuilding_(p) {
   const multiOuter = new Set(polysB.filter((p) => /^r\d+_[1-9]/.test(p.id)).map((p) => p.id.split('_')[0]));
   const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && !multiOuter.has(p.id.split('_')[0]) &&
     (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
-  const WHOLE = new Set(['w42645796', 'r17651166_0']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1)
+  const WHOLE = new Set(['w42645796', 'r17651166_0', 'w495968848', 'w495968849']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1, Colombo's towers)
   const parts = polysB.filter((p) => p.tags['building:part']), thinDrop = new Set();
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
@@ -499,7 +577,7 @@ function addBuilding_(p) {
       stats.thinParts = (stats.thinParts || 0) + 1;
       const top = (t) => parseMeters(t.height) ?? (isFinite(parseFloat(t['building:levels'])) ? parseFloat(t['building:levels']) * LEVEL_H + 1.2 : null);
       const oTop = OVERRIDES[o.id]?.h ?? top(o.tags) ?? 14;
-      for (const pt of inside) if ((top(pt.tags) ?? 0) <= oTop + 4) thinDrop.add(pt);
+      for (const pt of inside) if ((OVERRIDES[pt.id]?.h ?? top(pt.tags) ?? 0) <= oTop + 4 && !(OVERRIDES[pt.id]?.shape === "dome")) thinDrop.add(pt);
     }
     if (o.skip && churchy(o) && !['r19372558_0', 'w9253917'].includes(o.id)) { o.skip = false; o.ownParts = true; }   // churches: the outline is modelled whole
     if (o.skip) stats.skippedOutlines++;
@@ -509,7 +587,16 @@ function addBuilding_(p) {
   // hand-authored pilot: the Praça's arcade pillars live in the façade shader; the Arco and D. José are modelled below
   const [pxa, pya] = proj.fwd(38.7062, -9.1400), [pxb, pyb] = proj.fwd(38.7092, -9.1330);
   const inPraca = (p) => p.c[0] > pxa && p.c[0] < pxb && p.c[1] > pya && p.c[1] < pyb;
-  const dropped = (p) => DROP.has(p.id) || (dropTag(p.tags) && inPraca(p)) || (p.tags['bridge:support'] && nearPonte(p.c[0], p.c[1]));   // the bridge's piers and pylons are authored
+  // open raked stands: modelled by bleachers() below, not as a box (needs the pitch they face)
+  const BLEACH = new Map();
+  for (const p of polysB) {
+    const t = p.tags;
+    if (!(t.leisure === 'bleachers' || t.building === 'grandstand') || OVERRIDES[p.id] || t['roof:shape'] || Math.abs(p.area) < 400) continue;
+    let best = null, bd = 140;
+    for (const a of polysArea) if (a.tags.leisure === 'pitch' || a.tags.leisure === 'track') { const d = Math.hypot(a.c[0] - p.c[0], a.c[1] - p.c[1]); if (d < bd) { bd = d; best = a; } }
+    if (best) BLEACH.set(p.id, best.c);
+  }
+  const dropped = (p) => DROP.has(p.id) || BLEACH.has(p.id) || (dropTag(p.tags) && inPraca(p)) || (p.tags['bridge:support'] && nearPonte(p.c[0], p.c[1]));   // the bridge's piers and pylons are authored
   // Sé: the mapped parts carry no heights; the cathedral is modelled by hand below
   const seOutline = polysB.find((p) => p.id === 'r19372558_0');
   const seParts = seOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], seOutline.outer)) : [];
@@ -668,6 +755,9 @@ function addBuilding_(p) {
       oceanario(tileB(...ob.c), { corners, core: byId.get('w1016189633')?.outer, ground: ob.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / ob.outer.length, lin, srgb }); mark(); } }
   { const st = byId.get('r9159876_0');   // Estádio José Alvalade: bowl, tiled façade, roof ring on yellow trusses
     if (st && st.holes.length && inArea(st.c)) { alvaladeStadium(tileB(...st.c), { ring: st.outer, hole: st.holes[0], ground: groundAt(...st.c), lin, srgb }); mark(); } }
+  for (const [id, centre] of BLEACH) { const p = byId.get(id); if (!p || !inArea(p.c)) continue;
+    const H = parseMeters(p.tags.height) ?? Math.min(20, Math.max(5, Math.sqrt(Math.abs(p.area)) / 9));
+    if (bleachers(tileB(...p.c), { ring: p.outer, centre, ground: p.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H, lin, srgb })) mark(); }
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms
     if (cn && inArea(cn.c)) { oriente(tileB(...cn.c), { canopy: cn.outer, ground: groundAt(...cn.c), deck: 11.6, lin, srgb }); mark(); } }
   { const rf = byId.get('r16349886_0');   // Estádio da Luz: seats and the four arches
@@ -957,14 +1047,14 @@ const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), 
     }
   }
 }
-log(`buildings built`, JSON.stringify(stats));
+log(`buildings built`, JSON.stringify(stats), 'estimated from', JSON.stringify(heightSrc));
 if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); process.exitCode = 1; }
 
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
-  park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
+  park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#87b871'), turf: srgb('#5f9452'), tartan: srgb('#b5644e'), court: srgb('#5b87a0'), hardcourt: srgb('#a9aaa4'), clay: srgb('#c27a52'), sand: srgb('#e3cf9f'),
   parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), rough: srgb('#a3b07c'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
@@ -1007,7 +1097,8 @@ const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = co
     }
   }
 }
-const areaColor = (t) => {
+const TRACK_GREY = new Set(['w1266496440']);   // Restelo's mapped track is a grey paved ring, not tartan
+const areaColor = (t, id) => {
   if (t.leisure === 'park' || t.leisure === 'garden' || t.landuse === 'recreation_ground' || t.landuse === 'village_green') return C.park;
   if (t.landuse === 'grass' || t.landuse === 'meadow' || t.natural === 'grassland' || t.landuse === 'flowerbed') return C.grass;
   if (t.natural === 'wood' || t.landuse === 'forest' || t.natural === 'scrub' || t.natural === 'heath') return C.wood;
@@ -1015,6 +1106,16 @@ const areaColor = (t) => {
   if (t.golf === 'green' || t.golf === 'tee') return C.pitch;
   if (t.golf === 'fairway') return C.grass;
   if (t.leisure === 'golf_course' || t.golf === 'rough') return C.rough;
+  if (t.leisure === 'track' && !/asphalt|dirt|grass|gravel|ground/.test(t.surface || '') && !TRACK_GREY.has(id)) return C.tartan;   // athletics tracks: red tartan
+  if (t.leisure === 'pitch') {   // by surface: artificial turf reads darker than grass, hard courts grey-blue, beach courts sand, clay brick
+    const sf = t.surface || '';
+    if (sf === 'artificial_turf') return C.turf;
+    if (/tartan/.test(sf)) return C.tartan;
+    if (/acrylic/.test(sf)) return C.court;
+    if (/concrete|asphalt|paved|paving|sett/.test(sf)) return C.hardcourt;
+    if (/sand/.test(sf)) return C.sand;
+    if (/clay/.test(sf)) return C.clay;
+  }
   if (t.leisure === 'pitch' || t.leisure === 'playground') return C.pitch;
   if (t.natural === 'sand' || t.natural === 'beach') return C.sand;
   if (t.amenity === 'parking' && !t.parking?.includes('underground') && t.parking !== 'multi-storey') return C.parking;
@@ -1028,13 +1129,19 @@ const areaColor = (t) => {
 // big areas first so small ones draw on top
 const GRAVE = [srgb('#e2ded5'), srgb('#cfcac0'), srgb('#bdb8ae'), srgb('#d8d2c4')], GRAVEL = srgb('#aaa290');
 for (const p of [...polysArea].sort((a, b) => b.area - a.area)) {
-  const col = areaColor(p.tags);
+  const col = areaColor(p.tags, p.id);
   if (col === C.cemetery) {   // the blocks between the tomb streets: ground graves, rows of stone slabs on gravel
     const ob = obb(p.outer);
     gm.fillRings([p.outer, ...p.holes], (i) => {
       const x = minX + ((i % gm.w) + 0.5) * SS, y = maxY - (Math.floor(i / gm.w) + 0.5) * SS, u = x * ob.ux + y * ob.uy, v = -x * ob.uy + y * ob.ux;
       const cu = Math.floor(u / 1.7), cv = Math.floor(v / 3.1), fu = u / 1.7 - cu, fv = v / 3.1 - cv, h = hash(`${cu},${cv}`);
       paint(fu > 0.18 && fv > 0.12 && h < 0.85 ? GRAVE[Math.floor(h * 17) % 4] : GRAVEL)(i);
+    });
+  } else if (col === C.tartan && !p.holes.length && obb(p.outer).hw > 25) {   // a whole athletics oval mapped as one area: lanes round a grass infield
+    const ob = obb(p.outer), sl = ob.hl - ob.hw, rin = ob.hw - 9.8;
+    gm.fillRings([p.outer], (i) => {
+      const x = minX + ((i % gm.w) + 0.5) * SS - ob.cx, y = maxY - (Math.floor(i / gm.w) + 0.5) * SS - ob.cy, u = x * ob.ux + y * ob.uy, v = -x * ob.uy + y * ob.ux;
+      paint(Math.hypot(Math.max(0, Math.abs(u) - sl), v) < rin ? C.grass : C.tartan)(i);
     });
   } else if (col) gm.fillRings([p.outer, ...p.holes], paint(col));
 }
@@ -1292,15 +1399,19 @@ const nTagged = trees.length / 4;
   const grove = (x, y) => { const n = vn(x / 45, y / 45) * 0.7 + vn(x / 17 + 9.1, y / 17 + 3.7) * 0.3; const t = Math.min(1, Math.max(0, (n - 0.38) / 0.24)); return t * t * (3 - 2 * t) * 0.95; };
   for (const p of polysArea) {
     const t = p.tags;
-    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : 0;
+    // estates: the lawns between post-war blocks (Olivais, Benfica, Telheiras…) are planted with big trees — thinner than a park
+    const estate = (t.landuse === 'residential' || t.landuse === 'grass') && Math.hypot(p.c[0], p.c[1] * 1.15) > 2500;
+    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : estate ? 12 : 0;
     if (!dense || p.area < 150) continue;
+    const clearAt = (x, y) => { for (const [dx, dy] of [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4]]) { const c = Math.floor(bm.px(x + dx)), r = Math.floor(bm.py(y + dy)); if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) return false; } return true; };
     const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]);
     for (let x = Math.min(...xs); x < Math.max(...xs); x += dense) for (let y = Math.min(...ys); y < Math.max(...ys); y += dense) {
       const jx = x + (hash(`${p.id}${x}${y}a`) - 0.5) * dense * 0.8, jy = y + (hash(`${p.id}${x}${y}b`) - 0.5) * dense * 0.8;
       if (!pointInRing(jx, jy, p.outer) || p.holes.some((h) => pointInRing(jx, jy, h))) continue;
       const c = Math.floor(bm.px(jx)), r = Math.floor(bm.py(jy));
       if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) continue;
-      if (!wood && hash(`${jx}g`) > grove(jx, jy)) continue;   // parks: groves and open lawns, not an orchard
+      if (estate && !clearAt(jx, jy)) continue;   // keep estate trees off walls and kerbs
+      if (!wood && hash(`${jx}g`) > grove(jx, jy) * (estate ? 0.8 : 1)) continue;   // parks: groves and open lawns, not an orchard
       addTree(jx, jy, (wood ? 0.8 : 0.75) + hash(`${jx}`) * 0.65, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
     }
   }

@@ -57,7 +57,13 @@ export const OVERRIDES = {
   // modern institutions with courtyards that the rules read as old (tiled hips): flat-roofed, as built
   r17651166_0: { shape: 'flat', wall: '#dfe2e1', flatCol: [196, 199, 200], variant: 3, parapet: 0.8 },   // Aeroporto Terminal 1: light cladding and glass, metal roof
   w679256558: { shape: 'flat', wall: '#cfd3d4', flatCol: [176, 180, 182], variant: 3 },   // plant room on the terminal roof (no terracotta hip)
-  w42645796: { h: 18, shape: 'flat', wall: '#e6e2d9', flatCol: [200, 200, 196], variant: 3, parapet: 1 },   // Centro Colombo: one mass, its parts only where they rise above it
+  w42645796: { h: 18, shape: 'flat', wall: '#c98f7f', flatCol: [200, 200, 196], variant: 3, parapet: 1 },   // Centro Colombo: one mass, its parts only where they rise above it
+  // Colombo's twin office towers: salmon-brick slabs, each with a blue-glass drum at its corner (mapped as building=roof) under a pale disc
+  ...Object.fromEntries(['w495968848', 'w495968849'].map((id) => [id, { h: 58, shape: 'flat', wall: '#b86a5c', flatCol: [176, 172, 166], variant: 3, floorH: 3.7, groundH: 5, parapet: 1.2 }])),
+  ...Object.fromEntries(['w1453809581', 'w1453809582'].map((id) => [id, { h: 61, minH: 0, shape: 'flat', wall: '#3f6c86', flatCol: [214, 216, 214], variant: 3, floorH: 3.7, groundH: 5, parapet: 0.6 }])),
+  w495968845: { h: 27, minH: 0, shape: 'dome', roofH: 10, roofCol: '#9db1b8', wall: '#d9d3c8', variant: 3, floorH: 0 },   // the glass dome over Praça Central
+  w496232837: { h: 23, shape: 'flat', wall: '#d9d3c8', flatCol: [196, 196, 192], variant: 3, floorH: 0 },   // its drum terrace
+  w495968846: { h: 11, minH: 0, shape: 'dome', roofH: 6, roofCol: '#5d8e93', wall: '#c98f7f', variant: 3, floorH: 0 },   // small teal dome at the front between the towers
   w155331041: { shape: 'flat', wall: '#efefeb', flatCol: [222, 222, 218], variant: 3, parapet: 0.8 },   // Fundação Champalimaud (Charles Correa)
   r3232954_0: { shape: 'flat', wall: '#ebebe6', flatCol: [214, 214, 210], variant: 3, parapet: 0.6 },   // Pavilhão do Conhecimento (Carrilho da Graça)
   r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
@@ -129,7 +135,7 @@ export const AREAS = [
     [38.71192, -9.13330], [38.71176, -9.13370], [38.71176, -9.13415], [38.71223, -9.13445], [38.71282, -9.13453], [38.71332, -9.13443]]],
 ];
 // drawn by hand below (or folded into the arcade shader)
-export const DROP = new Set(['w821784760', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
+export const DROP = new Set(['w821784760', 'w496232838', 'w1257751599', 'w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
   'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0', 'w1069604938', 'w1069604939', 'w1069604940', 'w1069604941', 'w1016189633', 'r9159876_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
@@ -2409,16 +2415,16 @@ export function estadioLuz(S, { roof, hole, ground, lin, srgb }) {
     const [p, q] = sg > 0 ? [a, b] : [b, a];
     for (let k = 0; k < 8; k++) { const z0 = ground + 5.5 + k * 4.25; wallQuad(S, p, q, z0, z0, z0 + 4.25, z0 + 4.25, k % 2 ? lin(srgb('#8e9aa1')) : lin(srgb('#d2d4d4')), 0, 1, ground, I0, PL); }
   }
-  const o = obb(roof), zr = 41;
+  const o = obb(roof), zr = 41, archC = lin(srgb('#a3262c'));
   const P = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
   const arch = (a, b, rise) => {   // parabolic tube from a to b (local u, v)
-    const pts = Array.from({ length: 17 }, (_, k) => { const t = k / 16, u = a[0] + (b[0] - a[0]) * t, v = a[1] + (b[1] - a[1]) * t; return [u, v, zr - 2 + 4 * rise * t * (1 - t)]; });
-    for (let k = 0; k + 1 < pts.length; k++) limb(S, P(...pts[k]), P(...pts[k + 1]), 1.25, 1.25, 8, steel, PL, false);
+    const pts = Array.from({ length: 17 }, (_, k) => { const t = k / 16, u = a[0] + (b[0] - a[0]) * t, v = a[1] + (b[1] - a[1]) * t; return [u, v, zr + 5 + 4 * rise * t * (1 - t)]; });
+    for (let k = 0; k + 1 < pts.length; k++) limb(S, P(...pts[k]), P(...pts[k + 1]), 1.25, 1.25, 8, archC, PL, false);   // the four arches are painted Benfica red
     for (let k = 2; k < 15; k += 2) { const [u, v, z] = pts[k]; limb(S, P(u, v, z), P(u * 0.93, v * 0.93, zr + 0.3), 0.12, 0.12, 4, steel, PL, false); }   // hangers
   };
   const hl = o.hl * 0.94, hw = o.hw * 0.94;
-  arch([-hl, hw], [hl, hw], 26); arch([-hl, -hw], [hl, -hw], 26); arch([-hl, -hw], [-hl, hw], 19); arch([hl, -hw], [hl, hw], 19);
-  for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) limb(S, P(su * hl, sv * hw, -1), P(su * hl, sv * hw, zr - 1), 2.2, 1.6, 8, conc, PL, true);   // corner masts
+  arch([-hl, hw], [hl, hw], 14); arch([-hl, -hw], [hl, -hw], 14); arch([-hl, -hw], [-hl, hw], 11); arch([hl, -hw], [hl, hw], 11);
+  for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) limb(S, P(su * hl, sv * hw, -1), P(su * hl, sv * hw, zr + 6), 2.2, 1.6, 8, conc, PL, true);   // corner masts
 }
 
 // Gare do Oriente (Calatrava, 1998): over the raised platforms a forest of white steel trees, each trunk
@@ -2680,21 +2686,34 @@ export function alvaladeStadium(S, { ring, hole, ground, lin, srgb, H = 36 }) {
       quad(P(k, Ro[k], z0 - (j ? 0 : 1)), P(k + 1, Ro[k2], z0 - (j ? 0 : 1)), P(k + 1, Ro[k2], z1), P(k, Ro[k], z1), col, 0);
     }
   }
-  // roof ring: from the outer wall (H) to an inner edge over the front rows, rising slightly inward; underside too
-  const rIn = (k) => Ri[k] + (Ro[k] - Ri[k]) * 0.18;
+  // roof: a round, pale sage translucent disc reaching right to the rectangular opening over the pitch, with cream opaque
+  // panels along each side of the opening (not at the corners); hung by cables from four green lattice masts on the diagonals
+  const sage = lin(srgb('#b9cc9f')), sage2 = lin(srgb('#adc293')), cream = lin(srgb('#e4dcc2')), mastC = lin(srgb('#2f7a55'));
+  const oh = obb(hole);
+  const sideMid = (k) => { const x = c[0] + Math.cos(A[k]) * Ri[k] - oh.cx, y = c[1] + Math.sin(A[k]) * Ri[k] - oh.cy;
+    const u = x * oh.ux + y * oh.uy, v = -x * oh.uy + y * oh.ux; return !(Math.abs(u) > oh.hl * 0.8 && Math.abs(v) > oh.hw * 0.72); };   // anywhere along a side, not round a corner
+  const rIn = (k) => Ri[k] + 1.5, rMid = (k) => Ri[k] + Math.min(24, (Ro[k] - Ri[k]) * 0.45);
+  const zR = (r, k) => H + 3 * (Ro[k] - r) / Math.max(1, Ro[k] - Ri[k]);   // rises 3 m toward the opening
   for (let k = 0; k < N; k++) {
-    const k2 = (k + 1) % N;
-    quad(P(k, Ro[k], H), P(k + 1, Ro[k2], H), P(k + 1, rIn(k2), H + 3.5), P(k, rIn(k), H + 3.5), roofC, 1);
-    quad(P(k, Ro[k], H - 0.6), P(k + 1, Ro[k2], H - 0.6), P(k + 1, rIn(k2), H + 2.9), P(k, rIn(k), H + 2.9), conc, -1);
-    quad(P(k, rIn(k), H + 2.9), P(k + 1, rIn(k2), H + 2.9), P(k + 1, rIn(k2), H + 3.5), P(k, rIn(k), H + 3.5), yellow, 0);   // yellow inner edge
+    const k2 = (k + 1) % N, cr = sideMid(k) && sideMid(k2);
+    quad(P(k, Ro[k], H), P(k + 1, Ro[k2], H), P(k + 1, rMid(k2), zR(rMid(k2), k2)), P(k, rMid(k), zR(rMid(k), k)), k % 6 < 3 ? sage : sage2, 1);
+    quad(P(k, rMid(k), zR(rMid(k), k)), P(k + 1, rMid(k2), zR(rMid(k2), k2)), P(k + 1, rIn(k2), zR(rIn(k2), k2)), P(k, rIn(k), zR(rIn(k), k)), cr ? cream : sage, 1);
+    quad(P(k, Ro[k], H - 0.6), P(k + 1, Ro[k2], H - 0.6), P(k + 1, rIn(k2), zR(rIn(k2), k2) - 0.6), P(k, rIn(k), zR(rIn(k), k) - 0.6), conc, -1);
+    quad(P(k, rIn(k), zR(rIn(k), k) - 0.6), P(k + 1, rIn(k2), zR(rIn(k2), k2) - 0.6), P(k + 1, rIn(k2), zR(rIn(k2), k2)), P(k, rIn(k), zR(rIn(k), k)), conc, 0);
+    quad(P(k, Ro[k], H - 0.6), P(k + 1, Ro[k2], H - 0.6), P(k + 1, Ro[k2], H + 0.4), P(k, Ro[k], H + 0.4), mastC, 0);   // green edge beam
   }
-  // yellow trusses over the roof, radial, every 3 m of perimeter
-  for (let k = 0; k < N; k += 3) {
-    const rm = (Ro[k] + rIn(k)) / 2;
-    limb(S, P(k, Ro[k] + 1, H + 0.3), P(k, rm, H + 8), 0.45, 0.35, 6, yellow, PL, false);
-    limb(S, P(k, rm, H + 8), P(k, rIn(k) - 0.5, H + 3.8), 0.35, 0.3, 6, yellow, PL, false);
+  // four lattice masts on the diagonals, just outside the roof edge, leaning out; stays to the roof's inner edge
+  for (const q of [0.125, 0.375, 0.625, 0.875]) {
+    const ang = Math.atan2(oh.uy, oh.ux) + q * Math.PI * 2;
+    let k = Math.round(((ang % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI) * N) % N;
+    const base = P(k, Ro[k] + 6, -1), top = P(k, Ro[k] + 14, H + 34);
+    for (const [dx, dz] of [[-1.3, -1.3], [1.3, -1.3], [1.3, 1.3], [-1.3, 1.3]]) limb(S, [base[0] + dx * 1.6, base[1], base[2] + dz * 1.6], [top[0] + dx * 0.4, top[1], top[2] + dz * 0.4], 0.45, 0.3, 5, mastC, PL, false);
+    for (let z = 4; z < H + 32; z += 5) { const t = (z + 1) / (H + 35), x = base[0] + (top[0] - base[0]) * t, y = base[1] + (top[1] - base[1]) * t, w = base[2] + (top[2] - base[2]) * t, r = 1.6 * (1 - t) + 0.4 * t;
+      limb(S, [x - r * 1.3, y, w - r * 1.3], [x + r * 1.3, y + 2.5, w + r * 1.3], 0.15, 0.15, 4, mastC, PL, false);
+      limb(S, [x + r * 1.3, y, w - r * 1.3], [x - r * 1.3, y + 2.5, w + r * 1.3], 0.15, 0.15, 4, mastC, PL, false); }
+    for (const dk of [-9, -4, 0, 4, 9]) { const kk = (k + dk + N) % N; limb(S, top, P(kk, rMid(kk), zR(rMid(kk), kk) + 0.3), 0.09, 0.09, 3, lin(srgb('#d7dbd8')), PL, false); }
+    limb(S, top, P(k, Ro[k] + 40, 0), 0.12, 0.12, 3, lin(srgb('#d7dbd8')), PL, false);   // back stay
   }
-  for (let k = 0; k < N; k++) limb(S, P(k, (Ro[k] + rIn(k)) / 2, H + 8), P(k + 1, (Ro[(k + 1) % N] + rIn((k + 1) % N)) / 2, H + 8), 0.3, 0.3, 5, yellow, PL, false);
 }
 
 // Jerónimos monastery range (the long south wing, drawn by the generic builder at OVERRIDES h): Manueline dress on top of it —
@@ -2767,4 +2786,75 @@ export function jazigo(S, { x, y, ux, uy, ground, h, w, d, col, trim, cap }) {
     frustum(S, x, y, ux, uy, 0.12, 0.12, ground + h + 0.6, ground + h + 1.5, trim, ST, true); }   // a plinth and a stone cross shaft
   // the door: a dark slot on the path face
   box(S, x - uy * (d / 2 + 0.02), y + ux * (d / 2 + 0.02), ux, uy, Math.min(0.5, w * 0.25), 0.04, ground + 0.35, ground + Math.min(h - 0.4, 2.3), [0.05, 0.05, 0.05], I0, ST);
+}
+
+// Open raked stands (leisure=bleachers / building=grandstand without a roof of their own, e.g. Restelo's horseshoe): the
+// outer edge stands at H on a plain concrete wall, the seating falls in rows to a low wall at the pitch side. Each outer
+// edge point is paired with its nearest point on the pitch-facing edges and the band between is laid in rows: seats in the
+// club colour, every fourth row a grey gangway.
+export function bleachers(S, { ring, centre, ground, H = 13, seat = '#2f5c9e', lin, srgb }) {
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.7, 1], I0 = [0, 0, 0, 0];
+  const conc = lin(srgb('#d8d6d0')), conc2 = lin(srgb('#bdbab3')), seatC = lin(srgb(seat)), seat2 = lin(srgb('#e9e9e6'));
+  const sg = polyArea(ring) > 0 ? 1 : -1, n = ring.length;
+  const inner = [], outer = [];
+  for (let i = 0; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 0.3) continue;
+    const nx = sg * (b[1] - a[1]) / l, ny = -sg * (b[0] - a[0]) / l, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const dx = centre[0] - mx, dy = centre[1] - my, dl = Math.hypot(dx, dy) || 1, dot = (nx * dx + ny * dy) / dl;
+    (dot > 0.35 ? inner : dot < -0.35 ? outer : []).push([a, b]);
+  }
+  if (!inner.length || !outer.length) return false;
+  const onOuter = (p) => outer.some(([a, b]) => (a[0] === p[0] && a[1] === p[1]) || (b[0] === p[0] && b[1] === p[1]));
+  const ends = [];   // the stand's ends: walls whose top follows the rake
+  for (let i = 0; i < n; i++) { const a = ring[i], b = ring[(i + 1) % n];
+    if (!inner.some((e) => e[0] === a) && !outer.some((e) => e[0] === a) && Math.hypot(b[0] - a[0], b[1] - a[1]) >= 0.3) ends.push([a, b]); }
+  const nearestInner = (p) => { let best = null, bd = Infinity;
+    for (const [a, b] of inner) { const ex = b[0] - a[0], ey = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / (ex * ex + ey * ey)));
+      const q = [a[0] + ex * t, a[1] + ey * t], d = Math.hypot(q[0] - p[0], q[1] - p[1]); if (d < bd) { bd = d; best = q; } } return best; };
+  const W = (p, z) => [p[0], ground + z, -p[1]];
+  const nrm = (a, b, d) => { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]; const m = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...m) || 1; return m.map((q) => q / l); };
+  const quad = (a, b, c, d, col, up) => { let m = nrm(a, b, d); if ((up > 0 && m[1] < 0) || (up < 0 && m[1] > 0)) m = m.map((q) => -q); tri(S, a, b, c, m, col, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, c, d, m, col, [0, 0], [0, 0], [0, 0], I0, PL); };
+  const LOW = 1.6;
+  for (const [a, b] of ends) quad(W(a, -1), W(b, -1), W(b, onOuter(b) ? H : LOW), W(a, onOuter(a) ? H : LOW), conc, 0);
+  for (const [a, b] of outer) {
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.round(l / 3));
+    // outer wall (faces away from the pitch)
+    quad(W(a, -1), W(b, -1), W(b, H + 1.1), W(a, H + 1.1), conc, 0);
+    for (let k = 0; k < m; k++) {
+      const p0 = [a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m], p1 = [a[0] + (b[0] - a[0]) * (k + 1) / m, a[1] + (b[1] - a[1]) * (k + 1) / m];
+      const q0 = nearestInner(p0), q1 = nearestInner(p1);
+      if (Math.hypot(q0[0] - p0[0], q0[1] - p0[1]) > 60) continue;
+      quad(W(p0, H + 1.1), W(p1, H + 1.1), W(p1, H), W(p0, H), conc, 1);   // parapet top
+      const R = Math.max(3, Math.round(Math.hypot(q0[0] - p0[0], q0[1] - p0[1]) / 2.4));
+      for (let r = 0; r < R; r++) {
+        const f0 = r / R, f1 = (r + 1) / R, L0 = (p, q, f) => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
+        const z0 = H - (H - LOW) * f0, z1 = H - (H - LOW) * f1;
+        quad(W(L0(p0, q0, f0), z0), W(L0(p1, q1, f0), z0), W(L0(p1, q1, f1), z1), W(L0(p0, q0, f1), z1), r % 4 === 3 ? conc2 : (k % 9 === 4 ? seat2 : seatC), 1);
+      }
+      quad(W(q0, -1), W(q1, -1), W(q1, LOW), W(q0, LOW), conc, 0);   // pitch-side wall
+    }
+  }
+  return true;
+}
+
+// Shallow barrel vault over a rectangular plan (sports pavilions, markets, hangars): runs along the plan's long axis,
+// standing on the walls at z0 and rising by `rise` at the crown; the gable ends are closed in the wall colour.
+export function barrelRoof(S, { ob, z0, rise, col, under, N = 12 }) {
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.55, 1], I0 = [0, 0, 0, 0];
+  const P = (u, v, z) => [ob.cx + ob.ux * u - ob.uy * v, z, -(ob.cy + ob.uy * u + ob.ux * v)];
+  const zAt = (t) => z0 + rise * (1 - t * t);
+  const nrm = (a, b, d) => { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]; const m = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...m) || 1; return m.map((q) => q / l); };
+  const hl = ob.hl, hw = ob.hw;
+  for (let i = 0; i < N; i++) {
+    const t0 = -1 + (2 * i) / N, t1 = -1 + (2 * (i + 1)) / N;
+    const a = P(-hl, t0 * hw, zAt(t0)), b = P(hl, t0 * hw, zAt(t0)), c = P(hl, t1 * hw, zAt(t1)), d = P(-hl, t1 * hw, zAt(t1));
+    let n = nrm(a, b, d); if (n[1] < 0) n = n.map((q) => -q);
+    const shade = col.map((q) => q * (0.94 + 0.06 * (i % 2)));   // standing-seam sheets
+    tri(S, a, b, c, n, shade, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, a, c, d, n, shade, [0, 0], [0, 0], [0, 0], I0, PL);
+    for (const su of [-1, 1]) {   // gable ends
+      const nE = [ob.ux * su, 0, -ob.uy * su];
+      tri(S, P(su * hl, t0 * hw, z0), P(su * hl, t1 * hw, z0), P(su * hl, t1 * hw, zAt(t1)), nE, under, [0, 0], [0, 0], [0, 0], I0, PL);
+      tri(S, P(su * hl, t0 * hw, z0), P(su * hl, t1 * hw, zAt(t1)), P(su * hl, t0 * hw, zAt(t0)), nE, under, [0, 0], [0, 0], [0, 0], I0, PL);
+    }
+  }
 }
