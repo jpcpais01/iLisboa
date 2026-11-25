@@ -207,7 +207,7 @@ function detail(t, d) {
   }).catch(() => { t.dstate = 0; });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
-const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.55 + 700, 1000, 2000);   // beyond this the far level of detail stands in
+const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);   // beyond this the far level of detail stands in
 const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - y, 0, y - b[3]));
 let inflight = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 function stream(force) {
