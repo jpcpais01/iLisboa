@@ -38,6 +38,9 @@ export const OVERRIDES = {
     balconyFloors: [1, 2], balconyChance: 1, stone: false, parapet: 0, lantern: true,
   }])),
   w96315909: { wall: '#efe7d6' },
+  w821784762: { shape: 'flat', h: 9, wall: '#c8ccce', flatCol: [176, 180, 182], variant: 3 },   // Altice (MEO) Arena: the podium…
+  w821784760: { shape: 'dome', minH: 9, h: 14, roofH: 24, roofCol: '#8f969b', wall: '#9aa0a4', variant: 3, floorH: 0 },   // …and the long zinc shell
+  w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
   // Mosteiro dos Jerónimos: the monastery ranges in golden lioz under crested parapets (the church is authored)
@@ -103,7 +106,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2391,4 +2394,26 @@ export function estadioLuz(S, { roof, hole, ground, lin, srgb }) {
   const hl = o.hl * 0.94, hw = o.hw * 0.94;
   arch([-hl, hw], [hl, hw], 26); arch([-hl, -hw], [hl, -hw], 26); arch([-hl, -hw], [-hl, hw], 19); arch([hl, -hw], [hl, hw], 19);
   for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) limb(S, P(su * hl, sv * hw, -1), P(su * hl, sv * hw, zr - 1), 2.2, 1.6, 8, conc, PL, true);   // corner masts
+}
+
+// Gare do Oriente (Calatrava, 1998): over the raised platforms a forest of white steel trees, each trunk
+// opening into ribs that arch out to meet its neighbours in pointed, palm-like vaults. Built over the
+// mapped canopy (u along the tracks): four rows of trees on the island platforms, one every 17 m.
+export function oriente(S, { canopy, ground, deck, lin, srgb }) {
+  const white = lin(srgb('#eef0ef')), white2 = lin(srgb('#d9dcdc')), PL = [KIND.PLAIN / 8, 5 / 8, 0.8, 1];
+  const o = obb(canopy), F = (u, v, z) => [o.cx + o.ux * u - o.uy * v, ground + z, -(o.cy + o.uy * u + o.ux * v)];
+  const nU = Math.max(4, Math.round((2 * o.hl) / 17)), du = (2 * o.hl) / nU, rows = 4, dv = (2 * o.hw) / rows;
+  const z0 = deck, zt = deck + 8.5, zc = deck + 16.5;
+  for (let i = 0; i < nU; i++) for (let j = 0; j < rows; j++) {
+    const u = -o.hl + du * (i + 0.5), v = -o.hw + dv * (j + 0.5);
+    limb(S, F(u, v, z0), F(u, v, zt), 0.55, 0.42, 8, white, PL, false);
+    for (let k = 0; k < 8; k++) {   // ribs out to the cell's edges and corners
+      const a = (k / 8) * Math.PI * 2, eu = Math.cos(a), ev = Math.sin(a), s = Math.min(Math.abs(du / 2 / (eu || 1e-6)), Math.abs(dv / 2 / (ev || 1e-6)));
+      const path = Array.from({ length: 6 }, (_, m) => { const t = m / 5, r = s * Math.pow(t, 0.85); return [u + eu * r, v + ev * r, zt + (zc - zt) * Math.sin((t * Math.PI) / 2), 0.2 - 0.08 * t, 0.2 - 0.08 * t]; });
+      sweep(S, F, path, white, PL, 5, false);
+    }
+  }
+  // ridge and valley ribs: the lines where the vaults meet
+  for (let j = 0; j <= rows; j++) { const v = -o.hw + dv * j; limb(S, F(-o.hl, v, zc), F(o.hl, v, zc), 0.16, 0.16, 5, white2, PL, false); }
+  for (let i = 0; i <= nU; i++) { const u = -o.hl + du * i; limb(S, F(u, -o.hw, zc), F(u, o.hw, zc), 0.16, 0.16, 5, white2, PL, false); }
 }
