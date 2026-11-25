@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -640,6 +640,8 @@ function addBuilding_(p) {
     const t = byId.get(id); if (!t || !inArea(t.c)) continue;
     amoreirasCrown(tileB(...t.c), { ring: t.outer, ground: t.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / t.outer.length, zTop: 58, lin, srgb }); mark();
   }
+  { const m = byId.get('r11381632_0');   // MAAT: the white tiled wave on the river
+    if (m && inArea(m.c)) { maat(tileB(...m.c), { ring: m.outer, holes: m.holes, ground: Math.max(LAND_MIN, m.outer.reduce((a, q) => a + groundAt(q[0], q[1]), 0) / m.outer.length), lin, srgb }); mark(); } }
   { const cn = byId.get('w759763392');   // Gare do Oriente canopy over the platforms
     if (cn && inArea(cn.c)) { oriente(tileB(...cn.c), { canopy: cn.outer, ground: groundAt(...cn.c), deck: 11.6, lin, srgb }); mark(); } }
   { const rf = byId.get('r16349886_0');   // Estádio da Luz: seats and the four arches

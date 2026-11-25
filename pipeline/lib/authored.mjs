@@ -111,7 +111,7 @@ export const AREAS = [
 // drawn by hand below (or folded into the arcade shader)
 export const DROP = new Set(['w41683195', 'w663318739', 'w663311597', 'w663318735',
   'w96301719', 'w115238861', 'w1387011981', 'w663347630', 'w1566332176', 'w678721536', 'w822816252', 'w87891338', 'w24341353', 'w152327819', 'w259346570', 
-  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
+  'w118490305', 'w1386962088', 'w1386962089', 'w1386969006', 'w1386969007', 'w1386969008', 'w1466504958', 'w1466520766', 'w1466520767', 'w1466520768', 'r19133567_0', 'r20078664_0', 'r20078782_0', 'r20078783_0', 'r20078925_0', 'r11318402_0', 'w759763392', 'w683006891', 'w1268291335', 'w1268291336', 'w1268291337', 'w1387098203', 'w1387098204', 'w1387099961', 'w1387099962', 'w1387099963', 'w1387099964', 'w1387099965', 'w1387099966', 'w1387100761', 'w1387100762', 'w709779004', 'w1388124954', 'w1388124955', 'w1388126153', 'r11381632_0']);   // Torre de Belém, Padrão and the tower's mapped parts (authored)
    // … + Cristo Rei (authored)   // + São Bento frontispiece (authored)
  //   // + Carmo church, Santa Justa lift (tower and its base)
 export const dropTag = (t) => t['building:part'] === 'pillar' || t.building === 'pillar';
@@ -2558,4 +2558,51 @@ export function amoreirasCrown(S, { ring, ground, zTop, H = 75, lin, srgb }) {
     frustumAB(S, W2, s + 0.25, s + 0.25, s + 0.25, s + 0.25, zTop + 6, zTop + 6.8, pink, PL);
     frustumAB(S, W2, s + 0.1, s + 0.1, 0.1, 0.1, zTop + 6.8, zTop + 10.5, pink, PL);
   }
+}
+
+// MAAT (Amanda Levete, 2016): a long, low wave on the riverfront clad in white crackle-glazed tiles. The roof is a
+// walkable shell that rises from the promenade at the west end to ~13 m, domed gently across; under it the river
+// face is a band of dark glass. Roof built as a height field on 3 m cells clipped exactly to the mapped outline.
+export function maat(S, { ring, holes = [], ground, lin, srgb }) {
+  const tile = lin(srgb('#eeedea')), tile2 = lin(srgb('#e7e6e2')), glassC = lin(srgb('#33414b'));
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1], I0 = [0, 0, 0, 0];
+  const o = obb(ring), H = 13;
+  const lu = (x, y) => [(x - o.cx) * o.ux + (y - o.cy) * o.uy, -(x - o.cx) * o.uy + (y - o.cy) * o.ux];
+  const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const zAt = (x, y) => { const [u, v] = lu(x, y), t = (u + o.hl) / (2 * o.hl), w = v / o.hw;
+    return 0.4 + (H - 0.4) * sm(0.02, 0.6, t) * (1 - 0.3 * sm(0.88, 1.02, t)) * (0.84 + 0.16 * (1 - w * w)); };
+  // roof cells
+  const toC = (r) => r.map(([x, y]) => ({ X: Math.round(x * SCALE), Y: Math.round(y * SCALE) }));
+  const cs = 3, bx = ring.map((p) => p[0]), by = ring.map((p) => p[1]);
+  for (let x0 = Math.min(...bx); x0 < Math.max(...bx); x0 += cs) for (let y0 = Math.min(...by); y0 < Math.max(...by); y0 += cs) {
+    const c = new ClipperLib.Clipper();
+    c.AddPaths([toC(ring), ...holes.map(toC)], ClipperLib.PolyType.ptSubject, true);
+    c.AddPath(toC([[x0, y0], [x0 + cs, y0], [x0 + cs, y0 + cs], [x0, y0 + cs]]), ClipperLib.PolyType.ptClip, true);
+    const out = new ClipperLib.Paths(); c.Execute(ClipperLib.ClipType.ctIntersection, out, ClipperLib.PolyFillType.pftEvenOdd, ClipperLib.PolyFillType.pftNonZero);
+    for (const path of out) {
+      const pts = path.map((q) => [q.X / SCALE, q.Y / SCALE]); if (pts.length < 3) continue;
+      const idx = earcut(pts.flat());
+      for (let k = 0; k < idx.length; k += 3) {
+        const P = [idx[k], idx[k + 1], idx[k + 2]].map((i) => [pts[i][0], ground + zAt(...pts[i]), -pts[i][1]]);
+        const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+        let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; n = n.map((q) => q / l); if (n[1] < 0) n = n.map((q) => -q);
+        tri(S, P[0], P[1], P[2], n, ((Math.floor(x0 / cs) + Math.floor(y0 / cs)) & 1) ? tile : tile2, [0, 0], [0, 0], [0, 0], I0, PL);
+      }
+    }
+  }
+  // walls: outline (densified) up to the roof; dark glass in a band under the eaves, deeper on the river side
+  const sg = polyArea(ring) > 0 ? 1 : -1;
+  const wall = (r, outward) => {
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 3));
+      for (let k = 0; k < n; k++) {
+        const p0 = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], p1 = [a[0] + ((b[0] - a[0]) * (k + 1)) / n, a[1] + ((b[1] - a[1]) * (k + 1)) / n];
+        const [p, q] = (sg > 0) === outward ? [p0, p1] : [p1, p0], zp = zAt(...p), zq = zAt(...q);
+        const river = lu((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)[1] < 0, gl = Math.min(river ? 4.2 : 2.8, Math.min(zp, zq) - 0.9);
+        if (gl > 0.6) { wallQuad(S, p, q, ground - 1, ground - 1, ground + gl, ground + gl, glassC, 0, 1, ground, I0, PL); wallQuad(S, p, q, ground + gl, ground + gl, ground + zp, ground + zq, tile, 0, 1, ground, I0, PL); }
+        else wallQuad(S, p, q, ground - 1, ground - 1, ground + zp, ground + zq, tile, 0, 1, ground, I0, PL);
+      }
+    }
+  };
+  wall(ring, true); for (const h of holes) wall(h, false);
 }
