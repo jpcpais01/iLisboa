@@ -160,7 +160,7 @@ const polysB = (() => {   // the same footprint mapped twice (a convent relation
   const st = dem.refine(covered);
   log(`ground refined under roofs: ${st.roofCells} cells, mean shift ${st.meanShift.toFixed(2)} m, max ${st.maxShift.toFixed(1)} m`);
 }
-const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
+const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.golf || t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
 for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
 const roads0 = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
 // roads and rails up on the Ponte 25 de Abril deck are part of the authored bridge, not of the ground
@@ -965,7 +965,7 @@ const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#93c07c'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
+  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), rough: srgb('#a3b07c'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
@@ -1012,6 +1012,9 @@ const areaColor = (t) => {
   if (t.landuse === 'grass' || t.landuse === 'meadow' || t.natural === 'grassland' || t.landuse === 'flowerbed') return C.grass;
   if (t.natural === 'wood' || t.landuse === 'forest' || t.natural === 'scrub' || t.natural === 'heath') return C.wood;
   if (t.landuse === 'cemetery' || t.amenity === 'grave_yard') return C.cemetery;
+  if (t.golf === 'green' || t.golf === 'tee') return C.pitch;
+  if (t.golf === 'fairway') return C.grass;
+  if (t.leisure === 'golf_course' || t.golf === 'rough') return C.rough;
   if (t.leisure === 'pitch' || t.leisure === 'playground') return C.pitch;
   if (t.natural === 'sand' || t.natural === 'beach') return C.sand;
   if (t.amenity === 'parking' && !t.parking?.includes('underground') && t.parking !== 'multi-storey') return C.parking;
@@ -1048,6 +1051,32 @@ for (const r of sorted) {
   const k = roadKind(r.tags);
   const w = parseMeters(r.tags.width) ?? ROAD_W[k];
   gm.strokeLine(r.pts, w, paint(pedestrianish(k) ? C.calcada : C.asphalt));
+}
+// sports pitches: football lines; tennis, padel and basketball as coloured hard courts with their lines
+{
+  const LINE = srgb('#f1efe8'), TURF = srgb('#6e9f58'), HARD = srgb('#5b87a0'), BASKET = srgb('#c27352'), RED = srgb('#b9765a');
+  const ring = (ob, du, dv) => { const P = (a, b) => [ob.cx + ob.ux * a - ob.uy * b, ob.cy + ob.uy * a + ob.ux * b]; return [P(-du, -dv), P(du, -dv), P(du, dv), P(-du, dv), P(-du, -dv)]; };
+  let nP = 0;
+  for (const p of polysArea) {
+    const t = p.tags; if (t.leisure !== 'pitch' || p.holes.length || p.area < 120) continue;
+    const ob = obb(p.outer), sp = t.sport || '', L = ob.hl, W = ob.hw; if (L < 6 || W < 3) continue;
+    const P = (a, b) => [ob.cx + ob.ux * a - ob.uy * b, ob.cy + ob.uy * a + ob.ux * b], lw = 0.45;
+    if (/tennis|padel/.test(sp)) {
+      gm.fillRings([p.outer], paint(/clay/.test(t.surface || '') ? RED : HARD));
+      gm.strokeLine(ring(ob, L - 1.2, W - 0.8), lw, paint(LINE)); gm.strokeLine([P(0, -(W - 0.8)), P(0, W - 0.8)], lw, paint(LINE));
+      gm.strokeLine([P(-(L - 1.2) * 0.55, 0), P((L - 1.2) * 0.55, 0)], lw * 0.8, paint(LINE));
+    } else if (/basketball/.test(sp)) {
+      gm.fillRings([p.outer], paint(BASKET)); gm.strokeLine(ring(ob, L - 0.8, W - 0.8), lw, paint(LINE)); gm.strokeLine([P(0, -(W - 0.8)), P(0, W - 0.8)], lw, paint(LINE));
+    } else if (/soccer|football|futsal|multi|^$/.test(sp) && L > 12) {
+      if (/artificial|turf|synthetic/.test(t.surface || '') || L < 40) gm.fillRings([p.outer], paint(TURF));
+      const l = L - 1, w = W - 1, r = Math.min(9.15, w * 0.28), bd = Math.min(16.5, l * 0.17), bw = Math.min(20.2, w * 0.6);
+      gm.strokeLine(ring(ob, l, w), lw, paint(LINE)); gm.strokeLine([P(0, -w), P(0, w)], lw, paint(LINE));
+      gm.strokeLine(Array.from({ length: 33 }, (_, k) => P(Math.cos((k / 32) * Math.PI * 2) * r, Math.sin((k / 32) * Math.PI * 2) * r)), lw, paint(LINE));
+      for (const e of [-1, 1]) gm.strokeLine([P(e * l, -bw), P(e * (l - bd), -bw), P(e * (l - bd), bw), P(e * l, bw)], lw, paint(LINE));
+    } else continue;
+    nP++;
+  }
+  log(`pitches marked: ${nP}`);
 }
 // the airport: dry grass inside the fence, concrete aprons, taxiways with yellow centre lines, runways with white markings
 {
@@ -1256,6 +1285,7 @@ const nTagged = trees.length / 4;
   for (const r of roads) if (ROAD_W[roadKind(r.tags)]) bm.strokeLine(r.pts, ROAD_W[roadKind(r.tags)] + 2, (i) => { blocked[i] = 1; });
   for (let i = 0; i < trees.length; i += 4) bm.disc(trees[i], -trees[i + 2], 5, (k) => { blocked[k] = 1; });
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); bm.disc(x, y, 15, (k) => { blocked[k] = 1; }); }   // under the Príncipe Real cedar's canopy
+  for (const p of polysArea) if (/^(pitch|playground|track|swimming_pool|stadium)$/.test(p.tags.leisure) || p.tags.amenity === 'parking' || p.tags.natural === 'water' || p.tags.place === 'square') bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });   // no trees on pitches, courts, pools or car parks
   // grove field: value noise at ~45 m, sharpened, so trees gather in clumps with lawns between (about half the park planted)
   const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), h = (a, b) => hash(`${a},${b}gv`);
     return (h(i, j) * (1 - sx) + h(i + 1, j) * sx) * (1 - sy) + (h(i, j + 1) * (1 - sx) + h(i + 1, j + 1) * sx) * sy; };
