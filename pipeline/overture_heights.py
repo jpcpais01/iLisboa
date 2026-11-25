@@ -6,6 +6,8 @@ REL = sys.argv[1] if len(sys.argv) > 1 else '2026-11-18.0'
 W, S, E, N = -9.2525, 38.6715, -9.0705, 38.8070
 con = duckdb.connect()
 for s in ('INSTALL spatial', 'LOAD spatial', 'INSTALL httpfs', 'LOAD httpfs', "SET s3_region='us-west-2'"): con.execute(s)
+try: con.execute('SET geometry_always_xy = true')   # lon, lat order (DuckDB 2.x asks for it explicitly)
+except Exception: pass
 q = f"""
 SELECT ST_X(ST_Centroid(geometry)) AS lon, ST_Y(ST_Centroid(geometry)) AS lat,
        ST_Area_Spheroid(geometry) AS area, height, num_floors, sources[1].dataset AS src
