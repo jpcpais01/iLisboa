@@ -77,6 +77,8 @@ export const OVERRIDES = {
   w54754720: { h: 16, variant: 4, shape: 'flat', wall: '#eee8db', flatCol: [198, 196, 190], parapet: 1 },   // Aula Magna
   w663051574: { shape: 'flat', variant: 3, wall: '#f1f0ec', flatCol: [188, 190, 190] },   // white flat-roofed block (was a red hip)
   w54753984: { shape: 'flat', stone: true, wall: '#b8aea2', flatCol: [170, 164, 156], balconyFloors: [], parapet: 1.4 },   // Torre do Tombo: the windowless stone strongbox of the national archive
+  w1266496435: { shape: 'flat', variant: 3, wall: '#dcdedd', flatCol: [196, 198, 198], floorH: 0 },   // Estádio do Restelo: the low south-end block (white, ad boards), not brick
+  w1266496453: { shape: 'flat', variant: 3, wall: '#dcdedd', flatCol: [196, 198, 198], floorH: 0 },
   w1420989247: { h: 13, shape: 'flat', wall: '#d8c6a3', flatCol: [212, 200, 178], variant: 4, floorH: 0, parapet: 1.2 },   // musalla
   w1240194497: { minH: 13, h: 15, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 6.6, col: '#a8c8c5' } },   // drum; the dome is authored
   w940705830: { minH: 9.5, h: 10.5, shape: 'flat', flatCol: [212, 200, 178], wall: '#d8c6a3', variant: 3, floorH: 0, parapet: 0, dome: { rise: 3.9, col: '#95b9a7' } },
@@ -98,7 +100,8 @@ export const OVERRIDES = {
   r16349886_0: { h: 41, minH: 39.6, shape: 'flat', wall: '#dfe2e3', flatCol: [224, 227, 229], variant: 3, parapet: 0 },   // Estádio da Luz: pale translucent roof
   r9143921_0: { h: 6, wall: '#bdbab3', variant: 3, shape: 'flat', parapet: 0, floorH: 0 },   // its podium; the bowl and façade are authored
   // Mosteiro dos Jerónimos: the monastery ranges in golden lioz under crested parapets (the church is authored)
-  r11318401_0: { stone: false, wall: '#ddd0b1', shape: 'flat', h: 17, floorH: 5.2, groundH: 6.2, bayW: 4.4, variant: 4, parapet: 1.1, balconyFloors: [] },
+  r11318401_0: { stone: false, wall: '#ddd0b1', shape: 'hipped', roofCol: '#b86a4e', h: 17, floorH: 5.2, groundH: 6.2, bayW: 4.4, variant: 4, parapet: 1.1, balconyFloors: [] },
+  w1272872175: { shape: 'hipped', h: 13, wall: '#eeeae0', roofCol: '#b5694f', variant: 4, stone: false },   // Casa Pia (Belém): tiled hip roofs round its courts, not a flat hall
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
   w1561006352: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },   // the drum itself
   w481570880: { shape: 'flat', variant: 3, wall: '#6f6b65', flatCol: [139, 160, 104], h: 10 },   // Lisbon cruise terminal (2017): dark concrete block under a planted roof terrace
@@ -2831,7 +2834,7 @@ export function jazigo(S, { x, y, ux, uy, ground, h, w, d, col, trim, cap }) {
 // outer edge stands at H on a plain concrete wall, the seating falls in rows to a low wall at the pitch side. Each outer
 // edge point is paired with its nearest point on the pitch-facing edges and the band between is laid in rows: seats in the
 // club colour, every fourth row a grey gangway.
-export function bleachers(S, { ring, centre, ground, H = 13, seat = '#2f5c9e', lin, srgb }) {
+export function bleachers(S, { ring, centre, ground, H = 13, seat = '#2b4167', lin, srgb }) {
   const PL = [KIND.PLAIN / 8, 5 / 8, 0.7, 1], I0 = [0, 0, 0, 0];
   const conc = lin(srgb('#d8d6d0')), conc2 = lin(srgb('#bdbab3')), seatC = lin(srgb(seat)), seat2 = lin(srgb('#e9e9e6'));
   const sg = polyArea(ring) > 0 ? 1 : -1, n = ring.length;
@@ -3057,7 +3060,7 @@ export function flareTower(S, { c, ground, H = 90, half = 5.4, top = 2.2, col = 
 
 // Factory and warehouse halls under a big flat outline: the north-light sawtooth (shed) roof of Lisbon's old industrial
 // belts (Amadora, Marvila, Alcântara). Teeth run along the hall's long axis every 12 m, the steep glazed face to the north.
-export function sawtoothRoof(S, { outer, holes = [], z0, metal = '#a7aaab', glass = '#3e4b56', lin, srgb, pitch = 12, w = 7, rise = 2.4 }) {
+export function sawtoothRoof(S, { outer, holes = [], z0, metal = '#a7aaab', glass = '#3e4b56', lin, srgb, pitch = 12, w = 7, rise = 2.4, sym = false }) {   // sym: a row of plain twin-sloped spans (the old Marvila / Xabregas naves), no glazing
   const o = obb(outer); if (!o) return 0;
   const PL = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0], cm = lin(srgb(metal)), cg = lin(srgb(glass));
   // steep face toward whichever cross axis points more to the north
@@ -3073,6 +3076,15 @@ export function sawtoothRoof(S, { outer, holes = [], z0, metal = '#a7aaab', glas
       if (!run || u1 - run < 4) { run = null; return; }
       const p0 = [o.cx + o.ux * run + vx * t, o.cy + o.uy * run + vy * t], p1 = [o.cx + o.ux * u1 + vx * t, o.cy + o.uy * u1 + vy * t];
       const q0 = [p0[0] + vx * w, p0[1] + vy * w], q1 = [p1[0] + vx * w, p1[1] + vy * w];
+      if (sym) {   // two slopes up to a ridge down the middle of the span, gable triangles at the ends
+        const m0 = [p0[0] + vx * w / 2, p0[1] + vy * w / 2], m1 = [p1[0] + vx * w / 2, p1[1] + vy * w / 2], h2 = w / 2;
+        const NA = (() => { const v = [-vx * rise, h2, vy * rise], l = Math.hypot(...v); return v.map((c) => c / l); })(), NB = (() => { const v = [vx * rise, h2, -vy * rise], l = Math.hypot(...v); return v.map((c) => c / l); })();
+        tri(S, W(...p0, z0), W(...p1, z0), W(...m1, z0 + rise), NA, cm, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...p0, z0), W(...m1, z0 + rise), W(...m0, z0 + rise), NA, cm, [0, 0], [0, 0], [0, 0], I0, PL);
+        tri(S, W(...m0, z0 + rise), W(...m1, z0 + rise), W(...q1, z0), NB, cm, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...m0, z0 + rise), W(...q1, z0), W(...q0, z0), NB, cm, [0, 0], [0, 0], [0, 0], I0, PL);
+        const cw = cm.map((c) => c * 0.85);
+        tri(S, W(...p0, z0), W(...m0, z0 + rise), W(...q0, z0), [-o.ux, 0, o.uy], cw, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...p1, z0), W(...q1, z0), W(...m1, z0 + rise), [o.ux, 0, -o.uy], cw, [0, 0], [0, 0], [0, 0], I0, PL);
+        n++; run = null; return;
+      }
       // sloping metal face from the low edge (p) up to the ridge over q, vertical glazing at q facing north
       const nm = [-vx * rise, w, vy * rise], l = Math.hypot(...nm); const N = nm.map((c) => c / l);
       tri(S, W(...p0, z0), W(...p1, z0), W(...q1, z0 + rise), N, cm, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...p0, z0), W(...q1, z0 + rise), W(...q0, z0 + rise), N, cm, [0, 0], [0, 0], [0, 0], I0, PL);

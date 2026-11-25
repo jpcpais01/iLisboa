@@ -217,7 +217,7 @@ let waterSource = 'osm-coastline';
   }
   for (let i = 0; i < water.length; i++) if (water[i] === 1) water[i] = 2; // barrier is shoreline → water
   // inland water bodies (ponds, fountains, docks)
-  for (const p of polysArea) if (p.tags.natural === 'water' || p.tags.waterway === 'riverbank' || p.tags.waterway === 'dock' || p.tags.leisure === 'swimming_pool' || p.tags.amenity === 'fountain')
+  for (const p of polysArea) if (p.tags.natural === 'water' || p.tags.waterway === 'riverbank' || p.tags.waterway === 'dock' || (p.tags.leisure === 'swimming_pool' && p.area > 3000) || p.tags.amenity === 'fountain')
   {
     // at river level (docks, basins) it joins the river; uphill (ponds, pools, fountains) it is drawn
     // on the ground instead — cutting the terrain there opened deep holes down to the river plane
@@ -310,7 +310,7 @@ const VERNACULAR = pal([['#f5f2eb', 60], ['#ece8de', 14], ['#f0e3c4', 8], ['#efc
 const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
 const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
-const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
+const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#bfb5a3');
 const ROOFS = pal([['#b5725f', 5], ['#bd7e69', 4], ['#a86a59', 3], ['#c28a75', 3], ['#9a6152', 2], ['#b27765', 3]]);   // sun-faded salmon terracotta (Earth over Alfama/Bairro Alto reads lighter and pinker than new tile)   // weathered terracotta, lighter with sun and lichen
 const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2], ['#a9705f', 2], ['#9e6b5c', 1]]);   // newer machine-made tiles, brighter than the old town's
 const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
@@ -447,7 +447,7 @@ function buildingSpec(p) {
   const palette = hall ? HALL_C : variant === 8 ? RESI_C : variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
   const wall = parseColour(t['building:colour']) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(pal([['#f4f2ee', 6], ['#ece9e2', 2], ['#e8e2d4', 1]]), u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(hall && shape !== 'hipped' ? BIG_ROOF : variant === 8 ? ESTATE_ROOFS : ROOFS, u('r'));
-  const flatCol = castle ? [178, 166, 140] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
+  const flatCol = castle ? [170, 162, 148] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
@@ -567,7 +567,9 @@ function addBuilding_(p) {
   if (barrel) barrelRoof(S, { ob: barrel.ob, z0: wallTop, rise: barrel.rise, col: colRoof, under: colWall });
   if (domeR && domeR.rise > 0.5) { plainDome(S, { cx: p.c[0], cy: p.c[1], r: domeR.r * 0.98, z0: wallTop, rise: domeR.rise, col: colRoof, lin, srgb }); stats.domes = (stats.domes || 0) + 1; }
   if (mode === 'flat' && ['industrial', 'warehouse', 'manufacture', 'factory'].includes(s.kind) && Math.abs(p.area) > 2500 && !OVERRIDES[p.id] && hash(p.id + 'saw') < 0.7) {
-    const k = sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb }); if (k) stats.sawtooth = (stats.sawtooth || 0) + 1;
+    const sym = hash(p.id + 'sym') < 0.5, tile = hash(p.id + 'tile') < 0.45, sw = 9 + hash(p.id + 'sw') * 5;   // half the old halls are rows of plain gabled naves, tiled or sheeted (Marvila, checked against Earth)
+    const k = sym ? sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb, sym: true, w: sw, pitch: sw, rise: sw * 0.24, metal: tile ? '#b27460' : '#9fa3a4' })
+      : sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb }); if (k) stats.sawtooth = (stats.sawtooth || 0) + 1;
   }
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
@@ -1069,7 +1071,7 @@ if (VG_LINE.some(([la, lo]) => { const [x, y] = proj.fwd(la, lo); return x >= mi
 // ─── statues, columns & historic walls ──────────────────────────────────
 const authoredSpots = [...polysB.filter((p) => DROP.has(p.id)).map((p) => p.c), proj.fwd(38.71360, -9.13798)];
 {
-  const bronze = lin(srgb('#55614f')), stoneC = lin(LIOZ), wallC = lin(srgb('#d3c6aa')), whiteC = lin(srgb('#ece6da'));
+  const bronze = lin(srgb('#55614f')), stoneC = lin(LIOZ), wallC = lin(srgb('#c4baa7')), whiteC = lin(srgb('#ece6da'));
   const SI = [0, 0, 0, 0], ST = (seed) => [KIND.STONE / 8, 5 / 8, seed, 0.9], PL = (seed) => [KIND.PLAIN / 8, 5 / 8, seed, 1];
   const prism = (S, cx, cy, r, z0, z1, col, sides, st) => {
     const ring = Array.from({ length: sides }, (_, k) => [cx + r * Math.cos((k * 2 * Math.PI) / sides), cy + r * Math.sin((k * 2 * Math.PI) / sides)]);
@@ -1173,7 +1175,7 @@ const VR = new Raster(minX - 40, minY - 40, maxX + 40, maxY + 40, 4), villaF = n
 const villaAt = (x, y) => { const c = Math.floor(VR.px(x)), r = Math.floor(VR.py(y)); return c >= 0 && r >= 0 && c < VR.w && r < VR.h && villaF[r * VR.w + c] === 1; };
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
-  park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#87b871'), turf: srgb('#5f9452'), tartan: srgb('#b5644e'), court: srgb('#5b87a0'), hardcourt: srgb('#a9aaa4'), clay: srgb('#c27a52'), sand: srgb('#e3cf9f'),
+  park: srgb('#98b774'), grass: srgb('#a7c184'), wood: srgb('#7fa465'), pitch: srgb('#87b871'), turf: srgb('#5f9452'), tartan: srgb('#b5644e'), court: srgb('#5b87a0'), hardcourt: srgb('#a9aaa4'), clay: srgb('#c27a52'), sand: srgb('#e3cf9f'),
   parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), rough: srgb('#a3b07c'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
 };
 const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
@@ -1227,6 +1229,7 @@ const areaColor = (t, id) => {
   if (t.golf === 'green' || t.golf === 'tee') return C.pitch;
   if (t.golf === 'fairway') return C.grass;
   if (t.leisure === 'golf_course' || t.golf === 'rough') return C.rough;
+  if (TRACK_GREY.has(id)) return srgb('#b6bbbf');
   if (t.leisure === 'track' && !/asphalt|dirt|grass|gravel|ground/.test(t.surface || '') && !TRACK_GREY.has(id)) return C.tartan;   // athletics tracks: red tartan
   if (t.leisure === 'pitch') {   // by surface: artificial turf reads darker than grass, hard courts grey-blue, beach courts sand, clay brick
     const sf = t.surface || '';
@@ -1305,6 +1308,13 @@ for (const r of sorted) {
     nP++;
   }
   log(`pitches marked: ${nP}`);
+  // swimming pools: crisp on the 0.3 m ground map (the 1 m water mask drew them as blobs) — pale coping, then the water
+  { const COP = srgb('#e9e6de'), POOL = srgb('#5fb0cf'), POOL2 = srgb('#4b9dc2'); let nPool = 0;
+    for (const p of polysArea) { if (p.tags.leisure !== 'swimming_pool' || p.area > 3000) continue;
+      gm.fillRings([p.outer], paint(COP)); gm.strokeLine([...p.outer, p.outer[0]], 0.7, paint(COP));
+      const c = p.c, inner = p.outer.map((q) => { const dx = q[0] - c[0], dy = q[1] - c[1], l = Math.hypot(dx, dy) || 1, k = Math.max(0, l - 0.45) / l; return [c[0] + dx * k, c[1] + dy * k]; });
+      gm.fillRings([inner], paint(hash(p.id) < 0.5 ? POOL : POOL2)); nPool++; }
+    log(`pools painted: ${nPool}`); }
 }
 // the airport: dry grass inside the fence, concrete aprons, taxiways with yellow centre lines, runways with white markings
 {
@@ -1510,6 +1520,7 @@ const nTagged = trees.length / 4;
   const bm = new Raster(minX, minY, maxX, maxY, 1);
   const blocked = new Uint8Array(bm.w * bm.h);
   for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });
+  for (const p of polysB) if (/^(monastery|convent|church|cathedral|palace|castle)$/.test(p.tags.building) && p.holes.length) bm.fillRings([p.outer], (i) => { blocked[i] = 1; });   // cloisters and palace courts: clipped box and gravel, not a grove (Jerónimos, checked against Earth)
   for (const r of roads) if (ROAD_W[roadKind(r.tags)]) bm.strokeLine(r.pts, ROAD_W[roadKind(r.tags)] + 2, (i) => { blocked[i] = 1; });
   for (let i = 0; i < trees.length; i += 4) bm.disc(trees[i], -trees[i + 2], 5, (k) => { blocked[k] = 1; });
   { const [x, y] = proj.fwd(38.7162199, -9.1483953); bm.disc(x, y, 15, (k) => { blocked[k] = 1; }); }   // under the Príncipe Real cedar's canopy
@@ -1577,7 +1588,7 @@ const nTagged = trees.length / 4;
       if (estate && (hash(`${jx}e`) > 0.34 || !clearAt(jx, jy))) continue;   // keep estate trees off walls and kerbs
       if (yard) {   // only where a courtyard opens up: 6 m clear of walls all round, and then about every other spot
         let ok = true; for (const [dx, dy] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [4.2, 4.2], [-4.2, 4.2], [4.2, -4.2], [-4.2, -4.2]]) { const cc = Math.floor(bm.px(jx + dx)), rr = Math.floor(bm.py(jy + dy)); if (cc < 0 || rr < 0 || cc >= bm.w || rr >= bm.h || blocked[rr * bm.w + cc]) { ok = false; break; } }
-        if (!ok || hash(`${jx}y`) > 0.5) continue;
+        if (!ok || hash(`${jx}y`) > 0.65) continue;
         addTree(jx, jy, 0.55 + hash(`${jx}`) * 0.45, hash(`${jy}p`) < 0.15 ? 1 : 0); continue;
       }
       if (!wood && hash(`${jx}g`) > grove(jx, jy) * (estate ? 0.8 : 1)) continue;   // parks: groves and open lawns, not an orchard
