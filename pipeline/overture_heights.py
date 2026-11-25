@@ -15,6 +15,8 @@ FROM read_parquet('s3://overturemaps-us-west-2/release/{REL}/theme=buildings/typ
 WHERE bbox.xmin > {W} AND bbox.xmax < {E} AND bbox.ymin > {S} AND bbox.ymax < {N}
   AND (height IS NOT NULL OR num_floors IS NOT NULL) AND sources[1].dataset <> 'OpenStreetMap'
 """
+base = f"read_parquet('s3://overturemaps-us-west-2/release/{REL}/theme=buildings/type=building/*', hive_partitioning=1) WHERE bbox.xmin > {W} AND bbox.xmax < {E} AND bbox.ymin > {S} AND bbox.ymax < {N}"
+print('by source (all / with height / with floors):', con.execute(f"SELECT sources[1].dataset, count(*), count(height), count(num_floors) FROM {base} GROUP BY 1").fetchall(), flush=True)
 rows = con.execute(q).fetchall()
 with gzip.open('data/raw/heights.csv.gz', 'wt', newline='') as f:
     w = csv.writer(f); w.writerow(['lon', 'lat', 'area', 'height', 'floors', 'src'])
