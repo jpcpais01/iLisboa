@@ -185,26 +185,27 @@ async function load(tile) {
   tile.state = 1; const gen = (tile.gen = (tile.gen || 0) + 1);
   try {
     await wake(tile.a);
-    const [gltf, bal] = await Promise.all([loader.loadAsync(url(tile.a, tile.t.file)), tile.t.balconies ? fetch(url(tile.a, tile.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null]);
+    const gltf = await loader.loadAsync(url(tile.a, tile.t.file));
     if (tile.state !== 1 || tile.gen !== gen) { tile.obj = gltf.scene; tile.bal = null; const st = tile.state; dispose(tile); tile.state = st; return; }   // dropped while in flight
     tile.obj = adopt(tile, gltf); scene.add(tile.obj);
-    if (bal) { tile.bal = balconies(bal); scene.add(tile.bal); balconyChunks.push(tile.bal); }
     tile.state = 2; showFar(tile, false);
   } catch (e) { console.error(e); if (tile.gen === gen) tile.state = 0; tile.failed = (tile.failed || 0) + 1; }
 }
-// façade relief (cornices, string courses, cunhais): a separate file per tile, only within ~900 m of the camera
+// façade relief (cornices, string courses, cunhais) and balconies: separate files per tile, only within ~900 m of the camera
 function dropDetail(t) { if (t.detail) { scene.remove(t.detail); t.detail.traverse((m) => m.isMesh && m.geometry.dispose()); } t.detail = null; t.dstate = 0; }
 function detail(t, d) {
   const DR = 900 * lodK;
-  if (t.state !== 2 || !t.t.detail) return;
+  if (t.state !== 2 || !(t.t.detail || t.t.balconies)) return;
   if (!ready || inflight > 1) { if (d > DR + 400 && t.dstate) dropDetail(t); return; }   // near-only detail waits until the city is on screen and its tiles are in
   if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
   if (d > DR || t.dstate) return;
   t.dstate = 1; const gen = t.gen;
-  loader.loadAsync(url(t.a, t.t.detail)).then((g) => {
-    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { g.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
-    g.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; } });
-    t.detail = g.scene; t.dstate = 2; scene.add(g.scene);
+  Promise.all([t.t.detail ? loader.loadAsync(url(t.a, t.t.detail)) : null,
+    t.t.balconies && !t.bal ? fetch(url(t.a, t.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null]).then(([g, bal]) => {
+    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { g?.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
+    if (g) { g.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; } }); t.detail = g.scene; scene.add(g.scene); }
+    if (bal && !t.bal) { t.bal = balconies(bal); scene.add(t.bal); balconyChunks.push(t.bal); }
+    t.dstate = 2;
   }).catch(() => { t.dstate = 0; });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
