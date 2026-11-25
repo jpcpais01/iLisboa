@@ -16,7 +16,7 @@ import earcut from 'earcut';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
-import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower } from './lib/authored.mjs';
+import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
 const { SkeletonBuilder } = skPkg;
@@ -305,13 +305,13 @@ const RESI_KINDS = new Set(['residential', 'apartments', 'yes', 'flats', 'dormit
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
 // Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
-const POMBALINE = pal([['#f1ece2', 30], ['#ece0c2', 14], ['#e9c97f', 20], ['#e8b9a0', 11], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 8]]);
-const VERNACULAR = pal([['#f5f2eb', 46], ['#ece8de', 12], ['#f0e3c4', 10], ['#efcc7e', 8], ['#ecb79e', 7], ['#bcd3e3', 4], ['#d3dfb8', 2], ['#e8ac84', 3], ['#e2bccb', 3], ['#c86a53', 2], ['#b8cbbb', 2], ['#f3d899', 4]]);   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
+const POMBALINE = pal([['#f1ece2', 40], ['#ece0c2', 14], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
+const VERNACULAR = pal([['#f5f2eb', 60], ['#ece8de', 14], ['#f0e3c4', 8], ['#efcc7e', 4], ['#ecb79e', 4], ['#bcd3e3', 2], ['#d3dfb8', 1], ['#e8ac84', 2], ['#e2bccb', 2], ['#c86a53', 1], ['#b8cbbb', 1], ['#f3d899', 3]]);   // re-checked 2026-11-25 against Earth over Alfama and Bairro Alto: four in five are white or off-white   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
 const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
 const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
 const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#c9b99b');
-const ROOFS = pal([['#a96650', 5], ['#b3705a', 4], ['#9c5d4b', 3], ['#b77b63', 3], ['#8d5547', 2], ['#a56b58', 3]]);   // weathered terracotta, lighter with sun and lichen
+const ROOFS = pal([['#b5725f', 5], ['#bd7e69', 4], ['#a86a59', 3], ['#c28a75', 3], ['#9a6152', 2], ['#b27765', 3]]);   // sun-faded salmon terracotta (Earth over Alfama/Bairro Alto reads lighter and pinker than new tile)   // weathered terracotta, lighter with sun and lichen
 const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2]]);   // newer machine-made tiles, brighter than the old town's
 const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
 const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
@@ -358,7 +358,11 @@ const MODERN_ZONES = [[[38.7480, -9.1000], [38.7480, -9.0880], [38.8000, -9.0880
 const inModernZone = (c) => MODERN_ZONES.some((z) => pointInRing(c[0], c[1], z));
 let heightSrc = { neighbours: 0, guess: 0 };
 // complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
-const STONE_SITES = polysArea.filter((a) => ['r10093261_0'].includes(a.id)).map((a) => ({ ring: a.outer, wall: '#dccbb2', flat: [205, 193, 172] }));
+// detached houses outside the old core (Restelo, Belém, Lumiar, the suburbs): villas and moradias in their gardens
+const VILLA_KINDS = new Set(['house', 'detached', 'villa', 'bungalow', 'semidetached_house']);
+const isVilla = (p) => { const k = p.tags.building, a = Math.abs(p.area), lv = parseFloat(p.tags['building:levels']);
+  return !p.tags['building:part'] && a > 50 && a < 700 && !(lv > 3) && (VILLA_KINDS.has(k) || ((k === 'yes' || k === 'residential') && a < 400)) && Math.hypot(p.c[0], p.c[1] * 1.15) > 2500; };
+const STONE_SITES = polysArea.filter((a) => ['r10093261_0'].includes(a.id)).map((a) => ({ ring: a.outer, wall: '#dad3c6', flat: [206, 200, 188] }));
 function buildingSpec(p) {
   const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] && t['building:part'] !== 'yes' ? t['building:part'] : t.building || 'yes';
   const u = (k) => hash(p.id + k);
@@ -412,7 +416,7 @@ function buildingSpec(p) {
   if (!shape) {
     if (hall && !t['building:part'] && p.area > 500) {   // halls: sports pavilions often under a shallow metal barrel, sheds under a low metal gable
       const sport = kind === 'sports_hall' || ['sports_centre', 'sports_hall'].includes(t.leisure);
-      shape = sport ? (u('hr') < 0.55 ? 'round' : 'flat') : ['warehouse', 'industrial', 'manufacture', 'factory', 'barn', 'hangar'].includes(kind) && u('hr') < 0.6 ? 'gabled' : 'flat';
+      shape = sport ? (u('hr') < 0.55 ? 'round' : 'flat') : ['warehouse', 'industrial', 'manufacture', 'factory', 'barn', 'hangar'].includes(kind) && p.area < 2500 && u('hr') < 0.6 ? 'gabled' : 'flat';   // bigger factory halls: flat outline under sawtooth teeth (see sawtoothRoof)
     }
     else if ((newTown || instOut || bizOut) && !church) shape = 'flat';
     else if (variant === 8 && !instOut && (h < 21 ? u('rs8') < 0.72 : h < 32 && u('rs8') < 0.4) && !t['building:part']) shape = 'hipped';   // Avenidas Novas, Alvalade: about two in five 7–9 storey blocks too   // most 4–6 storey estate blocks (Olivais, Alvalade, Benfica) wear a low tile hip
@@ -422,6 +426,7 @@ function buildingSpec(p) {
     else if ((p.area > 3000 && (levels >= 6 || h > 22)) || h > 34) shape = 'flat';   // big low blocks in the old city are convents and palaces under hip roofs
     else if (p.area > 2500 && !p.holes.length && !church && !palace && obb(p.outer).hw > 16) shape = 'flat';   // halls, malls, warehouses: a single hip over a 30 m+ span is not how anything here is roofed
     else if (utility && p.area < 40) shape = 'flat';
+    else if (variant === 1 && isVilla(p) && p.area > 110 && !hall && u('vf') < 0.33) shape = 'flat';   // modern villa: white box, roof terrace
     else if ((variant === 1 || variant === 2) && p.area < 350) { const r = u('rs'); shape = r < 0.1 ? 'flat' : r < 0.3 ? 'gabled' : 'hipped'; }   // old-town mix: terraces (açoteias), gables, hips
     else shape = 'hipped';
   }
@@ -436,7 +441,7 @@ function buildingSpec(p) {
   const balconyFloors = variant === 0 || (variant === 2 && u('p') < 0.5) ? [1, ...(u('b2') < 0.55 ? [2] : []), ...(u('b3') < 0.3 ? [3] : [])] : variant === 1 || variant === 2 ? [1, 2, 3, 4] : variant === 4 ? [1] : [];
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
   const palette = hall ? HALL_C : variant === 8 ? RESI_C : variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
-  const wall = parseColour(t['building:colour']) || (castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
+  const wall = parseColour(t['building:colour']) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(pal([['#f4f2ee', 6], ['#ece9e2', 2], ['#e8e2d4', 1]]), u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(hall && shape !== 'hipped' ? BIG_ROOF : variant === 8 ? ESTATE_ROOFS : ROOFS, u('r'));
   const flatCol = castle ? [178, 166, 140] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
@@ -454,7 +459,7 @@ function buildingSpec(p) {
     spec.sub8 = k;
   }
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
-  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); if (spec.variant === 2 || spec.variant === 0) spec.variant = 1; spec.balconyFloors = []; }   // dressed stone: no azulejo, no iron balconies
+  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
   const o = OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
@@ -552,9 +557,28 @@ function addBuilding_(p) {
   const ctx = { outer: p.outer, holes: p.holes, party, ground, bottom, wallTop, spec, seed, colWall, colRoof, colTrim, colFlat, colCap: colRoof.map((v) => v * 0.8), rng, cx: p.c[0], cy: p.c[1], D: T.d };
   const res = buildRoofAndWalls(S, ctx);
   if (barrel) barrelRoof(S, { ob: barrel.ob, z0: wallTop, rise: barrel.rise, col: colRoof, under: colWall });
+  if (mode === 'flat' && ['industrial', 'warehouse', 'manufacture', 'factory'].includes(s.kind) && Math.abs(p.area) > 2500 && !OVERRIDES[p.id] && hash(p.id + 'saw') < 0.7) {
+    const k = sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb }); if (k) stats.sawtooth = (stats.sawtooth || 0) + 1;
+  }
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  // trapeiras: the old town's attic dormers on the street slopes of tiled roofs (about two Pombaline-type buildings in five, one vernacular in four)
+  if (mode === 'planar' && (s.shape === 'hipped' || s.shape === 'gabled') && [0, 1, 2].includes(s.variant) && s.floorH && s.h - (s.minH || 0) >= 9 &&
+      hash(p.id + 'trap') < (s.variant === 0 ? 0.42 : 0.25)) {
+    const o = obb(p.outer), sl = Math.tan((s.pitch * Math.PI) / 180), dR = 2.5 / sl;
+    if (o && o.hw * sl >= 3 && o.hw > dR + 0.6) for (const sg of [1, -1]) {
+      const nx = -sg * o.vx, ny = -sg * o.vy, mx = o.cx + sg * o.vx * o.hw, my = o.cy + sg * o.vy * o.hw;
+      const ins = (s.shape === 'hipped' ? dR : 0) + 1.2, L = 2 * o.hl - 2 * ins; if (L < 1.4) continue;
+      const n = Math.min(4, Math.max(1, Math.round(L / (s.bayW * 2)))), a = [mx - o.ux * (o.hl - ins), my - o.uy * (o.hl - ins)];
+      const us = Array.from({ length: n }, (_, k) => ((k + 0.5) / n) * L).filter((uu) => {
+        const ex = a[0] + o.ux * uu, ey = a[1] + o.uy * uu, d0 = 0.35 / sl + 0.04;
+        return Math.abs(res.f(ex + nx * d0, ey + ny * d0) - (wallTop + 0.35)) < 0.25 && Math.abs(res.f(ex + nx * dR, ey + ny * dR) - (wallTop + 2.5)) < 0.3 &&
+          [-0.7, 0.7].every((du) => Math.abs(res.f(ex + o.ux * du + nx * dR, ey + o.uy * du + ny * dR) - (wallTop + 2.5)) < 0.3);
+      });
+      if (us.length) { dormers(ctx.D || S, { a, ex: o.ux, ey: o.uy, nx, ny, us, wallTop, s1: sl, colRoof, seed }); stats.dormers = (stats.dormers || 0) + us.length; }
+    }
+  }
   if (s.crenel) { // merlons along every edge (castle walls and towers)
     const cs = [KIND.STONE / 8, 5 / 8, seed, 0.9];
     const slit = colWall.map((c) => c * 0.18), D = T.d;
@@ -1087,6 +1111,9 @@ if (BAD.length) { log('BAD geometry', BAD.length, BAD.slice(0, 5).join('\n')); p
 
 // ─── ground map (supersampled) ──────────────────────────────────────────
 const gm = new Raster(minX, minY, maxX, maxY, SS, 3);
+const VR = new Raster(minX - 40, minY - 40, maxX + 40, maxY + 40, 4), villaF = new Uint8Array(VR.w * VR.h);
+for (const p of polysB) if (isVilla(p)) VR.disc(p.c[0], p.c[1], 16 + Math.sqrt(Math.abs(p.area)) * 0.5, (i) => { villaF[i] = 1; });
+const villaAt = (x, y) => { const c = Math.floor(VR.px(x)), r = Math.floor(VR.py(y)); return c >= 0 && r >= 0 && c < VR.w && r < VR.h && villaF[r * VR.w + c] === 1; };
 const C = {
   ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
   park: srgb('#9fbf7a'), grass: srgb('#afc98a'), wood: srgb('#7fa465'), pitch: srgb('#87b871'), turf: srgb('#5f9452'), tartan: srgb('#b5644e'), court: srgb('#5b87a0'), hardcourt: srgb('#a9aaa4'), clay: srgb('#c27a52'), sand: srgb('#e3cf9f'),
@@ -1116,17 +1143,17 @@ const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = co
   const openAt = (x, y) => { const fx = (x - dr.minX) / DG - 0.5, fy = (dr.maxY - y) / DG - 0.5, c = Math.max(0, Math.min(dr.w - 2, Math.floor(fx))), r = Math.max(0, Math.min(dr.h - 2, Math.floor(fy))), u = fx - c, v = fy - r, i = r * dr.w + c;
     const d = (dist[i] * (1 - u) + dist[i + 1] * u) * (1 - v) + (dist[i + dr.w] * (1 - u) + dist[i + dr.w + 1] * u) * v;
     const t = Math.min(1, Math.max(0, (d - 16) / 26)); return t * t * (3 - 2 * t); };
-  const DRY = srgb('#b4ad84'), MEAD = srgb('#9ea472'), SCRUB = srgb('#8a9463');
+  const DRY = srgb('#b4ad84'), MEAD = srgb('#9ea472'), SCRUB = srgb('#8a9463'), LAWN = srgb('#8fa86c');
   for (let r = 0; r < gm.h; r++) {
     const y = maxY - (r + 0.5) * SS;
     for (let c = 0; c < gm.w; c++) {
       const x = minX + (c + 0.5) * SS, xw = x + 2.2 * Math.sin(y / 5.3), yw = y + 2.2 * Math.sin(x / 4.7);
-      const g = Math.min(1, Math.max(0, (vn(x / 21, y / 21) - 0.35) * 2.2)), e = vn(x / 13 + 17, y / 13 + 5);
+      const va = villaAt(x, y), g = Math.max(va ? 0.55 + 0.4 * vn(x / 9 + 5, y / 9) : 0, Math.min(1, Math.max(0, (vn(x / 21, y / 21) - 0.35) * 2.2))), e = vn(x / 13 + 17, y / 13 + 5);   // villa gardens: lawn and hedges
       const k = (0.95 + 0.08 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.97 + 0.06 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
       const i = (r * gm.w + c) * 3;
       const o = openAt(x, y), m = vn(x / 31 + 3, y / 31 + 9), sc = Math.min(1, Math.max(0, (vn(xw / 7 + 41, yw / 7) - 0.66) * 3));
       for (let q = 0; q < 3; q++) {
-        const yard = (EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + GREEN[q] * g, wild = (DRY[q] * m + MEAD[q] * (1 - m)) * (1 - sc) + SCRUB[q] * sc;
+        const yard = (EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + (va ? LAWN[q] : GREEN[q]) * g, wild = (DRY[q] * m + MEAD[q] * (1 - m)) * (1 - sc) + SCRUB[q] * sc;
         gm.data[i + q] = Math.min(255, (yard * (1 - o) + wild * o) * k);
       }
     }
@@ -1436,7 +1463,9 @@ const nTagged = trees.length / 4;
     const t = p.tags;
     // estates: the lawns between post-war blocks (Olivais, Benfica, Telheiras…) are planted with big trees — thinner than a park
     const estate = (t.landuse === 'residential' || t.landuse === 'grass') && Math.hypot(p.c[0], p.c[1] * 1.15) > 2500;
-    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : estate ? 12 : 0;
+    // courtyards (logradouros) of the inner-city blocks: gardens with a tree or two, citrus, a palm (Avenidas Novas, Campo de Ourique, Estrela)
+    const yard = t.landuse === 'residential' && !estate;
+    const wood = t.natural === 'wood' || t.landuse === 'forest', dense = wood ? 7 : t.leisure === 'park' || t.leisure === 'garden' ? 7.5 : estate ? 7 : yard ? 9 : 0;   // estates sample at 7 m (villa gardens use it all; the rest thins to the old 12 m density)
     if (!dense || p.area < 150) continue;
     const clearAt = (x, y) => { for (const [dx, dy] of [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4]]) { const c = Math.floor(bm.px(x + dx)), r = Math.floor(bm.py(y + dy)); if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) return false; } return true; };
     const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]);
@@ -1445,7 +1474,17 @@ const nTagged = trees.length / 4;
       if (!pointInRing(jx, jy, p.outer) || p.holes.some((h) => pointInRing(jx, jy, h))) continue;
       const c = Math.floor(bm.px(jx)), r = Math.floor(bm.py(jy));
       if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) continue;
-      if (estate && !clearAt(jx, jy)) continue;   // keep estate trees off walls and kerbs
+      if (estate && villaAt(jx, jy)) {   // villa gardens: dense trees, hedging pines, palms, cypresses, 3 m off the walls
+        let ok = true; for (const [dx, dy] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) { const cc = Math.floor(bm.px(jx + dx)), rr = Math.floor(bm.py(jy + dy)); if (cc < 0 || rr < 0 || cc >= bm.w || rr >= bm.h || blocked[rr * bm.w + cc]) { ok = false; break; } }
+        if (ok && hash(`${jx}v`) < 0.62) { const kk = hash(`${jy}vk`); addTree(jx, jy, 0.6 + hash(`${jx}`) * 0.5, kk < 0.12 ? 1 : kk < 0.27 ? 2 : kk < 0.37 ? 3 : 0); }
+        continue;
+      }
+      if (estate && (hash(`${jx}e`) > 0.34 || !clearAt(jx, jy))) continue;   // keep estate trees off walls and kerbs
+      if (yard) {   // only where a courtyard opens up: 6 m clear of walls all round, and then about every other spot
+        let ok = true; for (const [dx, dy] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [4.2, 4.2], [-4.2, 4.2], [4.2, -4.2], [-4.2, -4.2]]) { const cc = Math.floor(bm.px(jx + dx)), rr = Math.floor(bm.py(jy + dy)); if (cc < 0 || rr < 0 || cc >= bm.w || rr >= bm.h || blocked[rr * bm.w + cc]) { ok = false; break; } }
+        if (!ok || hash(`${jx}y`) > 0.5) continue;
+        addTree(jx, jy, 0.55 + hash(`${jx}`) * 0.45, hash(`${jy}p`) < 0.15 ? 1 : 0); continue;
+      }
       if (!wood && hash(`${jx}g`) > grove(jx, jy) * (estate ? 0.8 : 1)) continue;   // parks: groves and open lawns, not an orchard
       addTree(jx, jy, (wood ? 0.8 : 0.75) + hash(`${jx}`) * 0.65, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
     }

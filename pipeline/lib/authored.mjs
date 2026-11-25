@@ -3024,3 +3024,38 @@ export function flareTower(S, { c, ground, H = 90, half = 5.4, top = 2.2, col = 
   limb(S, [c[0], ground, -c[1]], [c[0], ground + H, -c[1]], 0.75, 0.6, 10, sk, PL);   // the stack
   limb(S, [c[0], ground + H, -c[1]], [c[0], ground + H + 1.2, -c[1]], 0.95, 0.95, 10, lin(srgb('#3a3a38')), PL);
 }
+
+// Factory and warehouse halls under a big flat outline: the north-light sawtooth (shed) roof of Lisbon's old industrial
+// belts (Amadora, Marvila, Alcântara). Teeth run along the hall's long axis every 12 m, the steep glazed face to the north.
+export function sawtoothRoof(S, { outer, holes = [], z0, metal = '#a7aaab', glass = '#3e4b56', lin, srgb, pitch = 12, w = 7, rise = 2.4 }) {
+  const o = obb(outer); if (!o) return 0;
+  const PL = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0], cm = lin(srgb(metal)), cg = lin(srgb(glass));
+  // steep face toward whichever cross axis points more to the north
+  const sg = o.vy >= 0 ? 1 : -1, vx = o.vx * sg, vy = o.vy * sg;
+  const inside = (x, y) => pip(x, y, outer) && !holes.some((h) => pip(x, y, h));
+  const ok = (x, y) => inside(x, y) && inside(x + vx * w, y + vy * w) && inside(x + o.ux * 1.5, y + o.uy * 1.5) && inside(x - o.ux * 1.5, y - o.uy * 1.5) &&
+    inside(x - vx * 1.5, y - vy * 1.5) && inside(x + vx * (w + 1.5), y + vy * (w + 1.5));
+  const W = (x, y, z) => [x, z, -y];
+  let n = 0;
+  for (let t = -o.hw + 2; t + w < o.hw - 1; t += pitch) {
+    let run = null;
+    const flush = (u1) => {
+      if (!run || u1 - run < 4) { run = null; return; }
+      const p0 = [o.cx + o.ux * run + vx * t, o.cy + o.uy * run + vy * t], p1 = [o.cx + o.ux * u1 + vx * t, o.cy + o.uy * u1 + vy * t];
+      const q0 = [p0[0] + vx * w, p0[1] + vy * w], q1 = [p1[0] + vx * w, p1[1] + vy * w];
+      // sloping metal face from the low edge (p) up to the ridge over q, vertical glazing at q facing north
+      const nm = [-vx * rise, w, vy * rise], l = Math.hypot(...nm); const N = nm.map((c) => c / l);
+      tri(S, W(...p0, z0), W(...p1, z0), W(...q1, z0 + rise), N, cm, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...p0, z0), W(...q1, z0 + rise), W(...q0, z0 + rise), N, cm, [0, 0], [0, 0], [0, 0], I0, PL);
+      const NG = [vx, 0, -vy];
+      tri(S, W(...q0, z0), W(...q1, z0), W(...q1, z0 + rise), NG, cg, [0, 0], [0, 0], [0, 0], I0, PL); tri(S, W(...q0, z0), W(...q1, z0 + rise), W(...q0, z0 + rise), NG, cg, [0, 0], [0, 0], [0, 0], I0, PL);
+      for (const [a, b] of [[p0, q0], [p1, q1]]) { const NE = a === p0 ? [-o.ux, 0, o.uy] : [o.ux, 0, -o.uy]; tri(S, W(...a, z0), W(...b, z0), W(...b, z0 + rise), NE, cm, [0, 0], [0, 0], [0, 0], I0, PL); }
+      n++; run = null;
+    };
+    for (let u = -o.hl; u <= o.hl; u += 2) {
+      const x = o.cx + o.ux * u + vx * t, y = o.cy + o.uy * u + vy * t;
+      if (ok(x, y)) { if (run === null) run = u; } else flush(u - 2);
+    }
+    flush(o.hl);
+  }
+  return n;
+}
