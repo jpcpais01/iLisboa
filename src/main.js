@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { initTouch } from './touch.js';
+import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
@@ -63,7 +64,10 @@ controls.maxDistance = 7000;
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
 // fingers get their own maps-style navigation (pan / pinch / twist / tilt, fling); MapControls keeps the mouse
-const touch = initTouch({ camera, controls, canvas, onStart: () => { introT = 1; } });
+// third-person chase camera (follow a plane / bus / tram; drive mode): one finger orbits instead of panning while it is on
+const chase = createChase({ camera, controls, ground: (x, y) => (live ? live.ground.at(x, y) : 0), roofs: (x, y) => (live ? live.ground.roofAt(x, y) : -Infinity) });
+const touch = initTouch({ camera, controls, canvas, onStart: () => { introT = 1; }, orbit: () => chase.active, exclude: (e) => chase.exclude(e) });
+window.__chase = chase;
 
 
 // ─── load: the city is several areas of 500 m tiles; tiles stream in and out around the view ───
@@ -239,7 +243,9 @@ const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.m
 const LOD_PIN = +new URLSearchParams(location.search).get('lod') || 0;   // ?lod=1 pins it, for checks on slow test machines
 let inflight = 0, lodK = LOD_PIN || 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 function stream(force) {
-  const x = controls.target.x, y = -controls.target.z, dist = camera.position.distanceTo(controls.target);
+  // following something: stream around where it will be in a few seconds, at a range that counts its height above the ground
+  const f = chase.focus();
+  const x = f ? f.x : controls.target.x, y = f ? f.y : -controls.target.z, dist = f ? f.d : camera.position.distanceTo(controls.target);
   const R = nearR(dist) * (0.75 + 0.25 * lodK), M = midR(dist) * (0.5 + 0.5 * lodK);
   DR = THREE.MathUtils.clamp(700 + camera.position.y * 0.9, 900, 2700) * lodK;   // relief and balconies reach further as the view rises
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
@@ -505,19 +511,19 @@ timeEl.addEventListener('input', () => { setTime(+timeEl.value); invalidate(true
 setTime(+timeEl.value);
 
 // Shadow frustum follows the view so close-ups get crisp shadows; snapped to texels to avoid shimmer.
-const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3();
+const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3();
 // The shadow map is the costliest pass, so it is cached: its frustum snaps to coarse steps (size in ×1.2 levels, position
 // in tenths of its width) and it is only re-rendered when that snapped frustum, the sun, or the scene's contents change.
 let shadowKey = '', shadowDirty = true;
 function fitShadow() {
-  const dist = camera.position.distanceTo(controls.target), lim = size * 0.6;
+  const f = chase.focus(), dist = f ? f.d : camera.position.distanceTo(controls.target), lim = size * 0.6;
   const R0 = THREE.MathUtils.clamp(dist * 0.85, 140, lim);
   const R = Math.min(lim, 140 * 1.2 ** Math.ceil(Math.log(R0 / 140) / Math.log(1.2))) * 1.15;
   const sc = sun.shadow.camera;
   lightRight.crossVectors(sunDir, THREE.Object3D.DEFAULT_UP).normalize();
   lightUp.crossVectors(lightRight, sunDir).normalize();
   const texel = (2 * R) / sun.shadow.mapSize.x, step = texel * Math.round(sun.shadow.mapSize.x / 10);
-  const t = controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
+  const t = f ? _sf.set(f.x, f.gy, -f.y) : controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
   const key = `${R.toFixed(2)}|${ka}|${kb}|${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)}`;
   if (key === shadowKey && !shadowDirty) return;
   shadowKey = key; shadowDirty = false; renderer.shadowMap.needsUpdate = true;
@@ -564,7 +570,7 @@ controls.addEventListener('end', () => {
   history.replaceState(null, '', '#' + v.join(','));
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
-const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY } }); window.__live = live;
+const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase }); window.__live = live;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -581,6 +587,7 @@ renderer.setAnimationLoop((now) => {
   }
   const touching = touch.update(dt);
   const moved = controls.update(dt) || touching;
+  if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
   const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
@@ -591,11 +598,11 @@ renderer.setAnimationLoop((now) => {
   let resized = false;   // a resized canvas is blank until drawn, so it is drawn this frame
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
   if (!active && !resized && curRatio === pixelRatio && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
-  // keep the target over the diorama
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
+  // keep the target over the diorama (a followed plane may fly beyond it)
+  if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
+  if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
-  if (++nf % 12 === 0 || !ready) stream(!ready);
+  if (++nf % (chase.active ? 4 : 12) === 0 || !ready) stream(!ready);   // a followed plane crosses a tile in seconds
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }

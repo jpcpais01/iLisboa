@@ -64,5 +64,69 @@ export function createGround(scene, bounds, res = 10) {
     for (let k = 0; k < 4; k++) if (prio[cs[k]]) { s += h[cs[k]] * ws[k]; n += ws[k]; }
     return n > 1e-6 ? s / n : 0;
   }
-  return { scan, at, get version() { return version; } };
+  // ─── roof tops, for the chase camera: it rises over the roofs rather than look at a wall ───
+  // Sparse: 500 m chunks of 5 m cells (top height in ¼ m, 0 = nothing built), filled only once something asks (roofAt),
+  // from every "buildings*" mesh in the scene, flat or sloped faces only (walls have no plan area).
+  const RR = 5, CN = 100, chunks = new Map(), roofSeen = new WeakSet();
+  let roofsOn = false, lastRoof = -1e9;
+  function chunk(i, j, make) {
+    const k = i * 65536 + j; let c = chunks.get(k);
+    if (!c && make) chunks.set(k, (c = new Uint16Array(CN * CN)));
+    return c;
+  }
+  // resumable: works through the triangles until the deadline, returns where it stopped (-1 when done)
+  function rasteriseRoofs(mesh, from, deadline) {
+    const g = mesh.geometry, P = g.attributes.position, I = g.index;
+    if (!P) return -1;
+    mesh.updateWorldMatrix(true, false);
+    const M = mesh.matrixWorld, n = I ? I.count : P.count;
+    for (let t = from; t < n; t += 3) {
+      if ((t % 3000) === 0 && t > from && performance.now() > deadline) return t;
+      for (let k = 0; k < 3; k++) v[k].fromBufferAttribute(P, I ? I.getX(t + k) : t + k).applyMatrix4(M);
+      const ax = v[0].x, ay = -v[0].z, bx = v[1].x, by = -v[1].z, cx = v[2].x, cy = -v[2].z;
+      const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+      if (Math.abs(area) < 0.3) continue;
+      const top = Math.min(65535, Math.ceil(Math.max(v[0].y, v[1].y, v[2].y) * 4));
+      // every cell the triangle's box touches (conservative: a camera ray is better a little high than inside a roof)
+      const i0 = Math.floor(Math.min(ax, bx, cx) / RR), i1 = Math.floor(Math.max(ax, bx, cx) / RR);
+      const j0 = Math.floor(Math.min(ay, by, cy) / RR), j1 = Math.floor(Math.max(ay, by, cy) / RR);
+      if ((i1 - i0 + 1) * (j1 - j0 + 1) > 400) continue;   // a huge sliver: skip rather than flood an area
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = (i + 0.5) * RR, y = (j + 0.5) * RR;
+        // keep cells whose centre is inside, or within half a cell of an edge
+        const w0 = ((bx - x) * (cy - y) - (cx - x) * (by - y)) / area, w1 = ((cx - x) * (ay - y) - (ax - x) * (cy - y)) / area, w2 = 1 - w0 - w1;
+        const tol = (RR * 0.7) / Math.sqrt(Math.abs(area));
+        if (w0 < -tol || w1 < -tol || w2 < -tol) continue;
+        const c = chunk(Math.floor(i / CN), Math.floor(j / CN), true), o = (j - Math.floor(j / CN) * CN) * CN + (i - Math.floor(i / CN) * CN);
+        if (c[o] < top) c[o] = top;
+      }
+    }
+    return -1;
+  }
+  // new building meshes are queued nearest-first to `near` and rasterised a few ms per frame, so nothing stutters
+  const queue = [];
+  let near = null;
+  function scanRoofs(now) {
+    if (now - lastRoof > 1500) {
+      lastRoof = now;
+      scene.traverse((o) => { if (o.isMesh && !roofSeen.has(o) && o.name.startsWith('buildings')) { roofSeen.add(o); if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); queue.push({ o, t: 0 }); } });
+      if (near) { const d = (q) => { const c = q.o.geometry.boundingSphere.center; return Math.hypot(c.x - near.x, -c.z - near.y); }; queue.sort((a, b) => d(a) - d(b)); }
+    }
+    const deadline = performance.now() + 4;
+    while (queue.length && performance.now() < deadline) {
+      const q = queue[0];
+      if (!q.o.parent) { queue.shift(); continue; }   // dropped before it was done
+      q.t = rasteriseRoofs(q.o, q.t, deadline);
+      if (q.t < 0) queue.shift();
+    }
+  }
+  // highest roof top (m, scene height) in the 5 m cell at (x, y), or -Infinity where nothing is built
+  function roofAt(x, y) {
+    if (!roofsOn) roofsOn = true;
+    near = { x, y };
+    const i = Math.floor(x / RR), j = Math.floor(y / RR), c = chunk(Math.floor(i / CN), Math.floor(j / CN), false);
+    const h = c ? c[(j - Math.floor(j / CN) * CN) * CN + (i - Math.floor(i / CN) * CN)] : 0;
+    return h ? h / 4 : -Infinity;
+  }
+  return { scan: (now) => { const r = scan(now); if (roofsOn) scanRoofs(now); return r; }, at, roofAt, get version() { return version; } };
 }

@@ -8,6 +8,8 @@
 // (rigid rotation and scaling about that point keep it fixed on screen, a pan puts it back under the fingers),
 // so fingers can be added or lifted at any time with no jump. Releasing with speed flings (pan, twist, pinch).
 // Mouse input is left to MapControls; it is only switched off while a finger is down.
+// While the chase camera follows something (orbit() true) one finger orbits round it instead of panning: drag sideways to
+// circle, up and down to tilt. Pinch, twist and the two-finger tilt work as always; any pan is undone by the chase.
 import * as THREE from 'three';
 
 const ROT_ENGAGE = 0.14;   // rad of twist before rotation kicks in (stops a pinch from wobbling the heading)
@@ -16,7 +18,7 @@ const FLING_WINDOW = 110;  // ms of motion used to measure release speed
 const FLING_STALE = 60;    // a finger resting this long before lift means no fling
 const TAP_MS = 260, TAP_PX = 10, DTAP_MS = 320, DTAP_PX = 45;
 
-export function initTouch({ camera, controls, canvas, onStart = () => {} }) {
+export function initTouch({ camera, controls, canvas, onStart = () => {}, orbit = () => false, exclude = () => false }) {
   const pts = new Map();             // pointerId → { x, y, x0, y0 }
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), dir = new THREE.Vector3();
   const W = new THREE.Vector3(), P = new THREE.Vector3(), d3 = new THREE.Vector3(), sph = new THREE.Spherical();
@@ -80,6 +82,15 @@ export function initTouch({ camera, controls, canvas, onStart = () => {} }) {
 
   function applyFree(now) {
     const s = snapshot();
+    if (pts.size === 1 && orbit()) {   // following: one finger orbits (same feel as MapControls' rotate drag)
+      const h = canvas.clientHeight || innerHeight, a = (2 * Math.PI * (s.cx - prev.cx)) / h * 0.85;
+      rotateAbout(controls.target, a);
+      tilt((-2 * Math.PI * (s.cy - prev.cy)) / h * 0.6);
+      samples.push({ t: now, dx: 0, dz: 0, dRot: a, dLog: 0 });
+      while (samples.length && now - samples[0].t > FLING_WINDOW) samples.shift();
+      prev = s;
+      return;
+    }
     let dRot = 0, dLog = 0;
     if (pts.size >= 2 && prev.dist > 0) {
       let da = s.ang - prev.ang; da = Math.atan2(Math.sin(da), Math.cos(da));
@@ -110,7 +121,7 @@ export function initTouch({ camera, controls, canvas, onStart = () => {} }) {
 
   // ─── events (window, capture phase: runs before MapControls and leaves the canvas listeners intact) ───
   function down(e) {
-    if (e.pointerType !== 'touch' || e.target !== canvas) return;
+    if (e.pointerType !== 'touch' || e.target !== canvas || exclude(e)) return;
     controls.enabled = false;         // MapControls ignores touch from here on
     onStart();
     if (!pts.size) {

@@ -18,7 +18,7 @@ async function get(url, as) {
 export default async function handler(req, res) {
   const now = Date.now() / 1000;
   const [carris, cm] = await Promise.allSettled([get(CARRIS, 'buf'), get(CM, 'json')]);
-  const out = [];   // [kind, id, line, x, y, bearing|-1, speed m/s|-1, age s, headsign]
+  const out = [];   // [kind, id, line, x, y, bearing|-1, speed m/s|-1, age s, route name, pattern id (CM only)]
   const status = {};
   if (carris.status === 'fulfilled') {
     const { vehicles } = decodeVehicles(carris.value);
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       const ts = v.timestamp / 1000;
       if (!inBox(v.lat, v.lon) || now - ts > STALE) continue;
       const [x, y] = fwd(v.lat, v.lon);
-      out.push(['cm', 'm' + v.id, v.line_id || '', r1(x), r1(y), v.bearing ?? -1, v.speed >= 0 ? r1(v.speed / 3.6) : -1, Math.round(now - ts), '']); n++;
+      out.push(['cm', 'm' + v.id, v.line_id || '', r1(x), r1(y), v.bearing ?? -1, v.speed >= 0 ? r1(v.speed / 3.6) : -1, Math.round(now - ts), '', v.pattern_id || '']); n++;
     }
     status.cm = n;
   } else status.cm = 'error: ' + cm.reason?.message;
