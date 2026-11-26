@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push([x, y]);
   const segs = []; let failed = 0, lastErr = '';
   await Promise.all(jobs.map(async ([x, y]) => {
-    const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/${Z}/${x}/${y}.pbf?key=${encodeURIComponent(key.trim())}`;   // default tags already carry road_type, traffic_level, road_closure
+    const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative/${Z}/${x}/${y}.pbf?key=${encodeURIComponent(key.trim())}`;   // default tags already carry road_type, traffic_level, road_closure
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`tomtom ${r.status}: ${(await r.text()).slice(0, 160).replaceAll(key.trim(), '…')}`);
