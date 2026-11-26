@@ -16,6 +16,7 @@ import earcut from 'earcut';
 import ClipperLib from 'clipper-lib';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
+import { loadDetail } from './lib/detail.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
 import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb, twinSpires, bullringRoof } from './lib/authored.mjs';
 
@@ -463,6 +464,12 @@ const LIDAR = await (async () => {
   return (x, y) => { const [la, lo] = proj.inv(x, y), c = Math.floor((lo - ox) / rx), k = Math.floor((la - oy) / ry); return c < 0 || k < 0 || c >= w || k >= hh ? NaN : r[k * w + c] / 10 + (dem.dtmLift ? dem.dtmLift(x, y) : 0); };
 })();
 const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 1; i < R.length; j = i++) { const [ax, ay] = R[j], [bx, by] = R[i], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)); m = Math.min(m, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } return m; };
+// Per-building detail (pipeline/lib/detail.mjs): where a DGT orthophoto covers the area, each building's roof colour and roof
+// type, its façade colour and its rooftop structures, every tree and the ground itself come from the photo and the survey,
+// not from palettes and scatter rules. NO_DETAIL=1 builds without it.
+const DETAIL = LIDAR ? await loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar: LIDAR }) : null;
+const DET = new Map();   // per building: what the photo says, and the height and lean it was read at
+const detailOf = (p, h) => { if (!DETAIL) return null; if (!DET.has(p.id)) DET.set(p.id, DETAIL.read(p, h)); const d = DET.get(p.id); if (d) d.h = h; return d; };
 const measured = (p) => {
   if (!LIDAR || p.area < 12) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of p.outer) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -663,10 +670,54 @@ function buildingSpec(p) {
   if (!spec.wall) spec.wall = pick(RESI_ERA[0], u('w'));
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
+  // the photo and the survey, building by building: roof type from the tiles the photo sees, roof and wall colours as they are
+  const det = lidOk && !p.ovr && !OVERRIDES[p.id] && !t['building:part'] && !church && !castle && !palace && !monument && !pillar ? detailOf(p, lid.top) : null;
+  if (det && det.n >= 12) {
+    spec.detail = true;
+    if (!t['roof:shape'] && !hall) {
+      const tiled = det.tileFrac >= 0.5 && lid.top - lid.lo > 0.8;   // tiles seen from above and a ridge in the survey
+      if (tiled && spec.shape === 'flat') { spec.shape = 'hipped'; spec.pitch = 20; if (spec.floorH) { const eave = Math.max(minH + 2.2, Math.min(lid.lo, h)), f = (eave - minH) / Math.max(1, h - minH); spec.h = eave; spec.roofH = Math.max(1, Math.min(6, lid.top - eave)); spec.floorH = Math.max(2.6, spec.floorH * f); spec.groundH = Math.max(spec.floorH, spec.groundH * f); } }
+      if (!tiled && spec.shape !== 'flat') { spec.shape = 'flat'; spec.h = h; spec.roofH = undefined; spec.parapet = Math.max(spec.parapet, 0.9); }
+    }
+    if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
+    if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
+    if (det.wall && !t['building:colour'] && !site) spec.wall = det.wall;
+  }
   const o = p.ovr || OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
   return spec;
+}
+
+// Rooftop structures of a flat roof from the survey: lift and stair housings, water tanks, plant rooms. Cells of a 1 m grid that
+// stand 1.6 m or more above the roof deck are grouped into blobs; each blob becomes a box along the building's axes, as tall as
+// the survey measured it. Nothing is invented: a roof the survey sees bare stays bare.
+function measuredRoofBoxes(p, ctx, wallTop) {
+  const ob = obb(p.outer); if (!ob) return 0;
+  const G = 0.5, nu = Math.ceil((2 * ob.hl) / G), nv = Math.ceil((2 * ob.hw) / G), z = new Float32Array(nu * nv).fill(NaN);
+  const W = (i, j) => [ob.cx + ob.ux * (-ob.hl + (i + 0.5) * G) + ob.vx * (-ob.hw + (j + 0.5) * G), ob.cy + ob.uy * (-ob.hl + (i + 0.5) * G) + ob.vy * (-ob.hw + (j + 0.5) * G)];
+  const deck = [];
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    const [x, y] = W(i, j); if (!pointInRing(x, y, p.outer) || p.holes.some((h) => pointInRing(x, y, h)) || segDist(x, y, p.outer) < 1.0) continue;
+    const v = DETAIL.fine(x, y); if (isFinite(v)) { z[j * nv + i] = v; deck.push(v); }
+  }
+  if (deck.length < 20) return 0;
+  deck.sort((a, b) => a - b); const d0 = deck[Math.floor(deck.length * 0.4)], seen = new Uint8Array(nu * nv);
+  const top = wallTop - (ctx.ground ?? 0), house = (ctx.colWall).map((c) => c * 0.93), info = [0, 0, 0, 0], st = [KIND.PLAIN / 8, ctx.spec.variant / 8, ctx.seed, 0.5];
+  let k = 0;
+  for (let s0 = 0; s0 < nu * nv; s0++) {
+    if (seen[s0] || !(z[s0] > d0 + 1.6)) continue;
+    const q = [s0], cells = []; seen[s0] = 1;
+    while (q.length) { const c = q.pop(); cells.push(c); const i = c % nu, j = (c / nu) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b, n = jj * nu + ii; if (ii >= 0 && jj >= 0 && ii < nu && jj < nv && !seen[n] && z[n] > d0 + 1.6) { seen[n] = 1; q.push(n); } } }
+    if (cells.length < 8 || cells.length > deck.length * 0.5) continue;   // under 2 m² is a mast, a chimney pot or noise; half the roof is a storey, not a box
+    let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1; const hs = [];
+    for (const c of cells) { const i = c % nu, j = (c / nu) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); hs.push(z[c]); }
+    hs.sort((a, b) => a - b); const hb = Math.min(6, hs[Math.floor(hs.length * 0.8)] - d0);
+    const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2), hu = ((i1 - i0 + 1) * G) / 2 - 0.25, hv = ((j1 - j0 + 1) * G) / 2 - 0.25;
+    box(ctx.D || getTile(...tileOf(p.c[0], p.c[1])).b, cx, cy, ob.ux, ob.uy, Math.max(0.6, hu), Math.max(0.6, hv), wallTop, wallTop + hb, house, info, st);
+    k++;
+  }
+  return k;
 }
 
 const FAR = [];   // footprints for the far level of detail (one block per building)
@@ -771,7 +822,8 @@ function addBuilding_(p) {
   }
   if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
-  if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
+  if (s.detail && mode === 'flat' && LIDAR) { const k = measuredRoofBoxes(p, ctx, wallTop); stats.roofBoxes = (stats.roofBoxes || 0) + k; }   // what stands on the roof, as the survey saw it
+  else if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
   // solar panels on about a third of the flat-roofed villas (Restelo, Belém from above)
   if (mode === 'flat' && isVilla(p) && hash(p.id + 'pv') < 0.35) {
     const o = obb(p.outer), pc = srgb('#2d3a4c').map((v) => v), PVS = [KIND.PLAIN / 8, 5 / 8, 0.2, 1];
@@ -1810,13 +1862,18 @@ log('AO baked');
   }
 }
 
+if (DETAIL) {   // the ground as photographed: dry grass, paving, car parks, paths; buildings lifted out, shadows lightened
+  const buildings = polysB.filter((p) => !p.skip && DETAIL.covers(p.c[0], p.c[1])).map((p) => { const d = DET.get(p.id); const z = LIDAR ? measured(p) : null; return { outer: p.outer, h: d?.h ?? z?.top ?? 0, shift: d?.shift }; }).filter((b) => b.h > 1.5);
+  DETAIL.ground({ ground1, GW, GH, buildings, Raster });
+}
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
 const groundPx = (x, y) => { const c = Math.floor(((x - minX) / (maxX - minX)) * GW), r = Math.floor(((maxY - y) / (maxY - minY)) * GH); return c >= 0 && r >= 0 && c < GW && r < GH ? r * GW + c : -1; };
 // tree kind rides in the scale's tens digit: 0 broadleaf, 1 palm, 2 stone pine / conifer, 3 cypress
 const PALMS = /^(phoenix|chamaerops|howea|jubaea|washingtonia|cocos|trachycarpus|syagrus|livistona|butia|archontophoenix)/i, CONIFERS = /^(pinus|cupressus|cedrus|araucaria|taxus|juniperus|abies|picea)/i;
 const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : /^cupressus/i.test(g) ? 3 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
-const addTree = (x, y, sc, kind = 0) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
+// under a photo every tree is the survey's (below): mapped and scattered ones there are dropped
+const addTree = (x, y, sc, kind = 0, measured = false) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; if (!measured && DETAIL && DETAIL.covers(x, y)) return; trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
 // size by species where the city's tree survey tagged it: the Avenida's planes and elms are big, the lódãos medium
 const treeScale = (t, h) => {
   const ht = parseMeters(t.height); if (ht && ht > 2 && ht < 40) return Math.max(0.6, Math.min(2.4, ht / 7.5));
@@ -1956,6 +2013,14 @@ const nTagged = trees.length / 4;
       addTree(jx, jy, (wood ? 0.8 : 0.75) + hash(`${jx}`) * 0.65, dense === 7 && hash(`${jy}k`) < 0.3 ? 2 : 0);   // woods: some pines among the broadleaves
     }
   }
+}
+if (DETAIL) {   // every tree the survey and the photo see: canopy peaks away from buildings, one per crown, at its measured height
+  const bm = new Raster(minX, minY, maxX, maxY, 1), bl = new Uint8Array(bm.w * bm.h);
+  for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { bl[i] = 1; });
+  const blockedAt = (x, y) => { for (const [a, b] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) { const c = Math.floor(bm.px(x + a)), r = Math.floor(bm.py(y + b)); if (c >= 0 && r >= 0 && c < bm.w && r < bm.h && bl[r * bm.w + c]) return true; } return false; };
+  const lt = DETAIL.trees({ blockedAt });
+  for (const [x, y, z, r] of lt) addTree(x, y, Math.max(0.45, Math.min(2.6, z / 7.5)), 0, true);
+  log(`trees from the survey: ${lt.length}`);
 }
 log(`trees: ${nTagged} mapped + ${trees.length / 4 - nTagged} scattered`);
 
