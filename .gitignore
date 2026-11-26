@@ -3,3 +3,4 @@ dist
 data/cache
 .vercel
 *.log
+data/detail/city
