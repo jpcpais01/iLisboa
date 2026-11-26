@@ -704,14 +704,14 @@
   "flat": 2528,
   "skeletonFail": 0,
   "parts": 5,
-  "skippedOutlines": 1,
+  "skippedOutlines": 0,
   "partyEdges": 13571,
   "balconies": 17245,
   "statues": 12,
   "wallsM": 4758.289008531838,
   "pillars": 0,
   "chimneys": 6993,
-  "thinParts": 2,
+  "thinParts": 3,
   "dormers": 258,
   "churches": 2,
   "sawtooth": 1,
@@ -738,7 +738,7 @@
   "triangles": 1484572
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:45:22.633Z",
+ "built": "2026-11-26T00:24:39.821Z",
  "far": {
   "bytes": 1109072,
   "tris": 125637

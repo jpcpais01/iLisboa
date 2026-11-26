@@ -705,7 +705,10 @@ function addBuilding_(p) {
     // …but only when the parts actually fill it: a lone mapped sliver (a lift shaft, a roof stair) must not stand in for a whole tower
     const inside = parts.filter((pt) => pt.area > 4 && Math.abs(pt.c[0] - o.c[0]) < 400 && pointInRing(pt.c[0], pt.c[1], o.outer));
     const special = OVERRIDES[o.id] || DROP.has(o.id) || o.tags.historic || o.tags.amenity === 'place_of_worship' || ['church', 'cathedral', 'chapel', 'basilica', 'castle', 'palace'].includes(o.tags.building);
-    o.skip = !WHOLE.has(o.id) && inside.length > 0 && (special || inside.reduce((a, pt) => a + Math.abs(pt.area), 0) >= 0.45 * Math.abs(o.area));
+    // a few mapped parts (a chapel, a tower) do not make a palace: an unauthored landmark stays whole unless its parts fill a fifth
+    // of it (Queluz Palace, Palácio Ribeira Grande, Edifício dos Leões, Forte do Conde de Lippe were vanishing)
+    const cover = inside.reduce((a, pt) => a + Math.abs(pt.area), 0) / Math.abs(o.area);
+    o.skip = !WHOLE.has(o.id) && inside.length > 0 && (OVERRIDES[o.id] || DROP.has(o.id) ? true : special ? cover >= 0.2 : cover >= 0.45);
     if (inside.length && !o.skip) {   // the outline stands for the building; parts that do not rise clear of it are redundant (and would z-fight its walls)
       stats.thinParts = (stats.thinParts || 0) + 1;
       const top = (t) => parseMeters(t.height) ?? (isFinite(parseFloat(t['building:levels'])) ? parseFloat(t['building:levels']) * LEVEL_H + 1.2 : null);
