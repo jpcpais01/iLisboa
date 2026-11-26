@@ -1,0 +1,384 @@
+200 application/json 49864 bytes
+https://api.ipma.pt/open-data/observation/meteorology/stations/stations.json
+
+[
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -7.821, 
+    37.033
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210881, 
+   "localEstacao": "Olh\u00e3o, EPPO"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -7.62050375, 
+    37.12166968
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210883, 
+   "localEstacao": "Tavira"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.05417, 
+    39.21536
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6210817, 
+   "localEstacao": "Ponte de S\u00f4r / Aer\u00f3dromo"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -7.974399, 
+    40.274578
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6213611, 
+   "localEstacao": "Arganil / Aer\u00f3dromo (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -28.0038, 
+    39.0672
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 11217430, 
+   "localEstacao": "Graciosa / Serra das Fontes (DROTRH)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.31808611, 
+    41.70225278
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6212121, 
+   "localEstacao": "Terras de Bouro/Barral (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.37977778, 
+    41.66796389
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6212122, 
+   "localEstacao": "Amares Caldelas (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -31.2647, 
+    39.45328
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210907, 
+   "localEstacao": "Faja / Ilha das Flores"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.42514722, 
+    41.53568333
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6212124, 
+   "localEstacao": "Braga (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.62705278, 
+    41.529375
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6212125, 
+   "localEstacao": "Barcelos (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.77984444, 
+    41.52645556
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6212126, 
+   "localEstacao": "Esposende (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -7.03693333, 
+    40.33918056
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210800, 
+   "localEstacao": "Sabugal, Martim Rei"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.82916, 
+    41.695
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1240610, 
+   "localEstacao": "Viana do Castelo"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -7.83693333, 
+    40.56577222
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6213015, 
+   "localEstacao": "Nelas / Vilar Seco (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -25.0917, 
+    36.9542
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 11217160, 
+   "localEstacao": "Santa Maria / Praia Formosa (DROTRH)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -25.150108, 
+    37.83256
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210932, 
+   "localEstacao": "S. Miguel, Nordeste"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.20133889, 
+    40.716925
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6213016, 
+   "localEstacao": "Oliveira de Frades (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.89066111, 
+    38.54846667
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1240929, 
+   "localEstacao": "Set\u00fabal, Areias"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.374887, 
+    40.330787
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6213613, 
+   "localEstacao": "Coimbra / Mata de S\u00e3o Pedro (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -17.171373, 
+    32.867477
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210956, 
+   "localEstacao": "Madeira, Porto Moniz"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -8.198685, 
+    40.280921
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 6213617, 
+   "localEstacao": "Penacova / Hombres (CIM)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -25.0176, 
+    36.9412
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 11217165, 
+   "localEstacao": "Santa Maria / Maia (DROTRH)"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -16.906219, 
+    32.83446944
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210960, 
+   "localEstacao": "Madeira, S. Jorge, Santana"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -16.8864166, 
+    32.808238
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210965, 
+   "localEstacao": "Madeira, Santana"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -17.044722, 
+    32.8001833
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210967, 
+   "localEstacao": "Madeira, S\u00e3o Vicente"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -17.0576888, 
+    32.75646944
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210970, 
+   "localEstacao": "Madeira, Bica da Cana"
+  }
+ }, 
+ {
+  "geometry": {
+   "type": "Point", 
+   "coordinates": [
+    -16.903955, 
+    32.693491
+   ]
+  }, 
+  "type": "Feature", 
+  "properties": {
+   "idEstacao": 1210972, 
+   "localEstacao": "Madeira, Pico Alto"
+  }
+ }, 
+ {
+  "geometry": 

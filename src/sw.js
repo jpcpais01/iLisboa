@@ -37,8 +37,8 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // hashed bundles and icons never change under the same URL: cache first
-  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest') {
+  // hashed bundles, icons and fonts never change under the same URL: cache first
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname.startsWith('/fonts/') || url.pathname === '/manifest.webmanifest') {
     e.respondWith((async () => {
       const hit = await caches.match(req, { ignoreSearch: true, ignoreVary: true });
       if (hit) return hit;

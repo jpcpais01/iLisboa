@@ -1,0 +1,242 @@
+200 application/json;charset=UTF-8 11626359 bytes
+https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0011609&Dim1=S7A2021&lang=PT
+
+[ {
+  "IndicadorCod" : "0011609",
+  "IndicadorDsg" : "População residente (N.º) por Local de residência à data dos Censos [2021] (NUTS - 2013), Sexo e Grupo etário (Por ciclos de vida); Decenal - INE, Recenseamento da população e habitação - Censos 2021",
+  "MetaInfUrl" : "https://www.ine.pt/bddXplorer/htdocs/minfo.jsp?var_cd=0011609&lingua=PT",
+  "DataExtracao" : "2026-11-26T20:01:24.888Z",
+  "DataUltimoAtualizacao" : "2022-11-23",
+  "UltimoPref" : "2021",
+  "Dados" : {
+    "2021" : [ {
+      "geocod" : "020206",
+      "geodsg" : "São Barnabé",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040103",
+      "geodsg" : "Cerejais",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040120",
+      "geodsg" : "Vilares de Vilariça",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040123",
+      "geodsg" : "União das freguesias de Ferradosa e Sendim da Serra",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040221",
+      "geodsg" : "Macedo do Mato",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040221",
+      "geodsg" : "Macedo do Mato",
+      "dim_3" : "T",
+      "dim_3_t" : "HM",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040250",
+      "geodsg" : "União das freguesias de Aveleda e Rio de Onor",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040250",
+      "geodsg" : "União das freguesias de Aveleda e Rio de Onor",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040530",
+      "geodsg" : "Talhas",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040538",
+      "geodsg" : "Vinhas",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040538",
+      "geodsg" : "Vinhas",
+      "dim_3" : "T",
+      "dim_3_t" : "HM",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040714",
+      "geodsg" : "Fradizela",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040817",
+      "geodsg" : "São Martinho do Peso",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040820",
+      "geodsg" : "Travanca",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040820",
+      "geodsg" : "Travanca",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040820",
+      "geodsg" : "Travanca",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040820",
+      "geodsg" : "Travanca",
+      "dim_3" : "T",
+      "dim_3_t" : "HM",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "040913",
+      "geodsg" : "Mós",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041009",
+      "geodsg" : "Roios",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041014",
+      "geodsg" : "Trindade",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041014",
+      "geodsg" : "Trindade",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041113",
+      "geodsg" : "Vilar Seco",
+      "dim_3" : "1",
+      "dim_3_t" : "H",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041113",
+      "geodsg" : "Vilar Seco",
+      "dim_3" : "T",
+      "dim_3_t" : "HM",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041221",
+      "geodsg" : "Santalha",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "2",
+      "dim_4_t" : "15 - 24 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041229",
+      "geodsg" : "Vila Boa de Ousilhão",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "1",
+      "dim_4_t" : "0 - 14 anos",
+      "ind_string" : "1",
+      "valor" : "1"
+    }, {
+      "geocod" : "041230",
+      "geodsg" : "Vila Verde",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "d
