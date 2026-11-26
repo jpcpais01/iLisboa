@@ -199,10 +199,10 @@ def main():
                 if fetch_lidar.download(s, href, dst, lambda: fetch_lidar.login(s)): files.append(str(dst))
             say(f"{c}: {len(files)} / {len(interesting[c])} files, {sum(pathlib.Path(x).stat().st_size for x in files) >> 20} MB")
             if not files: continue
-            v = gdal.BuildVRT(str(TMP / f"{c}.vrt"), files); v.FlushCache()
+            v = gdal.BuildVRT(str(TMP / f"{c}.vrt"), files, bandList=[1, 2, 3]); v.FlushCache()
             res = 0.25 / 111320.0
             gdal.Warp(str(OUT / f"{PNAME}_{tag}.tif"), str(TMP / f"{c}.vrt"), dstSRS="EPSG:4326", outputBounds=(PW, PS, PE, PN),
-                      xRes=res / np.cos(np.radians((PS + PN) / 2)), yRes=res, resampleAlg="bilinear", bandList=[1, 2, 3],
+                      xRes=res / np.cos(np.radians((PS + PN) / 2)), yRes=res, resampleAlg="bilinear",
                       creationOptions=["COMPRESS=JPEG", "JPEG_QUALITY=88", "PHOTOMETRIC=YCBCR", "TILED=YES"])
             say(f"{c} → {PNAME}_{tag}.tif {(OUT / f'{PNAME}_{tag}.tif').stat().st_size >> 20} MB")
             for x in files: pathlib.Path(x).unlink()
