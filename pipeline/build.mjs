@@ -336,17 +336,45 @@ const HALLS = new Set(['sports_hall', 'warehouse', 'hangar', 'riding_hall', 'man
 const RESI_KINDS = new Set(['residential', 'apartments', 'yes', 'flats', 'dormitory']);
 const UTILITY = new Set(['roof', 'garage', 'garages', 'shed', 'hut', 'bunker', 'carport', 'kiosk', 'service', 'construction', 'ruins', 'pillar']);
 const pal = (list) => list.map(([c, w]) => [srgb(c), w]);
-// Real Lisbon façade colours: lime whites, Pombaline ochre, rose/salmon, pistachio, sky blue, lilac, oxblood
-const POMBALINE = pal([['#f1ece2', 75], ['#ece0c2', 18], ['#e9c97f', 9], ['#e8b9a0', 10], ['#e2c3c4', 5], ['#c9d7e0', 6], ['#d6dcb9', 4], ['#c27a62', 3], ['#f0dcaa', 6]]);   // outside the Baixa: mostly lime white (checked against Bairro Alto, Lapa)
-const VERNACULAR = pal([['#f5f2eb', 60], ['#ece8de', 14], ['#f0e3c4', 8], ['#efcc7e', 4], ['#ecb79e', 4], ['#bcd3e3', 2], ['#d3dfb8', 1], ['#e8ac84', 2], ['#e2bccb', 2], ['#c86a53', 1], ['#b8cbbb', 1], ['#f3d899', 3]]);   // re-checked 2026-11-25 against Earth over Alfama and Bairro Alto: four in five are white or off-white   // checked against Alfama/Graça/Mouraria from above: about two in three are lime white or cream
-const RESI_C = pal([['#f3f1ec', 40], ['#ebe6da', 20], ['#dedbd4', 12], ['#ecdcc9', 8], ['#e6dab8', 6], ['#d5d8d6', 8], ['#e2cbb8', 6]]);   // estate blocks are overwhelmingly white render
+// Lisbon façade colours as they read in daylight (weathered lime render and paint, not paint-chart chips; a 'white' wall is
+// ~0.8 albedo, never 0.95, or the sun burns it to paper). Each palette is one era / type of building; shares are what you
+// count walking (and flying over) the place. Few buildings carry building:colour in OSM (< 1 %), so these do the work.
+// 2026-11-26: the earlier mixes were ~75 % lime white, and from the air the city read as plain white boxes (João).
+const FC = {   // named façade tones, sRGB
+  lime: '#ebe7de', limeW: '#e4dfd4', offw: '#efe9dc', cream: '#eadcbf', ivory: '#e6d8b6', paleY: '#ecd69a', ochre: '#dcb466', ochreD: '#c99a4f',
+  rose: '#e1b2a2', roseP: '#e6c4b8', salmon: '#d99a7e', almagre: '#a75b47', blue: '#b5c7d4', blueG: '#a9b9c2', sage: '#c4cfa8', lilac: '#cdbfcc',
+  lioz: '#dcd2bf', stoneP: '#cfc4ae', granite: '#a6a49e', graniteD: '#86847f', concrete: '#bcb8af', beige: '#ddcfb5', greyL: '#cfccc5', brick: '#a65d46', brownP: '#9c7a62',
+};
+const tones = (list) => pal(list.map(([k, w]) => [FC[k] || k, w]));
+// old town houses (Alfama, Graça, Mouraria, Madragoa, the old village cores): still mostly lime white, but one in two is coloured
+const VERNACULAR = tones([['lime', 34], ['limeW', 10], ['offw', 8], ['cream', 9], ['paleY', 9], ['ochre', 6], ['rose', 8], ['roseP', 4], ['salmon', 3], ['blue', 3], ['sage', 2], ['almagre', 2], ['lilac', 1], ['stoneP', 1]]);
+// 18th–19th-century 4–5 storey blocks (Bairro Alto, Lapa, Estrela, Campo de Ourique, Santos): Pombaline ochre, rose, cream, sky blue
+const POMBALINE = tones([['lime', 24], ['offw', 8], ['cream', 12], ['paleY', 11], ['ochre', 11], ['ochreD', 3], ['rose', 10], ['roseP', 5], ['salmon', 4], ['blue', 5], ['sage', 3], ['almagre', 2], ['lilac', 2]]);
+// Avenidas Novas, Av. da Liberdade, Arroios, Estefânia (1880–1940): cream, pale stone and pastel, with lioz-dressed fronts
+const AVENIDAS = tones([['lime', 18], ['offw', 6], ['cream', 16], ['ivory', 6], ['lioz', 10], ['stoneP', 5], ['paleY', 11], ['ochre', 5], ['rose', 10], ['roseP', 5], ['salmon', 3], ['blue', 3], ['sage', 2], ['lilac', 2]]);
+// apartment blocks by era (see sub8 below): 0 punched windows (50s–60s), 1 balcony bands (60s–70s), 2 Português Suave (40s–50s), 3 80s–90s
+const RESI_ERA = [
+  tones([['lime', 28], ['offw', 12], ['cream', 14], ['beige', 10], ['paleY', 9], ['roseP', 8], ['greyL', 7], ['salmon', 3], ['sage', 3], ['blue', 2]]),
+  tones([['lime', 28], ['offw', 8], ['concrete', 12], ['greyL', 8], ['beige', 14], ['cream', 10], ['paleY', 6], ['roseP', 6], ['ochre', 3], ['blueG', 4], ['brick', 2]]),
+  tones([['cream', 24], ['ivory', 8], ['lioz', 12], ['stoneP', 6], ['paleY', 14], ['rose', 10], ['roseP', 6], ['lime', 12], ['ochre', 6], ['salmon', 3]]),
+  tones([['lime', 22], ['offw', 6], ['roseP', 10], ['salmon', 8], ['beige', 14], ['cream', 8], ['ochre', 8], ['paleY', 6], ['brick', 6], ['greyL', 6], ['almagre', 3], ['brownP', 3]]),
+];
+const NEWTOWN_C = tones([['lime', 40], ['offw', 10], ['lioz', 14], ['greyL', 12], ['granite', 6], ['beige', 8], ['ochre', 4], ['roseP', 4], ['blueG', 2]]);   // Parque das Nações: white render, stone, glass
 const HALL_C = pal([['#d9dbda', 4], ['#c9ccce', 3], ['#e4e1d9', 3], ['#b9bfc3', 2], ['#d6cfc0', 2]]);
-const MODERN_C = pal([['#e7e3dc', 30], ['#cfcac2', 20], ['#b7b4ae', 10], ['#ddd2bf', 15], ['#a8b3b8', 6]]);
+// offices, hotels, shops: limestone and granite cladding, white render, grey panels
+const MODERN_C = tones([['lioz', 20], ['stoneP', 8], ['lime', 16], ['greyL', 14], ['granite', 12], ['graniteD', 5], ['beige', 12], ['concrete', 8], ['brownP', 3], ['blueG', 2]]);
+const PALACE_C = tones([['cream', 3], ['ochre', 2], ['rose', 2], ['offw', 3], ['paleY', 2], ['almagre', 1]]);
+const VILLA_C = tones([['lime', 10], ['offw', 3], ['cream', 2], ['paleY', 1], ['roseP', 1]]);
+// building:material → the wall tone it shows (plaster and tiles keep the palette / azulejo cladding)
+const MATERIAL_C = { brick: FC.brick, stone: FC.lioz, limestone: FC.lioz, sandstone: FC.stoneP, granite: FC.granite, marble: FC.lioz, concrete: FC.concrete,
+  cement_block: FC.concrete, glass: '#8f9ba3', metal: '#b5b9bb', steel: '#b5b9bb', wood: '#9a7656', timber_framing: '#e8e2d4' };
+// Avenidas Novas / Av. da Liberdade / Arroios: the 1880–1940 grid north of Restauradores (local metres, origin Baixa)
+const inAvenidas = (c) => c[0] > -1800 && c[0] < 1300 && c[1] > 450 && c[1] < 2700;
 const STONE = srgb('#ddd2bd'), LIOZ = srgb('#e7dfcd'), CASTLE = srgb('#bfb5a3');
 const ROOFS = pal([['#b5725f', 5], ['#bd7e69', 4], ['#a86a59', 3], ['#c28a75', 3], ['#9a6152', 2], ['#b27765', 3]]);   // sun-faded salmon terracotta (Earth over Alfama/Bairro Alto reads lighter and pinker than new tile)   // weathered terracotta, lighter with sun and lichen
 const ESTATE_ROOFS = pal([['#c47a5c', 4], ['#bb7055', 3], ['#cf8a6a', 2], ['#b0654c', 2], ['#a9705f', 2], ['#9e6b5c', 1]]);   // newer machine-made tiles, brighter than the old town's
 const BIG_ROOF = pal([['#a9adb0', 3], ['#bcbfbf', 3], ['#9ea4a8', 2], ['#c9c6bd', 2]]);   // metal decks and pale membranes on halls
-const FLAT_ROOF = pal([['#cdc6ba', 4], ['#bdb6aa', 3], ['#d8cfbf', 2], ['#b57a5a', 1]]);
+const FLAT_ROOF = pal([['#b3aea5', 4], ['#a7a39b', 3], ['#bdb6aa', 3], ['#c9c2b5', 2], ['#9a968f', 2], ['#b57a5a', 1]]);   // terraces from the air: grey membrane, gravel, weathered screed; a bright white deck is the exception (it read as snow)
 const TRIM = srgb('#f3efe6');
 
 // Height for footprints that carry none (≈70 % of them): the storey count of mapped neighbours of similar size (blocks in
@@ -477,6 +505,8 @@ function buildingSpec(p) {
   // a plain flat-roofed apartment building among the tiled ones (checked against Earth)
   const infill = core && Math.hypot(p.c[0], p.c[1]) > 1100 && (variant === 0 || variant === 1) && !hall && !palace && !church && RESI_KINDS.has(kind) && h >= 17 && h < 30 && !t['roof:shape'] && !t['building:part'] && u('infill') < 0.33;
   if (infill) variant = 8;
+  const mat = (t['building:material'] || t['building:facade:material'] || '').toLowerCase().split(/[;,]/)[0].trim();
+  if ((variant === 0 || variant === 1) && !hall && /^(tiles?|azulejos?|ceramic)$/.test(mat)) variant = 2;   // mapped azulejo fronts
   if ((variant === 0 || variant === 1) && !hall && u('azu') < (variant === 1 ? 0.11 : 0.08)) variant = 2; // azulejo-clad
   const stone = castle || pillar || (church && !t['building:colour']) || (monument && !UTILITY.has(kind));
   const utility = UTILITY.has(kind) || p.area < 25 || hall;
@@ -509,8 +539,9 @@ function buildingSpec(p) {
   const bayW = variant === 8 ? 2.6 + u('bw') * 0.8 : variant === 3 ? 1.6 + u('bw') * 0.6 : variant === 4 ? 3.6 + u('bw') * 0.8 : variant === 5 ? 5.5 : variant === 0 ? 2.7 + u('bw') * 0.5 : 2.5 + u('bw') * 1.1;
   const balconyFloors = variant === 0 || (variant === 2 && u('p') < 0.5) ? [1, ...(u('b2') < 0.55 ? [2] : []), ...(u('b3') < 0.3 ? [3] : [])] : variant === 1 || variant === 2 ? [1, 2, 3, 4] : variant === 4 ? [1] : [];
   const balconyChance = variant === 0 ? 1 : variant === 4 ? 0.6 : 0.2;
-  const palette = hall ? HALL_C : variant === 8 ? RESI_C : variant === 3 ? MODERN_C : variant === 0 ? POMBALINE : VERNACULAR;
-  const wall = parseColour(tameWall(t['building:colour'])) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(pal([['#f4f2ee', 6], ['#ece9e2', 2], ['#e8e2d4', 1]]), u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 4 ? pick(pal([['#f0e6d2', 3], ['#e9c98a', 2], ['#e3b6a2', 2], ['#f4f0ea', 3]]), u('w')) : pick(palette, u('w')));
+  const palette = hall ? HALL_C : newTown ? NEWTOWN_C : variant === 3 ? MODERN_C : variant === 4 ? PALACE_C
+    : (variant <= 2) && inAvenidas(p.c) ? AVENIDAS : variant === 0 ? POMBALINE : VERNACULAR;
+  let wall = parseColour(tameWall(t['building:colour'])) || (MATERIAL_C[mat] && srgb(MATERIAL_C[mat])) || (shape === 'flat' && variant === 1 && isVilla(p) ? pick(VILLA_C, u('w')) : castle ? CASTLE : stone ? LIOZ : church ? STONE : variant === 8 ? null : pick(palette, u('w')));
   const roofCol = parseColour(tameRoof(t['roof:colour'])) || pick(hall && shape !== 'hipped' ? BIG_ROOF : variant === 8 ? ESTATE_ROOFS : ROOFS, u('r'));
   const flatCol = castle ? [170, 162, 148] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
@@ -532,7 +563,9 @@ function buildingSpec(p) {
       : [0.45, 0.3, 0.05, 0.2];
     let r = u('era'), k = 0; while (k < 3 && r >= w[k]) r -= w[k++];
     spec.sub8 = k;
+    if (!spec.wall) spec.wall = pick(newTown ? NEWTOWN_C : RESI_ERA[k], u('w'));
   }
+  if (!spec.wall) spec.wall = pick(RESI_ERA[0], u('w'));
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
   const o = OVERRIDES[p.id]; // hand-authored

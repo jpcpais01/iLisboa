@@ -54,7 +54,11 @@ if (kind < .5) {                                  // plain trims, chimneys
   float top = vInfo.x, fh = max(vInfo.y, 2.4), bays = floor(vInfo.z + .5), gh = max(vInfo.w, 2.6);
   float y = vSurf.y;
   flood = .3 * (1. - smoothstep(1., 11., y));   // after dusk the street lamps wash the lower floors in warm light
-  col = base * (.9 + .1 * smoothstep(0., 5., y)) * (.95 + .07 * grime);
+  // ambient occlusion: the street canyon darkens the lower floors and the ground contact most; the eave shades the top metre
+  float ao = (.76 + .24 * smoothstep(0., 9., y)) * (1. - .1 * (1. - smoothstep(0., 1.2, top - y)));
+  // weathering: soft patches of faded and repainted render, each building its own age, a damp splash band at the foot
+  col = base * ao * (.9 + .12 * grime) * (.93 + .07 * fract(seed * 41.3));
+  col = mix(col, col * vec3(.84, .85, .8), (1. - smoothstep(.2, 1.4, y)) * .6);
   // rain streaks
   col *= 1. - .05 * smoothstep(.55, 1., vnoise(vec2(vSurf.x * (kind > 1.5 ? 2.3 : 9.), y * .08))) * (1. - smoothstep(0., top, y) * .5);
   if (kind < 1.5 && bays > .5 && y < top - .15) {
@@ -245,6 +249,7 @@ if (kind < .5) {                                  // plain trims, chimneys
   float pxm = max(fwidth(t.x), fwidth(t.y)) + 1e-4;
   float grid = max(box1(-.02, .02, fract(t.x / .6) - .5, pxm), box1(-.02, .02, fract(t.y / .6) - .5, pxm)) * (1. - smoothstep(.05, .15, pxm));
   col = base * (.88 + .14 * grime) * (1. - .1 * grid);
+  col *= 1. - .14 * smoothstep(.45, .85, vnoise(vWP.xz * .18 + seed * 7.)) - .06 * smoothstep(.6, .9, vnoise(vWP.xz * .9));   // ponding stains, patched membrane
   rough = .95;
 } else {                                                   // dressed lioz stone (monuments, castle, churches)
   vec2 t = vec2(vSurf.x * (vInfo.z > .5 ? bw : 1.), vSurf.y);
