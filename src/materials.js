@@ -393,7 +393,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 
 // Terrain: ground-map texture; fragments under the river are dropped so the water plane
 // and the terrain share one crisp shoreline (same mask, same threshold).
-export function terrainMaterial(map, mask, bounds) {
+export function terrainMaterial(map, mask, bounds, surf = false) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (s) => {
     s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight;
@@ -402,7 +402,7 @@ export function terrainMaterial(map, mask, bounds) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight;')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight;${surf ? '\n#define SURF' : ''}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   vec2 muv = vec2((vWPos.x - uBounds.x) / (uBounds.z - uBounds.x), (-vWPos.z - uBounds.y) / (uBounds.w - uBounds.y));
   if (texture2D(uMask, muv).r > 0.5) discard;
@@ -413,34 +413,48 @@ export function terrainMaterial(map, mask, bounds) {
     float fw = max(fwidth(p.x), fwidth(p.y)) + 1e-5;
     vec3 c = diffuseColor.rgb; float L = dot(c, vec3(.3, .59, .11)), sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
     float grey = 1. - smoothstep(.04, .09, sat);
+#ifdef SURF
+    // the surface class rides in the texture's alpha (see SURF in pipeline/build.mjs): the pattern follows what the ground IS,
+    // and the colour (map or photo) is left exactly as it is
+    float sa = diffuseColor.a * 255.;
+    float wPave = 1. - smoothstep(14., 24., abs(sa - 255.)), wSett = 1. - smoothstep(14., 22., abs(sa - 215.));
+    float wAsph = 1. - smoothstep(14., 22., abs(sa - 175.)), wGrass = 1. - smoothstep(4., 12., abs(sa - 135.));
+    diffuseColor.a = 1.;
+#else
+    float wPave = smoothstep(.5, .62, L) * grey, wAsph = smoothstep(.31, .25, L) * smoothstep(.1, .15, L) * grey;
+    float wSett = smoothstep(.22, .17, L) * grey * (1. - wAsph), wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
+#endif
     float dL = fwidth(L);   // derivatives stay outside the distance branches below
+#ifndef SURF
     if (fw < .35) {   // crisp kerbs: the filtered map blurs road/pavement edges over a metre; re-threshold the transition band to a sub-pixel edge up close
       float t = clamp((L - .27) / .31, 0., 1.), band = step(.27, L) * step(L, .58) * grey * (1. - smoothstep(.12, .35, fw)) * smoothstep(.15, .3, dL / fw);
       float L2 = mix(.27, .58, smoothstep(.42, .58, t));
       c *= mix(1., L2 / max(L, 1e-3), band); L = mix(L, L2, band);
     }
+#endif
     float near = 1. - smoothstep(.02, .06, fw);                    // fine patterns only while a few cm still span a pixel
     float macro = .96 + .08 * tvn(p / 9.) + .04 * tvn(p / 2.3);
+    // between the 0.5 m map and the few-cm patterns: three octaves of surface variation (1.6, 0.6, 0.22 m), each fading out
+    // before it would alias, stronger on grass and earth than on asphalt or paving. Up close a texel no longer reads as a blur.
+    float mAmp = .13 + .08 * wGrass - .05 * wAsph - .05 * wPave;
+    macro *= 1. + mAmp * ((tvn(p / 1.6 + 3.1) - .5) * (1. - smoothstep(.2, .45, fw)) + (tvn(p / .6 + 7.7) - .5) * (1. - smoothstep(.08, .16, fw)) + .8 * (tvn(p / .22 + 1.3) - .5) * (1. - smoothstep(.03, .06, fw)));
     float k = 1.;
     if (fw < .15) {   // beyond ~15 cm a pixel none of this shows: skip it (most of the screen in a city view)
     // calçada portuguesa: small limestone setts with dark joints
-    float wPave = smoothstep(.5, .62, L) * grey;
     vec2 q = p / .085; q.x += .5 * mod(floor(q.y), 2.); vec2 cf = fract(q) - .5, ci = floor(q);
     float joint = smoothstep(.36, .5, max(abs(cf.x), abs(cf.y)));
     float stone = (.9 + .14 * th(ci)) * (1. - .28 * joint);
     // asphalt: grain and worn patches
-    float wAsph = smoothstep(.31, .25, L) * smoothstep(.1, .15, L) * grey;
     float grain = .93 + .12 * th(floor(p / .035));
-    // granite setts (tram streets): bigger, darker blocks
-    float wSett = smoothstep(.22, .17, L) * grey * (1. - wAsph);
+    // granite setts (tram streets, kerbs): bigger, darker blocks
     vec2 q2 = p / .14; q2.x += .5 * mod(floor(q2.y), 2.); vec2 cf2 = fract(q2) - .5;
     float sett = (.86 + .2 * th(floor(q2))) * (1. - .35 * smoothstep(.38, .5, max(abs(cf2.x), abs(cf2.y))));
     // grass
-    float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
     float blades = .88 + .2 * tvn(p / .35) + .08 * th(floor(p / .06));
-    k = mix(1., stone, wPave * near) * mix(1., grain, wAsph * near) * mix(1., sett, wSett * near) * mix(1., blades, wGrass * (1. - smoothstep(.04, .15, fw)));
+    // anything else (earth, gravel, yards): a fine grit so it never reads as a smooth blur
+    float grit = 1. + (.1 * th(floor(p / .05)) - .05) * (1. - min(1., wPave + wSett + wAsph + wGrass));
+    k = mix(1., stone, wPave * near) * mix(1., grain, wAsph * near) * mix(1., sett, wSett * near) * mix(1., blades, wGrass * (1. - smoothstep(.04, .15, fw))) * mix(1., grit, near);
     }
-    float wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
     diffuseColor.rgb = c * k * macro;
     // after dusk: streets and squares under the lamps, pools of warm light along the paved surfaces
     if (uNight > .01) tLit = grey * smoothstep(.1, .16, L) * (1. - wGrass) * (.1 + .38 * smoothstep(.4, .85, tvn(p / 9.)) + .08 * tvn(p / 2.7));
@@ -463,7 +477,7 @@ export function terrainMaterial(map, mask, bounds) {
 float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-terrain-v7';
+  m.customProgramCacheKey = () => `ilisboa-terrain-v8${surf ? 's' : ''}`;
   return m;
 }
 
