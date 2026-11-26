@@ -1,9 +1,9 @@
-// Sun direction for a local clock time in Lisbon (WEST, UTC+1) on a late-spring day.
+// Sun direction for a local clock time in Lisbon on a given day of the year (default: late spring) and UTC offset (WET 0, WEST 1).
 // Output frame: x = east, y = up, -z = north.
-export function sunDirection(clockHours, latDeg, lonDeg, out, dayOfYear = 135) {
+export function sunDirection(clockHours, latDeg, lonDeg, out, dayOfYear = 135, utcOffset = 1) {
   const rad = Math.PI / 180;
   const decl = 23.44 * rad * Math.sin(((2 * Math.PI) / 365) * (dayOfYear - 81));
-  const solar = clockHours - 1 + lonDeg / 15; // UTC+1 → local solar time
+  const solar = clockHours - utcOffset + lonDeg / 15; // clock → UTC → local solar time
   const H = (solar - 12) * 15 * rad;
   const lat = latDeg * rad;
   const el = Math.asin(Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(H));

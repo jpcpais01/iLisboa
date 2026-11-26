@@ -661,7 +661,7 @@ const surveyMass_ = (p) => {
   const regs = [plan];
   for (let q = 1; q < L.length; q++) {
     let r = region((k) => lev[k] >= q);
-    r = off(off(r, 1), -1); r = off(off(r, -1.2), 1.2);   // close cracks, then drop spurs under 2.4 m wide
+    r = off(off(r, 1), -1); r = off(off(r, -2), 2);   // close cracks, then drop spurs and strips under 4 m wide (a parapet or a façade's smear, not a storey)
     r = run(ClipperLib.ClipType.ctIntersection, r, regs[q - 1]);
     // a ledge under 2.5 m wide between this slab and the one below is the survey's blur at the eaves, not a terrace
     let gap = run(ClipperLib.ClipType.ctDifference, regs[q - 1], r); gap = off(off(gap, -1.25), 1.25);
@@ -721,9 +721,14 @@ const surveyMass_ = (p) => {
         let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1; const zs = [];
         for (const c of comp) { const i = c % nu, j = (c / nu) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); zs.push(hz[c]); }
         if (comp.length < (i1 - i0 + 1) * (j1 - j0 + 1) * 0.35) continue;   // a ragged scatter is plant and railings, not a housing
+        const bu = i1 - i0 + 1, bv = j1 - j0 + 1;
+        if (Math.min(bu, bv) < 2 || Math.max(bu, bv) > 4 * Math.min(bu, bv)) { stats.boxThin = (stats.boxThin || 0) + 1; continue; }   // fins and blades: the survey's smear of a façade or a parapet, not a housing
         zs.sort((a, b) => a - b);
-        const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2);
-        s.boxes.push({ cx, cy, hu: Math.max(0.7, ((i1 - i0 + 1) * G) / 2 - 0.15), hv: Math.max(0.7, ((j1 - j0 + 1) * G) / 2 - 0.15), h: Math.min(5, zs[Math.floor(zs.length * 0.7)] - s.deck) });
+        const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2), hu = Math.max(0.7, (bu * G) / 2 - 0.15), hv = Math.max(0.7, (bv * G) / 2 - 0.15);
+        // the whole box must stand on its deck, 0.8 m in from every edge: nothing hangs over the eaves
+        const inner = off(s.r, -0.8), corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [cx + ob.ux * hu * a + ob.vx * hv * b, cy + ob.uy * hu * a + ob.vy * hv * b]);
+        if (!corners.every(([x, y]) => inR(inner, x, y))) { stats.boxEdge = (stats.boxEdge || 0) + 1; continue; }
+        s.boxes.push({ cx, cy, hu, hv, h: Math.min(5, zs[Math.floor(zs.length * 0.7)] - s.deck) });
       }
     }
     delete s.hs;
@@ -871,6 +876,7 @@ function buildingSpec(p) {
       : x > 1280 && x < 3450 && y > 4800 && y < 7900 && !newTown ? [0.45, 0.45, 0, 0.1]   // Olivais Norte / Sul
       : newTown ? [0.3, 0.45, 0, 0.25]
       : core ? [0.45, 0.3, 0.15, 0.1]
+      : x > -4300 && x < -2200 && y > 4500 && y < 6000 ? [0.1, 0.5, 0, 0.4]   // Telheiras (70s–90s): stacked balcony bands and aluminium marquises, checked against Earth
       : y > 5500 || x < -4000 ? [0.35, 0.2, 0, 0.45]                         // Telheiras, Lumiar, Carnide, Amadora, Odivelas: 80s onward
       : [0.45, 0.3, 0.05, 0.2];
     let r = u('era'), k = 0; while (k < 3 && r >= w[k]) r -= w[k++];
@@ -915,6 +921,9 @@ function buildingSpec(p) {
     if (lk.sub8 !== undefined) spec.sub8 = lk.sub8;
     spec.looked = true;
   }
+  if (spec.detail && spec.variant === 8 && spec.sub8 === 1 && spec.floorH && spec.h >= 12 && !site) {   // Telheiras 70s–90s blocks: stacked concrete balconies with solid white parapets (checked against Earth)
+    spec.balconyFloors = Array.from({ length: 40 }, (_, k) => k + 1); spec.balconyChance = 0.55; spec.balconyModern = true;
+  }
   const o = p.ovr || OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
@@ -931,7 +940,7 @@ function measuredRoofBoxes(p, ctx, wallTop) {
   const deck = [];
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
     const [x, y] = W(i, j); if (!pointInRing(x, y, p.outer) || p.holes.some((h) => pointInRing(x, y, h)) || segDist(x, y, p.outer) < 1.0) continue;
-    const v = DETAIL.fine(x, y); if (isFinite(v)) { z[j * nv + i] = v; deck.push(v); }
+    const v = DETAIL.fine(x, y); if (isFinite(v)) { z[j * nu + i] = v; deck.push(v); }
   }
   if (deck.length < 20) return 0;
   deck.sort((a, b) => a - b); const d0 = deck[Math.floor(deck.length * 0.4)], seen = new Uint8Array(nu * nv);
@@ -946,6 +955,8 @@ function measuredRoofBoxes(p, ctx, wallTop) {
     for (const c of cells) { const i = c % nu, j = (c / nu) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); hs.push(z[c]); }
     hs.sort((a, b) => a - b); const hb = Math.min(6, hs[Math.floor(hs.length * 0.8)] - d0);
     const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2), hu = ((i1 - i0 + 1) * G) / 2 - 0.25, hv = ((j1 - j0 + 1) * G) / 2 - 0.25;
+    if (cells.length < (i1 - i0 + 1) * (j1 - j0 + 1) * 0.35 || Math.min(hu, hv) < 0.9 || Math.max(hu, hv) > 4 * Math.min(hu, hv)) continue;   // fins, blades and ragged scatter are survey smear
+    if (![[-1, -1], [1, -1], [1, 1], [-1, 1]].every(([a, b]) => { const x = cx + ob.ux * hu * a + ob.vx * hv * b, y = cy + ob.uy * hu * a + ob.vy * hv * b; return pointInRing(x, y, p.outer) && segDist(x, y, p.outer) >= 0.8; })) continue;   // nothing hangs over the eaves
     box(ctx.D || getTile(...tileOf(p.c[0], p.c[1])).b, cx, cy, ob.ux, ob.uy, Math.max(0.6, hu), Math.max(0.6, hv), wallTop, wallTop + hb, house, info, st);
     k++;
   }
@@ -1058,7 +1069,7 @@ function addBuilding_(p) {
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
   if (s.mass) {   // the housings, tanks and plant rooms the survey measured on this slab's deck
     if (mode === 'flat' || s.shape === 'rim') {
-      const D = ctx.D || S, house = colWall.map((c) => c * 0.93), info = [0, 0, 0, 0], st = [KIND.PLAIN / 8, s.variant / 8, seed, 0.5], base = mode === 'flat' ? wallTop : top;
+      const D = ctx.D || S, house = s.shape === 'rim' ? colRoof.map((c) => c * 1.25) : colWall.map((c) => c * 0.93), info = [0, 0, 0, 0], st = [KIND.PLAIN / 8, s.variant / 8, seed, 0.5], base = mode === 'flat' ? wallTop : top;
       for (const b of s.mass.boxes) if (b.h > 0.8) { box(D, b.cx, b.cy, s.mass.ux, s.mass.uy, b.hu, b.hv, base - 0.1, base + b.h, house, info, st); stats.roofBoxes = (stats.roofBoxes || 0) + 1; }
     }
   }

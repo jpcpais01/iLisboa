@@ -11,6 +11,9 @@ import { createSky } from './sky.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
+import { initLandmarks } from './landmarks.js';
+import { initHud } from './ui/hud.js';
+import { initDock } from './ui/dock.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -95,18 +98,24 @@ const tick = () => { progressEl.style.width = `${Math.min(1, ++done / total) * 1
 const url = (a, f) => `/tiles/${a.area}/${f}?v=${encodeURIComponent(a.built)}`;
 const balconyParts = (() => { let g = null; return () => g || (g = (() => { const { slab, rail } = balconyGeometry(); return { slab, rail: mergeGeometries(rail), slabMat: new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 0.8 }), railMat: railingMaterial() }; })()); })();
 const balconyChunks = [];
+const solidRailMat = new THREE.MeshStandardMaterial({ color: 0xeeebe4, roughness: 0.85, side: THREE.DoubleSide });
+// iron balconies (positive width) and modern concrete ones with a solid parapet (negative width, twice as deep)
 function balconies(buf) {
   const d = new Float32Array(buf), n = d.length / 5, B = balconyParts();
-  const a = new THREE.InstancedMesh(B.slab, B.slabMat, n), b = new THREE.InstancedMesh(B.rail, B.railMat, n);
+  let nm = 0; for (let i = 4; i < d.length; i += 5) if (d[i] < 0) nm++;
+  const ni = n - nm;
+  const a = new THREE.InstancedMesh(B.slab, B.slabMat, n), b = new THREE.InstancedMesh(B.rail, B.railMat, Math.max(1, ni)), s = new THREE.InstancedMesh(B.rail, solidRailMat, Math.max(1, nm));
+  b.count = ni; s.count = nm;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Vector3();
-  for (let j = 0, i = 0; j < n; j++, i += 5) {
+  for (let j = 0, i = 0, jb = 0, js = 0; j < n; j++, i += 5) {
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, d[i + 3]);
-    m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(d[i + 4], 1, 1));
-    a.setMatrixAt(j, m); b.setMatrixAt(j, m); c.add(p);
+    const w = d[i + 4], mod = w < 0;
+    m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(Math.abs(w), 1, mod ? 2 : 1));
+    a.setMatrixAt(j, m); if (mod) s.setMatrixAt(js++, m); else b.setMatrixAt(jb++, m); c.add(p);
   }
-  a.computeBoundingSphere(); b.computeBoundingSphere();
-  a.castShadow = true; a.receiveShadow = true;
-  const g = new THREE.Group(); g.add(a, b); g.userData.c = c.divideScalar(Math.max(1, n));
+  a.computeBoundingSphere(); b.computeBoundingSphere(); s.computeBoundingSphere();
+  a.castShadow = true; a.receiveShadow = true; s.castShadow = true; s.receiveShadow = true;
+  const g = new THREE.Group(); g.add(a, b, s); g.userData.c = c.divideScalar(Math.max(1, n));
   return g;
 }
 
@@ -569,18 +578,16 @@ function lampPost() {
 // ─── sun / time of day ──────────────────────────────────────────────────
 // haze: extinction at sea level per metre (height fog, thinning with a ~1 km scale height; colour from the sky, see sky.js)
 const haze = new THREE.FogExp2(0xc8d2dc, 0.00009); scene.fog = haze;
-const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
 const sunDir = new THREE.Vector3(), lightDir = new THREE.Vector3();
 const MOON = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();   // a high moon over the south-west at night
 let skyT = 0, skyPend = null, sunLit = true;
+let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today in Lisbon)
 function setTime(h, now = false) {
-  sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir);
+  sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir, sunDay, sunUtc);
   const elev = Math.asin(sunDir.y);
   const night = 1 - THREE.MathUtils.smoothstep(elev, -0.1, 0.02);   // civil dusk (−6°) is night for the city lights
   cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.07, 0.04);
   document.body.classList.toggle('night', cityUniforms.uNight.value > 0.5);
-  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
-  clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
   // the sky (and with it the environment) is re-solved at most ~8 times a second while the slider is dragged
   const solve = () => {
     skyPend = null; skyT = performance.now();
@@ -604,9 +611,6 @@ function setTime(h, now = false) {
 }
 const EXPOSURE = +Q.get('exp') || 1.0;
 
-timeEl.addEventListener('input', () => setTime(+timeEl.value));
-timeEl.addEventListener('change', () => setTime(+timeEl.value, true));
-{ const t0 = +Q.get('t'); if (t0) timeEl.value = t0; }   // ?t=hour, for checks
 // Shadow cascades follow the view, snapped to coarse steps so they neither shimmer nor re-render every frame.
 // The near map is centred a little ahead of the view (half its radius at a grazing view, none looking straight down) and is
 // re-drawn when its snapped frame, the light, or the scene's contents change. The far map covers ~5 km ahead and is re-drawn
@@ -647,7 +651,9 @@ function fitShadow(now) {
 }
 let needRender = 3;
 const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = true; };
-setTime(+timeEl.value, true);
+// the clock: Lisbon's real time and date by default (the HUD keeps it ticking); the slider picks any hour of today. ?t=hour pins it.
+const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); } }); window.__hud = hud;
+initDock();
 { const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
 // ─── camera: shareable view in the URL hash, else a postcard intro from the river ───
@@ -685,6 +691,8 @@ controls.addEventListener('end', () => {
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
+// landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
+const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -700,8 +708,9 @@ renderer.setAnimationLoop((now) => {
     camera.position.lerpVectors(startPos, endPos, e);
   }
   const driving = drive.update(raw, now);   // before the chase camera, so it films where the car is now; real elapsed time (the car runs its own fixed steps)
+  const flying = marks.update(dt, now);   // a tapped landmark: the camera flies round to frame it
   const touching = touch.update(dt);
-  const moved = controls.update(dt) || touching || driving;
+  const moved = controls.update(dt) || touching || driving || flying;
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
@@ -772,5 +781,4 @@ try {
   console.error(err);
   document.querySelector('#loading span').textContent = 'Lisboa não carregou. Recarregue a página.';
 }
-document.getElementById('subtitle').textContent = `Lisboa · ${AREAS.reduce((n, a) => n + a.stats.buildings, 0).toLocaleString('pt-PT')} edifícios`;
 window.__ready = true;
