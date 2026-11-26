@@ -19,7 +19,7 @@ const ICON = {
   dens: '<circle cx="8" cy="8" r="2.2"/><circle cx="16" cy="8" r="2.2"/><circle cx="12" cy="15" r="2.2"/><path d="M4 20c.6-2 2-3 4-3M20 20c-.6-2-2-3-4-3"/>',
 };
 
-export function initLayers({ scene, camera, controls, canvas, ground, bounds, mobile, night = { value: 0 }, invalidate = () => {} }) {
+export function initLayers({ scene, camera, controls, canvas, ground, bounds, mobile, night = { value: 0 }, sky = null, hud = null, invalidate = () => {} }) {
   const box = [-14500, -8800, 11000, 11600];   // the 36 areas and a margin, local metres
   const weather = createWeather(); weather.setGround(ground);
   const card = createCard();
@@ -38,18 +38,48 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
   reg('densidade', 'Densidade', 'city', ICON.dens, regions.densidade, { exclusive: 'map' });
   weather.on(() => { for (const k in h) h[k].refresh(); });
 
+  // the sky's clouds follow the real cloud cover: now when the clock is live, the forecast hour when the slider is moved
+  const pinned = new URLSearchParams(location.search).has('clouds');
+  let cover = null, coverT = 0;
+  function cloudTarget() {
+    const d = weather.data; if (!d) return null;
+    if (!hud || hud.live()) return d.current?.cloud_cover ?? null;
+    const hr = d.hourly; if (!hr?.cloud_cover) return d.current?.cloud_cover ?? null;
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(new Date()), h = hud.hour();
+    const i0 = hr.time.indexOf(`${day}T${String(Math.floor(h) % 24).padStart(2, '0')}:00`);
+    if (i0 < 0) return d.current?.cloud_cover ?? null;
+    const i1 = Math.min(i0 + 1, hr.time.length - 1), f = h - Math.floor(h);
+    return hr.cloud_cover[i0] + (hr.cloud_cover[i1] - hr.cloud_cover[i0]) * f;
+  }
   let st = 0;
   return {
     weather,
     get busy() { return wind.busy || rain.busy; },
     update(dt, now) {
       overlayUniforms.uOvLift.value = night.value * 0.045;
+      if (sky && !pinned && now - coverT > 500) {
+        coverT = now;
+        const c = cloudTarget();
+        if (c != null) {
+          const u = coverOf(c / 100);
+          cover = cover == null ? u : cover + (u - cover) * 0.25;   // eases over a couple of seconds when the slider jumps
+          sky.clouds = cover;
+        }
+      }
       if (temp.tick()) h.temperatura.refresh();
       wind.update(dt); rain.update(dt); regions.update();
       for (const l of Object.values(labels)) l.update();
       if (now - st > 3000) { st = now; h.chuva.refresh(); h.vento.refresh(); }
     },
   };
+}
+
+// sky.js draws its deck where a 4-octave value noise exceeds 1 − uCover, with a soft edge. This table (Monte Carlo over
+// that same noise and ramp) gives the uCover whose mean cloud opacity equals each tenth of reported cloud cover.
+const COVER = [0, 0.498, 0.567, 0.621, 0.668, 0.713, 0.76, 0.81, 0.871, 0.955, 1.15];
+function coverOf(f) {
+  const x = Math.min(1, Math.max(0, f)) * 10, i = Math.min(9, Math.floor(x));
+  return COVER[i] + (COVER[i + 1] - COVER[i]) * (x - i);
 }
 
 // a small card for a picked freguesia (or anything else the layers want to say about a place)
