@@ -227,7 +227,7 @@ function detail(t, d) {
 const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);   // tiles with their own 0.5 m ground
 // beyond that, out to ~3× as far, tiles keep their full buildings (window grids, roofs, colours) over the far ground; only past
 // this do the plain far blocks stand in. Phones get 60 % of it.
-const midR = (dist) => THREE.MathUtils.clamp(dist * 1.15 + 700, 1450, 4400) * (isMobile ? 0.6 : 1);
+const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (isMobile ? 0.6 : 1);
 const _fwd = new THREE.Vector3();
 window.__stream = () => stream(true);   // for checks: stream without waiting for frames
 window.__tileStats = () => tiles.reduce((o, t) => { const k = t.state === 2 ? t.mode : t.state ? 'loading' : 'idle'; o[k] = (o[k] || 0) + 1; return o; }, {});

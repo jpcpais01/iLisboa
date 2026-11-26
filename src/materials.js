@@ -14,6 +14,10 @@ float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32);
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float box1(float a, float b, float x, float aa) { return smoothstep(a - aa, a + aa, x) - smoothstep(b - aa, b + aa, x); }
+// share of a pixel footprint [x − w/2, x + w/2] covered by a pulse train of period 1 lit on [a, b]: exact box filtering, so a
+// window grid reads as rows of windows at any distance (no moiré) and only melts into its average once a bay is under a pixel
+float fpulse(float x, float a, float b, float w) { w = max(w, 1e-4); float x0 = x - w * .5, x1 = x + w * .5;
+  return ((floor(x1) * (b - a) + clamp(fract(x1), a, b) - a) - (floor(x0) * (b - a) + clamp(fract(x0), a, b) - a)) / w; }
 float rect(vec2 lo, vec2 hi, vec2 p, float aa) { return box1(lo.x, hi.x, p.x, aa) * box1(lo.y, hi.y, p.y, aa); }
 `;
 
@@ -59,7 +63,14 @@ if (kind < .5) {                                  // plain trims, chimneys
     float pxm = max(fwidth(bx) * bw, fwidth(y)) + 1e-4;
     float aa = pxm * .7;
     float far = smoothstep(.38, 1.05, pxm);   // windows hold until a bay is ~1 px wide
-    if (far > .995) { col = mix(col, vec3(.16, .18, .2), .22); glow = .045 + .05 * fract(seed * 13.7); } else {   // far façades: skip the window work entirely
+    if (far > .995) {   // far façades: the window grid alone, box-filtered (cheap, and it holds from ~1 m a pixel out to the horizon)
+      float wf = variant > 2.5 && variant < 3.5 ? (ms < .28 ? .94 : ms < .7 ? .84 : .5) : variant > 7.5 ? .55 : .44;
+      float cxw = fpulse(bx, .5 - wf * .5, .5 + wf * .5, fwidth(bx));
+      float above = step(gh, y), cyw = mix(.45, fpulse((y - gh) / fh, .28, .86, fwidth(y) / fh), above);
+      float win = cxw * cyw;
+      col = mix(col, vec3(.13, .15, .18), win * .8);
+      glow = .8 * win * mix(step(h21(vec2(floor(bx), floor((y - gh) / fh)) + seed), .42), .42, smoothstep(.5, 1.5, fwidth(bx)));   // lit windows, averaged once a bay is under a pixel
+    } else {
     float isG = step(y, gh);
     float fi = isG > .5 ? 0. : 1. + floor((y - gh) / fh);
     float fy = isG > .5 ? y : mod(y - gh, fh);
