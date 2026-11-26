@@ -723,6 +723,13 @@
   "miradouros": 0,
   "ponte": 0,
   "hedgeM": 652.1624216749007,
+  "bridges": {
+   "decks": 1,
+   "ramps": 0,
+   "piers": 0,
+   "abutments": 0,
+   "tris": 0
+  },
   "waterSource": "osm-coastline",
   "trees": 3016,
   "treesMapped": 0,
@@ -734,7 +741,7 @@
   "triangles": 347494
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T14:46:44.103Z",
+ "built": "2026-11-26T18:04:39.778Z",
  "far": {
   "bytes": 122728,
   "tris": 34663

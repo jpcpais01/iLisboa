@@ -477,7 +477,7 @@
     -12741.858967845676,
     -1746.1324095920008
    ],
-   "bytes": 276388,
+   "bytes": 278540,
    "balconies": "bal_0_4.bin",
    "detail": "d_0_4.glb"
   },
@@ -589,7 +589,7 @@
     -12741.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 260568,
+   "bytes": 261664,
    "balconies": "bal_0_5.bin",
    "detail": "d_0_5.glb"
   },
@@ -617,7 +617,7 @@
     -11741.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 169728,
+   "bytes": 175664,
    "balconies": "bal_2_5.bin",
    "detail": "d_2_5.glb"
   },
@@ -631,7 +631,7 @@
     -11241.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 196328,
+   "bytes": 197692,
    "balconies": "bal_3_5.bin",
    "detail": "d_3_5.glb"
   },
@@ -645,7 +645,7 @@
     -10741.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 119496,
+   "bytes": 134640,
    "balconies": "bal_4_5.bin",
    "detail": "d_4_5.glb"
   },
@@ -659,7 +659,7 @@
     -10241.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 78528,
+   "bytes": 90164,
    "balconies": null,
    "detail": "d_5_5.glb"
   },
@@ -673,7 +673,7 @@
     -9741.858967845676,
     -1415.3774698637371
    ],
-   "bytes": 83388,
+   "bytes": 92652,
    "balconies": null,
    "detail": "d_6_5.glb"
   },
@@ -687,7 +687,7 @@
     -9458.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 76356,
+   "bytes": 89792,
    "balconies": "bal_7_5.bin",
    "detail": "d_7_5.glb"
   }
@@ -727,20 +727,27 @@
   "ponte": 0,
   "fountains": 1,
   "hedgeM": 7282.217597005798,
+  "bridges": {
+   "decks": 36,
+   "ramps": 4,
+   "piers": 8,
+   "abutments": 43,
+   "tris": 2481
+  },
   "waterSource": "dem",
   "trees": 856,
   "treesMapped": 2,
-  "lamps": 774,
-  "cars": 1359,
+  "lamps": 785,
+  "cars": 1354,
   "water": 0.8733,
-  "bytes": 4405634,
+  "bytes": 4474026,
   "detailTris": 52368,
-  "triangles": 431237
+  "triangles": 434632
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T14:32:27.525Z",
+ "built": "2026-11-26T17:54:04.246Z",
  "far": {
-  "bytes": 216164,
-  "tris": 42217
+  "bytes": 224516,
+  "tris": 42950
  }
 }
