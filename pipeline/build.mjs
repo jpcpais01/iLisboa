@@ -13,6 +13,7 @@ import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions';
 import { weld, meshopt } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
 import earcut from 'earcut';
+import ClipperLib from 'clipper-lib';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
@@ -443,6 +444,62 @@ const measured = (p) => {
   }
   return null;
 };
+// Stepped landmarks (CGD's Campus XXI): one height cannot stand for a building that climbs in terraces. The survey is cut
+// into storey bands; each band becomes a slab over the part of the plan that reaches it, stacked on the band below, so
+// the massing is the measured one and no two walls share a plane. OVERRIDES set terraces: { step, minArea }.
+const terraceSlabs = (p) => {
+  const T = OVERRIDES[p.id].terraces, step = T.step || 3.6, G = 2, SC = 100, minArea = T.minArea || 30;
+  if (!LIDAR) return [p];
+  // the grid runs along the building's own axes, so terrace edges come out square to the façades, not stair-stepped
+  const { ux, uy } = obb(p.outer), W = (u, v) => [u * ux - v * uy, u * uy + v * ux];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of p.outer) { const u = x * ux + y * uy, v = -x * uy + y * ux; x0 = Math.min(x0, u); y0 = Math.min(y0, v); x1 = Math.max(x1, u); y1 = Math.max(y1, v); }
+  const nx = Math.ceil((x1 - x0) / G), ny = Math.ceil((y1 - y0) / G), raw = new Float32Array(nx * ny).fill(NaN);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const [x, y] = W(x0 + (i + 0.5) * G, y0 + (j + 0.5) * G);
+    if (pointInRing(x, y, p.outer) && !p.holes.some((h) => pointInRing(x, y, h))) raw[j * nx + i] = LIDAR(x, y);
+  }
+  const hz = new Float32Array(nx * ny), MR = T.median ?? 2;   // 5×5 median: roof plant, rooftop trees and edge blur do not make terraces
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v = []; for (let b = -MR; b <= MR; b++) for (let a = -MR; a <= MR; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < nx && jj < ny && isFinite(raw[jj * nx + ii])) v.push(raw[jj * nx + ii]); }
+    v.sort((a, b) => a - b); hz[j * nx + i] = isFinite(raw[j * nx + i]) && v.length ? v[v.length >> 1] : 0;
+  }
+  const C = (r) => r.map(([x, y]) => ({ X: Math.round(x * SC), Y: Math.round(y * SC) }));
+  const run = (op, subj, clip) => { const c = new ClipperLib.Clipper(); c.AddPaths(subj, ClipperLib.PolyType.ptSubject, true); if (clip) c.AddPaths(clip, ClipperLib.PolyType.ptClip, true); const o = new ClipperLib.Paths(); c.Execute(op, o, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero); return o; };
+  const off = (paths, d) => { const co = new ClipperLib.ClipperOffset(2, 25); co.AddPaths(paths, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon); const o = new ClipperLib.Paths(); co.Execute(o, d * SC); return o; };
+  const plan = run(ClipperLib.ClipType.ctUnion, [C(p.outer), ...p.holes.map((h) => C(h).reverse())]);
+  const top = Math.max(...hz), K = Math.round(top / step), out = [];
+  let ground = 0, gn = 0; for (const [x, y] of p.outer) { ground += groundAt(x, y); gn++; } ground /= gn;
+  let prev = plan;
+  for (let k = 1; k <= K; k++) {
+    const L = k * step, cells = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (hz[j * nx + i] >= L - step / 2) {
+      let i2 = i; while (i2 + 1 < nx && hz[j * nx + i2 + 1] >= L - step / 2) i2++;   // one run of cells per row keeps the union cheap
+      const ax = x0 + i * G, bx = x0 + (i2 + 1) * G, ay = y0 + j * G, by = ay + G;
+      cells.push(C([W(ax, ay), W(bx, ay), W(bx, by), W(ax, by)])); i = i2;
+    }
+    if (!cells.length) break;
+    let reg = run(ClipperLib.ClipType.ctUnion, cells);
+    const R = T.smooth ?? 3; reg = off(off(reg, R), -R); reg = off(off(reg, -R), R);   // close gaps, then open away spurs narrower than a terrace
+    reg = run(ClipperLib.ClipType.ctIntersection, k === 1 ? plan : reg, k === 1 ? null : prev);   // nested: a slab never overhangs the one below
+    if (k === 1) reg = plan;   // the bottom slab is the mapped outline itself (crisp street walls)
+    reg = ClipperLib.Clipper.CleanPolygons(ClipperLib.Clipper.SimplifyPolygons(reg, ClipperLib.PolyFillType.pftNonZero), 1.4 * SC);
+    const c = new ClipperLib.Clipper(); c.AddPaths(reg, ClipperLib.PolyType.ptSubject, true);
+    const tree = new ClipperLib.PolyTree(); c.Execute(ClipperLib.ClipType.ctUnion, tree, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+    const keep = [];
+    for (const ch of tree.Childs()) {
+      const outer = ch.Contour().map((q) => [q.X / SC, q.Y / SC]), holes = ch.Childs().map((hh) => hh.Contour().map((q) => [q.X / SC, q.Y / SC])).filter((r) => Math.abs(ringArea(r)) > 20);
+      if (ringArea(outer) < 0) outer.reverse(); holes.forEach((r) => { if (ringArea(r) > 0) r.reverse(); });
+      const area = ringArea(outer) + holes.reduce((a, r) => a + ringArea(r), 0);
+      if (area < minArea || outer.length < 3) continue;
+      keep.push(ch.Contour(), ...ch.Childs().map((hh) => hh.Contour()));
+      const c0 = [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length];
+      out.push({ id: `${p.id}_t${k}_${out.length}`, tags: p.tags, outer, holes, area, c: c0, ground, ovr: { ...OVERRIDES[p.id], terraces: undefined, h: L, minH: (k - 1) * step, floorH: step, groundH: step, shape: 'flat', parapet: k === K ? 1 : 0 } });
+    }
+    if (!keep.length) break;
+    prev = keep;
+  }
+  return out.length ? out : [p];
+};
 // complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
 // detached houses outside the old core (Restelo, Belém, Lumiar, the suburbs): villas and moradias in their gardens
 const VILLA_KINDS = new Set(['house', 'detached', 'villa', 'bungalow', 'semidetached_house']);
@@ -456,7 +513,7 @@ function buildingSpec(p) {
   let levels = parseFloat(t['building:levels']);
   // a measured height beats a mapped one and any estimate; a footprint the survey sees as open ground (demolished, or
   // built after 2024) keeps the old way. A storey count that cannot fit the measured height is dropped.
-  const lid = OVERRIDES[p.id] || p.tags.man_made === 'tower' || ['roof', 'carport'].includes(t.building) ? null : measured(p);
+  const lid = p.ovr || OVERRIDES[p.id] || p.tags.man_made === 'tower' || ['roof', 'carport'].includes(t.building) ? null : measured(p);
   const lidOk = lid && lid.mid >= 2.2 && lid.mid < 200;
   if (lid && !lidOk) heightSrc.lidarSkip++;
   if (lidOk) { h = Math.max(lid.mid, (parseMeters(t.min_height) ?? 0) + 2); if (isFinite(levels) && Math.abs(levels * LEVEL_H + 1.2 - h) > 4.5) levels = NaN; }
@@ -568,7 +625,7 @@ function buildingSpec(p) {
   if (!spec.wall) spec.wall = pick(RESI_ERA[0], u('w'));
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
-  const o = OVERRIDES[p.id]; // hand-authored
+  const o = p.ovr || OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
   if (process.env.DBG_ID === p.id) console.log('SPEC', p.id, JSON.stringify({ ...spec, src: spec.src }));
   return spec;
@@ -598,7 +655,7 @@ function addBuilding_(p) {
   const rings = [p.outer, ...p.holes];
   let tmin = Infinity, tsum = 0, n = 0;
   for (const r of rings) for (const [x, y] of r) { const g = groundAt(x, y); tmin = Math.min(tmin, g); tsum += g; n++; }
-  const ground = tsum / n;
+  const ground = p.ground ?? tsum / n;
   const bottom = s.minH > 0 ? ground + s.minH : tmin - 1.5;
   const top = ground + s.h;
   const [ti, tj] = tileOf(p.c[0], p.c[1]);
@@ -731,7 +788,7 @@ function addBuilding_(p) {
   const multiOuter = new Set(polysB.filter((p) => /^r\d+_[1-9]/.test(p.id)).map((p) => p.id.split('_')[0]));
   const churchy = (p) => !p.tags['building:part'] && !OVERRIDES[p.id] && !multiOuter.has(p.id.split('_')[0]) &&
     (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
-  const WHOLE = new Set(['w42645796', 'r17651166_0', 'w495968848', 'w495968849']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1, Colombo's towers)
+  const WHOLE = new Set(['w42645796', 'r17651166_0', 'w495968848', 'w495968849', 'r5742899_0', 'w96719280']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1, Colombo's towers); CGD and El Corte Inglés lost their whole mass to one or two small mapped parts
   const parts = polysB.filter((p) => p.tags['building:part']), thinDrop = new Set();
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
@@ -772,8 +829,9 @@ function addBuilding_(p) {
   const ptOutline = polysB.find((p) => p.id === 'w9253917');
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
-  for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))]) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
-  let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  const terr = (p) => (OVERRIDES[p.id]?.terraces ? terraceSlabs(p) : [p]);   // stepped landmarks become their measured terraces
+  for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].flatMap(terr)) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
+  let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].flatMap(terr).filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   if (process.env.DBG_ID) { const q = polysB.find((p) => p.id === process.env.DBG_ID); console.log('TRACE', !!q, q && q.skip, q && dropped(q), q && todo.includes(q), q && q.c); }
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
@@ -2034,7 +2092,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
       if (Math.abs(p.area) < 25) continue;
       const outer = simplify(p.outer, 1.5); if (outer.length < 3) continue;
       const holes = p.holes.filter((h) => Math.abs(ringArea(h)) > 60).map((h) => simplify(h, 1.2)).filter((h) => h.length >= 3);
-      let g = Infinity; for (const [x, y] of outer) g = Math.min(g, groundAt(x, y));
+      let g = Infinity; for (const [x, y] of outer) g = Math.min(g, groundAt(x, y)); if (p.ground != null) g = p.ground;
       const pitched = spec.shape !== 'flat', roofH = pitched ? Math.min(spec.roofH ?? 3, spec.h * 0.3) : 0;
       const yb = g + (spec.minH || 0) - (spec.minH ? 0 : 1.5), yt = g + Math.max(spec.h - roofH * 0.55, (spec.minH || 0) + 0.5);
       const wall = lin(spec.wall), roof = lin(pitched ? spec.roofCol : spec.flatCol);

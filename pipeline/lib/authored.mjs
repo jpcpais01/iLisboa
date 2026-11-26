@@ -90,7 +90,10 @@ export const OVERRIDES = {
   r3232954_0: { shape: 'flat', wall: '#ebebe6', flatCol: [214, 214, 210], variant: 3, parapet: 0.6 },   // Pavilhão do Conhecimento (Carrilho da Graça)
   r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
   r6902258_0: { shape: 'flat', wall: '#e4e0d8', variant: 3, parapet: 0.8 },   // Hospital Fernando Fonseca
-  ...Object.fromEntries(['r5742899_0', 'r21949748_0'].map((id) => [id, { shape: 'flat', variant: 3, parapet: 0.8 }])),   // Campus XXI, Edifício Fidelidade
+  r21949748_0: { shape: 'flat', variant: 3, parapet: 0.8 },   // Edifício Fidelidade
+  // Caixa Geral de Depósitos HQ (Campus XXI, Arsénio Cordeiro, 1993): nine storeys above ground climbing in terraces to the
+  // central ridge — the 'castle' of Campo Pequeno. Massing is cut from the 2024 LiDAR in storey bands (see terraceSlabs).
+  r5742899_0: { terraces: { step: 4.4, minArea: 40 }, variant: 3, stone: false, wall: '#c8c0b3', flatCol: [168, 164, 156], bayW: 1.9 },
   r6053715_0: { h: 21, wall: '#e3ded1', roofCol: '#a5604b', variant: 4, stone: false, floorH: 5.2, groundH: 6.2, bayW: 4.6, balconyFloors: [] },   // Palácio da Ajuda: neoclassical limestone (tagged 'house')
   r12988834_0: { h: 16, wall: '#dc9d8f', roofCol: '#a8624c', variant: 4, stone: false, floorH: 4.6, groundH: 5, bayW: 4.2 },   // Palácio das Necessidades: the pink palace
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
