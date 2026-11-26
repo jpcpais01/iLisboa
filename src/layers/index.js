@@ -19,7 +19,7 @@ const ICON = {
   dens: '<circle cx="8" cy="8" r="2.2"/><circle cx="16" cy="8" r="2.2"/><circle cx="12" cy="15" r="2.2"/><path d="M4 20c.6-2 2-3 4-3M20 20c-.6-2-2-3-4-3"/>',
 };
 
-export function initLayers({ scene, camera, controls, canvas, ground, bounds, mobile, night = { value: 0 }, sky = null, hud = null, invalidate = () => {} }) {
+export function initLayers({ scene, camera, controls, canvas, ground, bounds, mobile, night = { value: 0 }, sky = null, hud = null, onCloud = () => {}, invalidate = () => {} }) {
   const box = [-14500, -8800, 11000, 11600];   // the 36 areas and a margin, local metres
   const weather = createWeather(); weather.setGround(ground);
   const card = createCard();
@@ -64,6 +64,7 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
           const u = coverOf(c / 100);
           cover = cover == null ? u : cover + (u - cover) * 0.25;   // eases over a couple of seconds when the slider jumps
           sky.clouds = cover;
+          onCloud(c / 100);   // the light re-solves once per real change (the clouds above ease on their own)
         }
       }
       if (temp.tick()) h.temperatura.refresh();

@@ -583,7 +583,17 @@ const sunDir = new THREE.Vector3(), lightDir = new THREE.Vector3();
 const MOON = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();   // a high moon over the south-west at night
 let skyT = 0, skyPend = null, sunLit = true;
 let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today in Lisbon)
+// overcast (0…1, the real cloud cover from src/layers, eased): a dimmer, softer sun, a brighter diffuse sky and blurred,
+// paler shadows. Global light under cloud follows Kasten & Czeplak (G = G_clear·(1 − 0.75·c^3.4)); the direct beam goes
+// first (broken cloud hides the sun part of the time), the sky's diffuse share grows.
+let overcast = 0, lastH = 12;
+const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);   // always present: a light count change recompiles every shader
+function setOvercast(c) {
+  if (Math.abs(c - overcast) < 0.02) return;
+  overcast = c; setTime(lastH, true);
+}
 function setTime(h, now = false) {
+  lastH = h;
   sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir, sunDay, sunUtc);
   const elev = Math.asin(sunDir.y);
   const night = 1 - THREE.MathUtils.smoothstep(elev, -0.1, 0.02);   // civil dusk (−6°) is night for the city lights
@@ -595,16 +605,22 @@ function setTime(h, now = false) {
     const st = sky.update(sunDir, { night });
     // the sun is the air's transmittance of sunlight; once it has set, a dim cool moon takes over the same light (and its shadows)
     const moon = THREE.MathUtils.smoothstep(elev, -0.06, -0.14) * 0.75;
-    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = 1; }
-    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon; }
+    const c = overcast, beam = 1 - 0.85 * c ** 1.6, glob = 1 - 0.75 * c ** 3.4;
+    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = beam; }
+    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon * beam; }
+    for (const l of [sun, sunFar]) { l.shadow.radius = 2 + 7 * c; l.shadow.intensity = 1 - 0.35 * c; }
     sunLit = sun.intensity * Math.max(sun.color.r, sun.color.g, sun.color.b) > 1e-3;   // (never toggle .visible: a light count change recompiles every shader)
     // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
-    const E = Math.max(0, Math.max(sunDir.y, 0) * (st.sunColor.r + st.sunColor.g * 2 + st.sunColor.b) / 4 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.16, 0.45) + 0.02);
+    const E = Math.max(0, Math.max(sunDir.y, 0) * (st.sunColor.r + st.sunColor.g * 2 + st.sunColor.b) / 4 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.16, 0.45) + 0.02) * Math.sqrt(glob);   // the camera adapts only partly: overcast reads a little darker, as it is
     // in daylight the exposure is photographic: a sunlit horizontal albedo comes out of ACES as itself (E is ~3.95× the
     // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain), so photos and measured colours read true instead
     // of ~2.5× brighter and milky. Dusk and night keep the eye's partial adaptation (the min hands over smoothly).
     renderer.toneMappingExposure = EXPOSURE * Math.min(1.71 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
-    scene.environmentIntensity = 1;
+    // the light the beam loses (beyond what the cloud absorbs) comes back from the cloud deck: grey-white, from everywhere
+    // (the clear-sky environment is blue; under a full deck part of it hands over to that neutral light)
+    const day = Math.max(0, sunDir.y + 0.05) / (Math.abs(sunDir.y) + 0.3);
+    scene.environmentIntensity = 1 - 0.45 * c * c;
+    cloudLight.intensity = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
   };
@@ -691,7 +707,7 @@ controls.addEventListener('end', () => {
 // live layers (traffic, transport, planes): separate module, off until toggled
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // map layers (weather: temperature, wind, rain; city: freguesias, density): src/layers, off until toggled
-const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, invalidate }); window.__layers = layers;
+const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, onCloud: setOvercast, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
