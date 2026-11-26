@@ -1853,7 +1853,7 @@ let openAtG = null;   // set by the ground pass below: how far a point is from a
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
 // earth and cement drifting into each other over ~20 m, with plot-sized (≈6 m) shifts in value — not one pale fill, not camouflage
 {
-  const GREEN = srgb('#70765a'), EARTH = srgb('#7e7462'), CEMENT = srgb('#827f78');   // measured: undescribed yards read ~0.74× the old fill
+  const GREEN = srgb('#6c7a52'), EARTH = srgb('#7e7462'), CEMENT = srgb('#827f78');   // measured: undescribed yards read ~0.74× the old fill
   const hh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
   const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
     return (hh(i, j) * (1 - fx) + hh(i + 1, j) * fx) * (1 - fy) + (hh(i, j + 1) * (1 - fx) + hh(i + 1, j + 1) * fx) * fy; };
@@ -1875,19 +1875,39 @@ let openAtG = null;   // set by the ground pass below: how far a point is from a
     const t = Math.min(1, Math.max(0, (d - 16) / 26)); return t * t * (3 - 2 * t); };
   openAtG = openAt;
   const DRY = srgb('#868062'), MEAD = srgb('#727854'), SCRUB = srgb('#646c48'), LAWN = srgb('#687c4e');
+  const PAVED = srgb('#99948b'), APRON = srgb('#a8a296'), WORN = srgb('#80776a');
+  // distance to the nearest building at 1 m: every block stands on a paved apron (the walk round its foot, entrances, the
+  // strip under the eaves), 2–3.5 m wide
+  const BG = 1, br = new Raster(minX - 8, minY - 8, maxX + 8, maxY + 8, BG), bd = new Float32Array(br.w * br.h).fill(99);
+  for (const p of polysB) br.fillRings([p.outer, ...p.holes], (i) => { bd[i] = 0; });
+  for (let pass = 0; pass < 2; pass++) for (let k = 0; k < bd.length; k++) {
+    const i = pass ? bd.length - 1 - k : k, r = Math.floor(i / br.w), c = i % br.w, s = pass ? 1 : -1; let d = bd[i]; if (!d) continue;
+    for (const [dc, drow, w] of [[s, 0, 1], [0, s, 1], [s, s, 1.414], [-s, s, 1.414]]) { const cc = c + dc, rr = r + drow; if (cc >= 0 && rr >= 0 && cc < br.w && rr < br.h) d = Math.min(d, bd[rr * br.w + cc] + w); }
+    bd[i] = d;
+  }
+  const bdAt = (x, y) => { const c = Math.floor((x - br.minX) / BG), r = Math.floor((br.maxY - y) / BG); return c >= 0 && r >= 0 && c < br.w && r < br.h ? bd[r * br.w + c] : 99; };
+  // Undescribed land is read, not smeared: a paved apron round every building; then, in built-up areas, clean-edged lawns
+  // and paved courts (old-town back yards are mostly paved, estates mostly lawn) with worn earth where paths cross the
+  // grass; out in open land, dry grass and meadow with scrub. Each patch has a crisp edge and its own surface class.
   for (let r = 0; r < gm.h; r++) {
     const y = maxY - (r + 0.5) * SS;
     for (let c = 0; c < gm.w; c++) {
       const x = minX + (c + 0.5) * SS, xw = x + 2.2 * Math.sin(y / 5.3), yw = y + 2.2 * Math.sin(x / 4.7);
-      const va = villaAt(x, y), g = Math.max(va ? 0.55 + 0.4 * vn(x / 9 + 5, y / 9) : 0, Math.min(1, Math.max(0, (vn(x / 21, y / 21) - 0.35) * 2.2))), e = vn(x / 13 + 17, y / 13 + 5);   // villa gardens: lawn and hedges
-      const k = (0.95 + 0.08 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.97 + 0.06 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
-      const i = (r * gm.w + c) * 3;
-      const o = openAt(x, y), m = vn(x / 31 + 3, y / 31 + 9), sc = Math.min(1, Math.max(0, (vn(xw / 7 + 41, yw / 7) - 0.66) * 3));
-      for (let q = 0; q < 3; q++) {
-        const yard = (EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + (va ? LAWN[q] : GREEN[q]) * g, wild = (DRY[q] * m + MEAD[q] * (1 - m)) * (1 - sc) + SCRUB[q] * sc;
-        gm.data[i + q] = Math.min(255, (yard * (1 - o) + wild * o) * k);
+      const i = (r * gm.w + c) * 3, va = villaAt(x, y), o = openAt(x, y);
+      const k = (0.96 + 0.06 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.98 + 0.04 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
+      const core = Math.hypot(x, y * 1.15) < 2600, d = bdAt(x, y);
+      let col, cl;
+      if (d < 3 + 2.2 * vn(x / 7 + 11, y / 7)) { col = APRON; cl = SURF.calcada; }
+      else if (o > 0.5) {   // open land
+        const m = vn(x / 31 + 3, y / 31 + 9), sc = vn(xw / 7 + 41, yw / 7) > 0.68;
+        col = sc ? SCRUB : m > 0.5 ? DRY : MEAD; cl = SURF.grass;
+      } else {
+        const lawn = va || vn(xw / 17 + 5, yw / 17 + 2) > (core ? 0.7 : 0.5);
+        if (lawn) { const worn = vn(xw / 4.5 + 31, yw / 4.5) > 0.87 && !va; col = worn ? WORN : va ? LAWN : GREEN; cl = worn ? SURF.plain : SURF.grass; }
+        else { col = vn(x / 13 + 17, y / 13 + 5) > 0.86 ? EARTH : PAVED; cl = col === EARTH ? SURF.plain : SURF.calcada; }
       }
-      if ((va ? g : g * (1 - o) + (1 - sc) * 0.5 * o) > 0.6) gcls[i / 3] = SURF.grass;
+      for (let q = 0; q < 3; q++) gm.data[i + q] = Math.min(255, col[q] * k);
+      gcls[i / 3] = cl;
     }
   }
 }
@@ -1947,7 +1967,7 @@ const sorted = roads.filter((r) => ROAD_W[roadKind(r.tags)]).sort((a, b) => ROAD
 const pedestrianish = (k) => ['footway', 'path', 'steps', 'pedestrian', 'cycleway', 'track', 'living_street'].includes(k);
 for (const r of sorted) {   // kerbs/pavement halo first
   const k = roadKind(r.tags);
-  if (!pedestrianish(k)) gm.strokeLine(r.pts, (parseMeters(r.tags.width) ?? ROAD_W[k]) + 2.2, paint(C.calcada));
+  if (!pedestrianish(k)) gm.strokeLine(r.pts, (parseMeters(r.tags.width) ?? ROAD_W[k]) + (k === 'service' ? 2.4 : /^(motorway|trunk)$/.test(k) ? 3 : 5.2), paint(C.calcada));   // the pavements OSM rarely maps: ~2.6 m a side on streets
 }
 for (const r of sorted) {
   const k = roadKind(r.tags);
@@ -2177,7 +2197,9 @@ function detailRoadAt() {
   const { rm, d } = detailRoadR;
   return (x, y) => { const c = Math.floor(rm.px(x)), r = Math.floor(rm.py(y)); return c >= 0 && r >= 0 && c < rm.w && r < rm.h && d[r * rm.w + c] === 1; };
 }
-if (DETAIL) {   // the ground as photographed: dry grass, paving, car parks, paths; buildings lifted out, shadows lightened
+// the aerial photo is no longer draped on the ground (João, 2026-11-26: it always shows squashed buildings and its detail is
+// blurry): every floor is our own reading of the map. PHOTO_GROUND=1 brings it back for comparison.
+if (DETAIL && process.env.PHOTO_GROUND) {
   const buildings = polysB.filter((p) => !p.skip && DETAIL.covers(p.c[0], p.c[1])).map((p) => { const d = DET.get(p.id); const z = LIDAR ? measured(p) : null; return { outer: p.outer, h: d?.h ?? z?.top ?? 0, shift: d?.shift }; }).filter((b) => b.h > 1.5);
   DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt(), ao: groundAO, palette: C, cls: cls1, SURF });
 }

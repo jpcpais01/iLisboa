@@ -418,6 +418,21 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
 #ifdef SURF
     // the surface class rides in the texture's alpha (see SURF in pipeline/build.mjs): the pattern follows what the ground IS,
     // and the colour (map or photo) is left exactly as it is
+    // crisp edges: the map is 0.5 m a texel, so kerbs and lawn edges blur over a metre up close. Where the class changes,
+    // look half a texel either side along the class gradient and put a hard (anti-aliased) edge between the two surfaces.
+    float aR = diffuseColor.a, faR = fwidth(aR);
+    vec2 gUv = dFdx(vMapUv) * dFdx(aR) + dFdy(vMapUv) * dFdy(aR);
+    if (fw < .35 && dot(gUv, gUv) > 1e-14) {
+      vec2 dd = normalize(gUv) * .75 / vec2(textureSize(map, 0));
+      vec4 c1 = textureLod(map, vMapUv + dd, 0.), c0 = textureLod(map, vMapUv - dd, 0.);
+      float dA = c1.a - c0.a;
+      if (abs(dA) > .06) {
+        float f = clamp((aR - c0.a) / dA, 0., 1.), w = clamp(faR / abs(dA), .02, .5), sh = smoothstep(.5 - w, .5 + w, f);
+        float kk = 1. - smoothstep(.15, .35, fw);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(c0.rgb, c1.rgb, sh), kk); diffuseColor.a = mix(aR, mix(c0.a, c1.a, sh), kk);
+        c = diffuseColor.rgb; L = dot(c, vec3(.3, .59, .11));
+      }
+    }
     float sa = diffuseColor.a * 255.;
     float wPave = 1. - smoothstep(14., 24., abs(sa - 255.)), wSett = 1. - smoothstep(14., 22., abs(sa - 215.));
     float wAsph = 1. - smoothstep(14., 22., abs(sa - 175.)), wGrass = 1. - smoothstep(4., 12., abs(sa - 135.));
@@ -479,7 +494,7 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
 float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => `ilisboa-terrain-v8${surf ? 's' : ''}`;
+  m.customProgramCacheKey = () => `ilisboa-terrain-v9${surf ? 's' : ''}`;
   return m;
 }
 
