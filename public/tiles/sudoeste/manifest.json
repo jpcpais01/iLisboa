@@ -57,8 +57,8 @@
     -4175.082414791048,
     -3746.132409592001
    ],
-   "bytes": 98512,
-   "balconies": "bal_2_0.bin",
+   "bytes": 98760,
+   "balconies": null,
    "detail": "d_2_0.glb"
   },
   {
@@ -71,7 +71,7 @@
     -3675.082414791048,
     -3746.132409592001
    ],
-   "bytes": 154156,
+   "bytes": 166340,
    "balconies": "bal_3_0.bin",
    "detail": "d_3_0.glb"
   },
@@ -85,7 +85,7 @@
     -3175.082414791048,
     -3746.132409592001
    ],
-   "bytes": 136604,
+   "bytes": 139112,
    "balconies": "bal_4_0.bin",
    "detail": "d_4_0.glb"
   },
@@ -197,7 +197,7 @@
     -3175.082414791048,
     -3246.132409592001
    ],
-   "bytes": 51404,
+   "bytes": 54276,
    "balconies": null,
    "detail": null
   },
@@ -225,7 +225,7 @@
     -2175.082414791048,
     -3246.132409592001
    ],
-   "bytes": 84756,
+   "bytes": 87048,
    "balconies": "bal_6_1.bin",
    "detail": "d_6_1.glb"
   },
@@ -491,7 +491,7 @@
     -4675.082414791048,
     -1746.1324095920008
    ],
-   "bytes": 303048,
+   "bytes": 312612,
    "balconies": "bal_1_4.bin",
    "detail": "d_1_4.glb"
   },
@@ -631,7 +631,7 @@
     -3675.082414791048,
     -1415.3774698637371
    ],
-   "bytes": 215968,
+   "bytes": 215008,
    "balconies": "bal_3_5.bin",
    "detail": "d_3_5.glb"
   },
@@ -645,7 +645,7 @@
     -3175.082414791048,
     -1415.3774698637371
    ],
-   "bytes": 409792,
+   "bytes": 410332,
    "balconies": "bal_4_5.bin",
    "detail": "d_4_5.glb"
   },
@@ -694,24 +694,24 @@
  ],
  "stats": {
   "authored": 11,
-  "buildings": 1629,
+  "buildings": 1625,
   "lidar": 0,
-  "height": 392,
-  "levels": 352,
+  "height": 393,
+  "levels": 347,
   "estimated": 874,
-  "planar": 1059,
-  "skeleton": 117,
-  "flat": 449,
+  "planar": 1060,
+  "skeleton": 116,
+  "flat": 445,
   "skeletonFail": 0,
   "parts": 48,
-  "skippedOutlines": 8,
-  "partyEdges": 2500,
-  "balconies": 3376,
+  "skippedOutlines": 6,
+  "partyEdges": 2506,
+  "balconies": 3409,
   "statues": 60,
   "wallsM": 6018.181524722037,
   "pillars": 0,
   "chimneys": 1329,
-  "thinParts": 6,
+  "thinParts": 8,
   "dormers": 143,
   "churches": 4,
   "landmarks": 5,
@@ -720,6 +720,7 @@
   "trains": 1,
   "masts": 87,
   "moored": 512,
+  "pierM": 684,
   "ferries": 2,
   "sailboats": 5,
   "miradouros": 0,
@@ -732,14 +733,14 @@
   "lamps": 1829,
   "cars": 1875,
   "water": 0.6697,
-  "bytes": 8813525,
-  "detailTris": 161601,
-  "triangles": 657551
+  "bytes": 8903313,
+  "detailTris": 161055,
+  "triangles": 658850
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:28:38.805Z",
+ "built": "2026-11-26T01:26:56.337Z",
  "far": {
-  "bytes": 362228,
-  "tris": 55966
+  "bytes": 428108,
+  "tris": 55929
  }
 }

@@ -365,7 +365,7 @@
     6175.082414790893,
     -5076.887349320264
    ],
-   "bytes": 299280,
+   "bytes": 299776,
    "balconies": "bal_0_3.bin",
    "detail": "d_0_3.glb"
   },
@@ -477,7 +477,7 @@
     6175.082414790893,
     -4576.887349320264
    ],
-   "bytes": 108912,
+   "bytes": 108980,
    "balconies": "bal_0_4.bin",
    "detail": "d_0_4.glb"
   },
@@ -491,7 +491,7 @@
     6675.082414790893,
     -4576.887349320264
    ],
-   "bytes": 155460,
+   "bytes": 155540,
    "balconies": "bal_1_4.bin",
    "detail": "d_1_4.glb"
   },
@@ -547,7 +547,7 @@
     8675.082414790893,
     -4576.887349320264
    ],
-   "bytes": 79836,
+   "bytes": 88172,
    "balconies": null,
    "detail": null
   },
@@ -659,7 +659,7 @@
     8675.082414790893,
     -4246.132409592001
    ],
-   "bytes": 78312,
+   "bytes": 78396,
    "balconies": "bal_5_5.bin",
    "detail": "d_5_5.glb"
   },
@@ -706,13 +706,13 @@
   "parts": 28,
   "skippedOutlines": 6,
   "partyEdges": 13414,
-  "balconies": 18659,
+  "balconies": 18654,
   "statues": 10,
   "wallsM": 9419.947636746321,
   "pillars": 0,
-  "chimneys": 6388,
+  "chimneys": 6413,
   "thinParts": 3,
-  "dormers": 270,
+  "dormers": 266,
   "churches": 3,
   "landmarks": 9,
   "trams": 0,
@@ -720,6 +720,7 @@
   "trains": 2,
   "masts": 158,
   "moored": 3,
+  "pierM": 114,
   "ferries": 0,
   "sailboats": 0,
   "miradouros": 0,
@@ -731,14 +732,14 @@
   "lamps": 5968,
   "cars": 12167,
   "water": 0.2175,
-  "bytes": 21271519,
-  "detailTris": 663148,
-  "triangles": 1319032
+  "bytes": 21463947,
+  "detailTris": 665038,
+  "triangles": 1321309
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:48:45.867Z",
+ "built": "2026-11-26T01:06:29.566Z",
  "far": {
-  "bytes": 987488,
+  "bytes": 1148184,
   "tris": 117462
  }
 }

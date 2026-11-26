@@ -29,7 +29,7 @@
     -1391.694138263734,
     -915.3774698637371
    ],
-   "bytes": 173132,
+   "bytes": 176564,
    "balconies": "bal_0_0.bin",
    "detail": "d_0_0.glb"
   },
@@ -71,7 +71,7 @@
     108.30586173626602,
     -915.3774698637371
    ],
-   "bytes": 73840,
+   "bytes": 75812,
    "balconies": "bal_3_0.bin",
    "detail": "d_3_0.glb"
   },
@@ -197,7 +197,7 @@
     608.305861736266,
     -415.37746986373713
    ],
-   "bytes": 1001424,
+   "bytes": 1001960,
    "balconies": "bal_4_1.bin",
    "detail": "d_4_1.glb"
   },
@@ -211,7 +211,7 @@
     1108.305861736266,
     -415.37746986373713
    ],
-   "bytes": 509264,
+   "bytes": 513376,
    "balconies": "bal_5_1.bin",
    "detail": "d_5_1.glb"
   },
@@ -725,6 +725,7 @@
   "trains": 19,
   "masts": 143,
   "moored": 0,
+  "pierM": 536,
   "ferries": 4,
   "sailboats": 7,
   "miradouros": 10,
@@ -738,14 +739,14 @@
   "lamps": 6575,
   "cars": 12590,
   "water": 0.2447,
-  "bytes": 45599066,
+  "bytes": 45772110,
   "detailTris": 1328091,
-  "triangles": 2783031
+  "triangles": 2783611
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T00:24:51.314Z",
+ "built": "2026-11-26T01:20:25.511Z",
  "far": {
-  "bytes": 1776256,
+  "bytes": 1939248,
   "tris": 216789
  }
 }

@@ -43,7 +43,7 @@
     2891.6941382635796,
     1915.377469864526
    ],
-   "bytes": 277320,
+   "bytes": 277600,
    "balconies": "bal_1_0.bin",
    "detail": "d_1_0.glb"
   },
@@ -57,7 +57,7 @@
     3391.6941382635796,
     1915.377469864526
    ],
-   "bytes": 83352,
+   "bytes": 83476,
    "balconies": "bal_2_0.bin",
    "detail": "d_2_0.glb"
   },
@@ -141,7 +141,7 @@
     2391.6941382635796,
     2415.3774698645257
    ],
-   "bytes": 361520,
+   "bytes": 361624,
    "balconies": "bal_0_1.bin",
    "detail": "d_0_1.glb"
   },
@@ -169,7 +169,7 @@
     3391.6941382635796,
     2415.3774698645257
    ],
-   "bytes": 202256,
+   "bytes": 199120,
    "balconies": "bal_2_1.bin",
    "detail": "d_2_1.glb"
   },
@@ -281,7 +281,7 @@
     3391.6941382635796,
     2915.3774698645257
    ],
-   "bytes": 250580,
+   "bytes": 250484,
    "balconies": "bal_2_2.bin",
    "detail": "d_2_2.glb"
   },
@@ -533,7 +533,7 @@
     4391.69413826358,
     3915.3774698645257
    ],
-   "bytes": 49672,
+   "bytes": 54776,
    "balconies": null,
    "detail": null
   },
@@ -645,7 +645,7 @@
     4391.69413826358,
     4246.132409592789
    ],
-   "bytes": 37976,
+   "bytes": 51904,
    "balconies": null,
    "detail": null
   },
@@ -700,20 +700,20 @@
   "levels": 218,
   "estimated": 1664,
   "planar": 1121,
-  "skeleton": 122,
-  "flat": 639,
+  "skeleton": 121,
+  "flat": 640,
   "skeletonFail": 0,
   "parts": 224,
   "skippedOutlines": 17,
   "partyEdges": 1708,
-  "balconies": 3541,
+  "balconies": 3478,
   "statues": 13,
   "wallsM": 11483.220390459495,
   "pillars": 0,
-  "chimneys": 1759,
+  "chimneys": 1771,
   "thinParts": 11,
-  "dormers": 85,
   "sawtooth": 7,
+  "dormers": 83,
   "churches": 1,
   "landmarks": 3,
   "trams": 0,
@@ -721,6 +721,7 @@
   "trains": 6,
   "masts": 182,
   "moored": 0,
+  "pierM": 310,
   "ferries": 0,
   "sailboats": 7,
   "miradouros": 0,
@@ -732,14 +733,14 @@
   "lamps": 2759,
   "cars": 4974,
   "water": 0.5871,
-  "bytes": 9463080,
-  "detailTris": 246031,
-  "triangles": 687915
+  "bytes": 9569644,
+  "detailTris": 246589,
+  "triangles": 689277
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:25:22.590Z",
+ "built": "2026-11-26T01:23:41.712Z",
  "far": {
-  "bytes": 407036,
+  "bytes": 492036,
   "tris": 60022
  }
 }

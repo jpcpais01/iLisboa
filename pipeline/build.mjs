@@ -446,9 +446,9 @@ function buildingSpec(p) {
   if (h == null && isFinite(levels)) { h = levels * LEVEL_H + 1.2 + (roofLevels ? 2.8 : 0); src = 'levels'; }
   if (h == null) {
     src = 'estimated';
-    const typed = DEFAULT_H[kind];
+    const typed = kind === 'silo' || t.man_made === 'silo' ? (p.area > 2000 ? 48 : p.area > 300 ? 30 : 16) : DEFAULT_H[kind];   // grain and cement silos stand tall (Trafaria's ~50 m, checked against Earth)
     const small = p.area < 30 || UTILITY.has(kind) || ['garage', 'garages', 'shed', 'kiosk', 'hut', 'roof', 'carport', 'bunker', 'service', 'ruins', 'pillar', 'construction'].includes(kind);
-    const special = ['church', 'cathedral', 'chapel', 'castle', 'tower', 'palace', 'basilica'].includes(kind) || t.amenity === 'place_of_worship';
+    const special = ['church', 'cathedral', 'chapel', 'castle', 'tower', 'palace', 'basilica'].includes(kind) || t.amenity === 'place_of_worship' || kind === 'silo' || t.man_made === 'silo';
     const nb = small || special || t['building:part'] ? null : KNOWN_H(p);
     if (nb != null) { h = nb * (0.94 + u('h') * 0.12); estLevels = Math.max(1, Math.round((h - 1.2) / LEVEL_H)); heightSrc.neighbours++; }   // window rows follow the borrowed storey count
     else { h = typed ?? (p.area < 30 ? 3.5 : p.area < 90 ? 9 + u('h') * 4 : 12.5 + u('h') * 5); heightSrc.guess++; }
@@ -897,7 +897,8 @@ function addBuilding_(p) {
     if (st && st.holes.length && inArea(st.c)) { alvaladeStadium(tileB(...st.c), { ring: st.outer, hole: st.holes[0], ground: groundAt(...st.c), lin, srgb }); mark(); } }
   for (const [id, centre] of BLEACH) { const p = byId.get(id); if (!p || !inArea(p.c)) continue;
     const H = parseMeters(p.tags.height) ?? Math.min(20, Math.max(5, Math.sqrt(Math.abs(p.area)) / 9));
-    if (bleachers(tileB(...p.c), { ring: p.outer, centre, ground: p.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H, lin, srgb })) mark(); }
+    const seat = p.id === 'w265399341' ? '#cdc8bd' : undefined;   // Estádio Nacional (Jamor): bare limestone terraces, no plastic seats (Earth)
+    if (bleachers(tileB(...p.c), { ring: p.outer, centre, ground: p.outer.reduce((a, q) => Math.min(a, groundAt(q[0], q[1])), Infinity), H, seat, lin, srgb })) mark(); }
   { const pl = byId.get('w39735031');   // Pavilhão de Portugal: Siza's concrete pala between its porticoes
     if (pl && inArea(pl.c)) { palaSiza(tileB(...pl.c), { ring: pl.outer, ground: groundAt(...pl.c), lin, srgb }); mark(); } }
   for (const id of ['w240817325', 'w1015870543']) { const tw = byId.get(id);   // São Rafael / São Gabriel crowns
@@ -1130,6 +1131,23 @@ function addBuilding_(p) {
       }
     }
     stats.moored = moorN;
+    // every other mapped pier over open water (Trafaria's grain jetty, the Doca de Pedrouços and Barreiro moles, fishing jetties):
+    // a concrete deck 2.4 m above the water on paired piles; floating ones sit low. The two cacilheiro piers are authored above.
+    const conc = lin(srgb('#bdb8ae')), pile = lin(srgb('#8e8a83')), authoredPiers = [[38.7048156, -9.1458602], [38.7065673, -9.1335673]].map(([la, lo]) => proj.fwd(la, lo));
+    let pierM = 0;
+    for (const w of extractLines(els, proj, (t) => t.man_made === 'pier' && t.area !== 'yes')) {
+      const mid = w.pts[Math.floor(w.pts.length / 2)]; if (inMarina(mid[0], mid[1]) || authoredPiers.some(([x, y]) => Math.hypot(x - mid[0], y - mid[1]) < 120)) continue;
+      const fl = w.tags.floating === 'yes', hw = Math.min(8, Math.max(1.2, (parseMeters(w.tags.width) ?? (fl ? 3 : 5)) / 2)), top = fl ? 0.6 : 2.4;
+      for (let i = 0; i + 1 < w.pts.length; i++) {
+        const a = w.pts[i], b = w.pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+        const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        if (mx < minX || mx > maxX || my < minY || my > maxY || !isWaterAt(mx, my)) continue;
+        box(tileB0(mx, my), mx, my, ux, uy, L / 2 + 0.3, hw, top - (fl ? 0.9 : 0.8), top, conc, I0, PLs); pierM += L;
+        if (!fl) for (let s2 = 4; s2 < L; s2 += 9) for (const sg of [1, -1]) { const x = a[0] + ux * s2 - uy * sg * (hw - 0.8), y = a[1] + uy * s2 + ux * sg * (hw - 0.8);
+          box(tileB0(x, y), x, y, ux, uy, 0.35, 0.35, -2, top - 0.8, pile, I0, PLs); }
+      }
+    }
+    stats.pierM = Math.round(pierM);
   }
   stats.ferries = n; stats.sailboats = sb; log(`ferries ${n} (${moored} moored), sailboats ${sb}`);
 }
@@ -1930,7 +1948,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
 // ─── far level of detail: one file per area, a coarse terrain and a plain block per building for every tile ───
 // Seen from a kilometre or more a building is its silhouette, wall colour and roof colour: that is all this keeps.
 {
-  const FG = 25, FTEX = 160;   // 25 m terrain grid, 160 px (≈3 m) per 500 m tile
+  const FG = 25, FTEX = 256;   // 25 m terrain grid, 256 px (≈2 m) per 500 m tile: roads still read at the horizon
   const simplify = (ring, tol) => {   // Douglas–Peucker on a closed ring
     const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring.slice();
     if (pts.length <= 4) return pts;

@@ -720,6 +720,7 @@
   "trains": 10,
   "masts": 190,
   "moored": 0,
+  "pierM": 0,
   "ferries": 0,
   "sailboats": 7,
   "miradouros": 0,
@@ -731,14 +732,14 @@
   "lamps": 336,
   "cars": 684,
   "water": 0.9445,
-  "bytes": 3359106,
+  "bytes": 3383914,
   "detailTris": 20072,
   "triangles": 387158
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:25:29.409Z",
+ "built": "2026-11-26T01:23:41.903Z",
  "far": {
-  "bytes": 111248,
+  "bytes": 136056,
   "tris": 37062
  }
 }
