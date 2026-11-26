@@ -94,18 +94,24 @@ const tick = () => { progressEl.style.width = `${Math.min(1, ++done / total) * 1
 const url = (a, f) => `/tiles/${a.area}/${f}?v=${encodeURIComponent(a.built)}`;
 const balconyParts = (() => { let g = null; return () => g || (g = (() => { const { slab, rail } = balconyGeometry(); return { slab, rail: mergeGeometries(rail), slabMat: new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 0.8 }), railMat: railingMaterial() }; })()); })();
 const balconyChunks = [];
+const solidRailMat = new THREE.MeshStandardMaterial({ color: 0xeeebe4, roughness: 0.85, side: THREE.DoubleSide });
+// iron balconies (positive width) and modern concrete ones with a solid parapet (negative width, twice as deep)
 function balconies(buf) {
   const d = new Float32Array(buf), n = d.length / 5, B = balconyParts();
-  const a = new THREE.InstancedMesh(B.slab, B.slabMat, n), b = new THREE.InstancedMesh(B.rail, B.railMat, n);
+  let nm = 0; for (let i = 4; i < d.length; i += 5) if (d[i] < 0) nm++;
+  const ni = n - nm;
+  const a = new THREE.InstancedMesh(B.slab, B.slabMat, n), b = new THREE.InstancedMesh(B.rail, B.railMat, Math.max(1, ni)), s = new THREE.InstancedMesh(B.rail, solidRailMat, Math.max(1, nm));
+  b.count = ni; s.count = nm;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Vector3();
-  for (let j = 0, i = 0; j < n; j++, i += 5) {
+  for (let j = 0, i = 0, jb = 0, js = 0; j < n; j++, i += 5) {
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, d[i + 3]);
-    m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(d[i + 4], 1, 1));
-    a.setMatrixAt(j, m); b.setMatrixAt(j, m); c.add(p);
+    const w = d[i + 4], mod = w < 0;
+    m.compose(p.set(d[i], d[i + 1], d[i + 2]), q, sc.set(Math.abs(w), 1, mod ? 2 : 1));
+    a.setMatrixAt(j, m); if (mod) s.setMatrixAt(js++, m); else b.setMatrixAt(jb++, m); c.add(p);
   }
-  a.computeBoundingSphere(); b.computeBoundingSphere();
-  a.castShadow = true; a.receiveShadow = true;
-  const g = new THREE.Group(); g.add(a, b); g.userData.c = c.divideScalar(Math.max(1, n));
+  a.computeBoundingSphere(); b.computeBoundingSphere(); s.computeBoundingSphere();
+  a.castShadow = true; a.receiveShadow = true; s.castShadow = true; s.receiveShadow = true;
+  const g = new THREE.Group(); g.add(a, b, s); g.userData.c = c.divideScalar(Math.max(1, n));
   return g;
 }
 
