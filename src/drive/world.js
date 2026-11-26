@@ -45,7 +45,7 @@ export function createWorld(scene) {
       const next = [];
       todo.length = 0;
       scene.traverse((o) => {
-        if (!o.isMesh || o.isInstancedMesh) return;
+        if (!o.isMesh || o.isInstancedMesh || o.userData.farMerged) return;   // the merged far level (one mesh an area) hides loaded tiles in its shader: the near meshes stand there
         const kind = kindOf(o.name);
         if (!kind || !shown(o)) return;
         const e = entry(o, kind), d = e.box.distanceToPoint(p);

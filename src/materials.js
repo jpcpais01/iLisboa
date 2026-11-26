@@ -318,6 +318,7 @@ export function waterMaterial(mask) {
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    s.fragmentShader = s.fragmentShader.replace('#include <alphamap_fragment>', 'diffuseColor.a *= texture2D(alphaMap, vAlphaMapUv).r;');   // the mask is one channel (R8)
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vWPos; uniform float uTime; uniform float uNight;
@@ -352,7 +353,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   roughnessFactor = clamp(.045 + sqrt(lost) * 1.6 + smoothstep(600., 6000., dist) * .08, .04, .34);
 
   // shore field from the mask's mipmaps (1 = open water at that scale)
-  float s1 = textureLod(alphaMap, vAlphaMapUv, 1.2).g, s2 = textureLod(alphaMap, vAlphaMapUv, 3.8).g, s3 = textureLod(alphaMap, vAlphaMapUv, 6.3).g;
+  float s1 = textureLod(alphaMap, vAlphaMapUv, 1.2).r, s2 = textureLod(alphaMap, vAlphaMapUv, 3.8).r, s3 = textureLod(alphaMap, vAlphaMapUv, 6.3).r;
   float deep = smoothstep(.55, 1., s3) * smoothstep(.7, 1., s2);
   vec3 shallow = vec3(.105, .135, .105), mid = vec3(.045, .095, .105), abyss = vec3(.022, .05, .068);
   vec3 body = mix(shallow, mid, smoothstep(.75, 1., s2));
@@ -465,5 +466,38 @@ float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); 
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
   m.customProgramCacheKey = () => 'ilisboa-terrain-v7';
+  return m;
+}
+
+// Far blocks (one extruded footprint per building, past the mid tier): flat-shaded walls in the façade colour, with the same
+// box-filtered window grid the full buildings fall back to at range (bays ~3.4 m, storeys ~3.1 m, anchored in world space), so
+// the hand-over from full to far keeps rows of windows instead of turning into blank boxes; after dusk a share of them is lit.
+export function farBuildingMaterial() {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
+  m.onBeforeCompile = (s) => {
+    s.uniforms.uNight = cityUniforms.uNight;
+    s.vertexShader = s.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vFW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.)).xyz;');
+    s.fragmentShader = s.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vFW;\n' + BUILDING_GLSL.replace(/varying[^\n]*\n/, ''))
+      .replace('#include <color_fragment>', `#include <color_fragment>
+float glow = 0.;
+{
+  vec3 nW = normalize(cross(dFdx(vFW), dFdy(vFW)));
+  float wall = 1. - smoothstep(.35, .6, abs(nW.y));
+  if (wall > 0.) {
+    vec2 tg = normalize(vec2(-nW.z, nW.x) + 1e-5);
+    float u = dot(vFW.xz, tg) / 3.4, v = vFW.y / 3.1;
+    float fu = fwidth(u), fv = fwidth(v);
+    float win = fpulse(u, .28, .72, fu) * fpulse(v, .3, .86, fv) * wall;
+    float k = .5 + .5 * h21(floor(vFW.xz / 23.) + .37);   // blocks differ: some darker glass, some shuttered
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.13, .15, .18), win * mix(.62, .82, k));
+    glow = .8 * win * mix(step(h21(vec2(floor(u), floor(v)) + floor(vFW.xz / 40.)), .42), .42, smoothstep(.5, 1.5, fu));
+  }
+}`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
+  };
+  m.customProgramCacheKey = () => 'ilisboa-far-buildings-v1';
   return m;
 }

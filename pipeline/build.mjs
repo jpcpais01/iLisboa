@@ -2192,7 +2192,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     addMesh(doc, scene, `ft_${i}_${j}`, { POSITION: [Float32Array.from(pos), 'VEC3'], NORMAL: [Float32Array.from(nrm), 'VEC3'], TEXCOORD_0: [Float32Array.from(uv), 'VEC2'], indices: [Uint32Array.from(idx)] }, gmat);
     farTris += idx.length / 3;
     // buildings: extruded simplified footprints, walls in the façade colour, a flat cap in the roof colour at mid-roof
-    const list = byTile.get(`${i}_${j}`); if (!list) continue;
+    const list = byTile.get(`${i}_${j}`) || [];   // no buildings is no reason to skip: a tile of open river can still carry a bridge
     const P = [], C = [];   // no normals: the viewer shades these flat, so welding can share every corner
     const tri = (a, b, c, col) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) C.push(...col); };
     for (const p of list) {
@@ -2221,10 +2221,15 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
         if (triNormal(a, b, c)[1] < 0) tri(a, c, b, roof); else tri(a, b, c, roof);
       }
     }
-    { const F = FARX.get(`${i}_${j}`); if (F) for (let q = 0; q < F.P.length; q++) { P.push(F.P[q]); C.push(F.C[q]); } }   // the bridges stand at every distance
     if (P.length) {
       addMesh(doc, scene, `fb_${i}_${j}`, { POSITION: [Float32Array.from(P), 'VEC3'], COLOR_0: [Uint8Array.from(C, (v) => Math.round(Math.min(1, v) * 255)), 'VEC3', true] }, bmat);
       farTris += P.length / 9;
+    }
+    // the bridges and the aqueduct stand at every distance: their own mesh, so the viewer draws no windows on them
+    const F = FARX.get(`${i}_${j}`);
+    if (F && F.P.length) {
+      addMesh(doc, scene, `fx_${i}_${j}`, { POSITION: [Float32Array.from(F.P), 'VEC3'], COLOR_0: [Uint8Array.from(F.C, (v) => Math.round(Math.min(1, v) * 255)), 'VEC3', true] }, bmat);
+      farTris += F.P.length / 9;
     }
   }
   const bytes = await writeDoc(doc, path.join(OUT, 'far.glb'));

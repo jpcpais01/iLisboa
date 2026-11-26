@@ -5,7 +5,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { initTouch } from './touch.js';
 import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
+import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
@@ -73,7 +73,6 @@ window.__chase = chase;
 
 // ─── load: the city is several areas of 500 m tiles; tiles stream in and out around the view ───
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-const texLoader = new THREE.TextureLoader();
 const progressEl = document.getElementById('progress');
 const ok = (r) => { if (!r.ok) throw new Error(`${r.status} ${r.url}`); return r; };
 const index = await (await fetch('/tiles/index.json', { cache: 'no-cache' })).json();
@@ -110,13 +109,99 @@ function balconies(buf) {
   return g;
 }
 
+// The water mask (1 m a pixel over a whole area, ~11 Mpx) is one channel: uploaded as R8 it takes 14 MB of video memory instead of
+// the 57 MB an RGBA image costs, and every visible area holds one
+async function loadMask(u) {
+  const bmp = await createImageBitmap(await (await fetch(u).then(ok)).blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  const W = bmp.width, H = bmp.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(bmp, 0, 0); bmp.close?.();
+  const px = cx.getImageData(0, 0, W, H).data, r = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) { const src = (H - 1 - y) * W * 4, dst = y * W; for (let x = 0; x < W; x++) r[dst + x] = px[src + x * 4]; }   // rows bottom-up, as an image texture with flipY
+  cv.width = cv.height = 1;
+  const t = new THREE.DataTexture(r, W, H, THREE.RedFormat, THREE.UnsignedByteType);
+  t.unpackAlignment = 1; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.needsUpdate = true;
+  t.userData.px = W * H / 4;   // (for the memory check: one byte a pixel)
+  return t;
+}
 // every area starts with its water, its skirt and its far level of detail (a coarse terrain and plain blocks per tile)
-const farBuildingMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
 const tileAt = new Map();
+
+// The far level of detail is one draw per area and kind, not ~100 small meshes: every tile's far ground goes into one mesh over an
+// area-wide atlas of its ground images, its far blocks into another, bridges into a third. A tile that is showing its own version
+// is hidden by a per-tile flag the vertex shader reads (its vertices collapse to a point), so nothing is re-uploaded as tiles come
+// and go. Three thousand-odd draw calls become about a hundred, and the per-tile ground images are freed once in the atlas.
+const deq = (g) => {   // meshopt-quantised attributes → float, so geometries can be baked into world space and merged
+  for (const [k, at] of Object.entries(g.attributes)) {
+    if (at.array instanceof Float32Array || k === 'color') continue;
+    const n = at.count, s = at.itemSize, f = new Float32Array(n * s);
+    for (let i = 0; i < n; i++) for (let c = 0; c < s; c++) f[i * s + c] = at.getComponent(i, c);
+    g.setAttribute(k, new THREE.BufferAttribute(f, s));
+  }
+  return g;
+};
+function hideable(mat, U) {   // collapse the vertices of tiles whose flag is set
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
+  mat.onBeforeCompile = (s, r) => {
+    prev.call(mat, s, r); s.uniforms.uHide = U;
+    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTile; uniform vec4 uHide[16];')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n{ int k = int(aTile + .5); if (uHide[k >> 2][k & 3] > .5) transformed = vec3(0.); }');
+  };
+  mat.customProgramCacheKey = () => key + '-hide';
+  return mat;
+}
+const flags = () => ({ value: Array.from({ length: 16 }, () => new THREE.Vector4()) });
+function mergeFar(a, root) {
+  root.updateMatrixWorld(true);
+  const parts = { t: [], b: [], x: [] };
+  for (const o of root.children) {
+    const m = /^f([tbx])_(\d+)_(\d+)$/.exec(o.name);
+    if (!m || !o.isMesh || !tileAt.get(`${a.area}:${m[2]}_${m[3]}`)) continue;
+    parts[m[1]].push({ o, i: +m[2], j: +m[3] });
+  }
+  const ni = Math.max(...a.tiles.map((t) => t.i)) + 1, nj = Math.max(...a.tiles.map((t) => t.j)) + 1;
+  if (ni * nj > 64) throw new Error(`${a.area}: ${ni}×${nj} tiles, the far flags hold 64`);
+  const H = { t: flags(), b: flags(), ni };
+  const bake = ({ o, i, j }, keep) => {
+    const g = deq(o.geometry.clone()); g.applyMatrix4(o.matrixWorld);
+    for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
+    g.setAttribute('aTile', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(i + j * ni), 1));
+    if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
+    return g;
+  };
+  const free = (list) => { for (const { o } of list) { o.geometry.dispose(); const map = o.material.map; if (map) { map.image?.close?.(); map.dispose(); } o.material.dispose(); } };
+  const add = (geo, mat, name) => { const mesh = new THREE.Mesh(geo, mat); mesh.name = name; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.userData.farMerged = true; scene.add(mesh); return mesh; };
+  // ground: lay the tile images out edge to edge (each keeps its own size, so the atlas is simply the area's ground image)
+  if (parts.t.length) {
+    const colW = new Map(), rowH = new Map();
+    const S = isMobile ? 0.5 : 1;   // phones: ~4 m a pixel (a quarter of the video memory); this ground is only seen past ~1 km
+    for (const { o, i, j } of parts.t) { const im = o.material.map.image; colW.set(i, Math.round(im.width * S)); rowH.set(j, Math.round(im.height * S)); }
+    const cols = [...colW.keys()].sort((p, q) => p - q), rows = [...rowH.keys()].sort((p, q) => q - p);   // atlas rows run north → south
+    const x0 = new Map(), y0 = new Map(); let W = 0, Hh = 0;
+    for (const i of cols) { x0.set(i, W); W += colW.get(i); }
+    for (const j of rows) { y0.set(j, Hh); Hh += rowH.get(j); }
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = Hh;
+    const cx = cv.getContext('2d');
+    const geos = parts.t.map((p) => {
+      cx.drawImage(p.o.material.map.image, x0.get(p.i), y0.get(p.j), colW.get(p.i), rowH.get(p.j));
+      const g = bake(p, ['position', 'normal', 'uv']), uv = g.attributes.uv, w = colW.get(p.i), h = rowH.get(p.j);
+      for (let k = 0; k < uv.count; k++) uv.setXY(k, (x0.get(p.i) + uv.getX(k) * w) / W, (y0.get(p.j) + uv.getY(k) * h) / Hh);
+      return g;
+    });
+    const tex = new THREE.CanvasTexture(cv);
+    tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.userData.px = W * Hh; tex.onUpdate = () => { cv.width = cv.height = 1; };   // uploaded: let the canvas go
+    add(mergeGeometries(geos), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t), `ft_${a.area}`);
+    free(parts.t);
+  }
+  if (parts.b.length) { add(mergeGeometries(parts.b.map((p) => bake(p, ['position', 'color']))), hideable(farBuildingMaterial(), H.b), `fb_${a.area}`); free(parts.b); }
+  if (parts.x.length) { add(mergeGeometries(parts.x.map((p) => bake(p, ['position', 'color']))), hideable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), H.b), `fx_${a.area}`); free(parts.x); }
+  a.farHide = H;   // from here on tiles flag themselves
+  for (const t of tiles) if (t.a === a) showFar(t);
+}
 function base(a) {
   if (a.base) return a.base;
   return (a.base = (async () => {
-    a.mask = await texLoader.loadAsync(url(a, 'water.png'));
+    a.mask = await loadMask(url(a, 'water.png'));
     const { minX, minY, maxX, maxY } = a.bounds;
     if (a.stats.water !== 0) {
       const water = new THREE.Mesh(new THREE.PlaneGeometry(maxX - minX, maxY - minY, 1, 1).rotateX(-Math.PI / 2), waterMaterial(a.mask));
@@ -127,14 +212,7 @@ function base(a) {
     loader.loadAsync(url(a, 'base.glb')).then((g) => { g.scene.traverse((o) => { if (o.isMesh) o.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }); }); scene.add(g.scene); }).catch(() => {});
     if (a.far) {
       const g = await loader.loadAsync(url(a, 'far.glb'));
-      for (const o of [...g.scene.children]) {
-        const m = /^f([tb])_(\d+)_(\d+)$/.exec(o.name), t = m && tileAt.get(`${a.area}:${m[2]}_${m[3]}`);
-        if (!t || !o.isMesh) continue;
-        if (m[1] === 't') { const map = o.material.map; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.anisotropy = maxAniso; o.material = terrainMaterial(map, a.mask, a.bounds); }
-        else { o.material = farBuildingMat; }
-        o.receiveShadow = true;
-        (m[1] === 't' ? t.farT : t.farB).push(o); o.visible = m[1] === 't' ? t.mode !== 'full' : t.state !== 2; scene.add(o);
-      }
+      mergeFar(a, g.scene);
     }
   })());
 }
@@ -148,12 +226,14 @@ function wake(a) {
   })());
 }
 
-const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, mode: null, obj: null, bal: null, farT: [], farB: [] })));   // state 0 idle, 1 loading, 2 shown; mode 'full' (own ground) or 'mid' (buildings over the far ground)
+const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, mode: null, obj: null, bal: null })));   // state 0 idle, 1 loading, 2 shown; mode 'full' (own ground) or 'mid' (buildings over the far ground)
 for (const t of tiles) tileAt.set(`${t.a.area}:${t.t.i}_${t.t.j}`, t);
 const areaDist = (a) => rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], controls.target.x, -controls.target.z);
 let farReady = null;   // started once the camera is placed: nearest area first, the loading screen waits only for the one under the view
 const startFar = () => { const order = [...AREAS].sort((p, q) => areaDist(p) - areaDist(q)); farReady = base(order[0]).catch((e) => console.error(e)); (async () => { for (const a of order.slice(1)) await base(a).catch((e) => console.error(e)); })(); };
-const showFar = (t) => { for (const o of t.farT) o.visible = t.state !== 2 || t.mode !== 'full'; for (const o of t.farB) o.visible = t.state !== 2; };
+// a tile's far ground hides under its own full ground; its far blocks hide once its real buildings are in
+const showFar = (t) => { const H = t.a.farHide; if (!H) return; const k = t.t.i + t.t.j * H.ni;
+  H.t.value[k >> 2].setComponent(k & 3, t.state === 2 && t.mode === 'full' ? 1 : 0); H.b.value[k >> 2].setComponent(k & 3, t.state === 2 ? 1 : 0); };
 function adopt(tile, gltf, mode) {
   const { a } = tile, strip = [];
   gltf.scene.traverse((o) => {
@@ -233,7 +313,9 @@ function detail(t, d) {
   }).catch(() => { t.dstate = 0; });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
-const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);   // tiles with their own 0.5 m ground
+// tiles with their own 0.5 m ground (4 MB of video memory each). Phones keep fewer: past ~1 km a phone pixel covers 2 m or more of
+// ground, which the far ground already holds
+const nearR = (dist) => isMobile ? THREE.MathUtils.clamp(dist * 0.25 + 500, 700, 1000) : THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);
 // beyond that, out to ~3× as far, tiles keep their full buildings (window grids, roofs, colours) over the far ground; only past
 // this do the plain far blocks stand in. Phones get 60 % of it.
 const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (isMobile ? 0.6 : 1);
