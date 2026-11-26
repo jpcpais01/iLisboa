@@ -5,6 +5,7 @@
 // While driving, controls.target rides just ahead of the car, so the viewer's tile streaming and shadow fitting
 // follow it with no extra hooks.
 import * as THREE from 'three';
+import { registerAction } from '../layers/registry.js';
 import { createWorld } from './world.js';
 import { createCar } from './physics.js';
 import { createCarModel } from './model.js';
@@ -53,13 +54,11 @@ export function initDrive({ scene, camera, controls, canvas, chase, live, waterY
   let msgT = 0;
   const flash = (t, s = 1.8) => { msgEl.textContent = t; msgEl.classList.add('in'); msgT = s; };
 
-  // the entry button sits with the live-layer toggles
-  const btn = document.createElement('button');
-  btn.type = 'button'; btn.className = 'drive-go'; btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5v-4l1.8-4.6A2 2 0 0 1 8.7 6.6h6.6a2 2 0 0 1 1.9 1.3l1.8 4.6v4"/><path d="M4 12.5h16v4H4z"/><circle cx="7.6" cy="16.8" r="1.6"/><circle cx="16.4" cy="16.8" r="1.6"/></svg><span class="t">Conduzir</span><span class="s"></span>';
-  btn.onclick = () => (active ? exit() : enter());
-  const mount = () => { const nav = document.querySelector('nav.live'); if (nav) nav.appendChild(btn); else document.body.appendChild(btn); };
-  mount();
+  // the entry button sits in the layer dock, next to the live layers
+  const btn = registerAction({
+    id: 'drive', label: 'Conduzir', run: () => (active ? exit() : enter()),
+    icon: '<path d="M5 16.5v-4l1.8-4.6A2 2 0 0 1 8.7 6.6h6.6a2 2 0 0 1 1.9 1.3l1.8 4.6v4"/><path d="M4 12.5h16v4H4z"/><circle cx="7.6" cy="16.8" r="1.6"/><circle cx="16.4" cy="16.8" r="1.6"/>',
+  });
 
   const onKey = (e) => {
     if (!active) return;
@@ -122,7 +121,7 @@ export function initDrive({ scene, camera, controls, canvas, chase, live, waterY
   async function enter() {
     if (active) return;
     active = true; entering = 1.6; waitT = 0;
-    btn.setAttribute('aria-pressed', 'true');
+    btn.setActive(true);
     document.body.classList.add('driving');
     audio.start();
     saved = { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov, near: camera.near };
@@ -146,7 +145,7 @@ export function initDrive({ scene, camera, controls, canvas, chase, live, waterY
   function exit() {
     if (!active) return;
     active = false;
-    btn.setAttribute('aria-pressed', 'false');
+    btn.setActive(false);
     document.body.classList.remove('driving');
     input.detach(); hud.hidden = true; audio.stop();
     scene.remove(model.object);
