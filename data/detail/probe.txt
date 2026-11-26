@@ -1,14 +1,30 @@
 pilot telheiras: 38.752,-9.183 → 38.768,-9.155
 CDD collections: HTTP 200
+  raw: {"status": 200, "message": "OK", "data": {"collections": [{"id": "MDT-50cm", "name": "MDT-50cm", "type": "Collection", "links": [{"rel": "items", "type": "application/geo+json", "href": "https://dgt-be.a.incd.pt:8081/collections/MDT-50cm/items"}, {"rel": "parent", "type": "application/json", "href": "https://dgt-be.a.incd.pt:8081/"}, {"rel": "root", "type": "application/json", "href": "https://dgt-be.a.incd.pt:8081/"}, {"rel": "self", "type": "application/json", "href": "https://dgt-be.a.incd.pt:8081/collections/MDT-50cm"}, {"rel": "items", "href": "https://dgt-be.a.incd.pt:8081/collections/MD
 finer surface collections over the pilot: none
+WMS https://cartografia.dgterritorio.gov.pt/ortos2023/service: HTTP 404 196 B
+WMS https://cartografia.dgterritorio.gov.pt/ortos2021/service: HTTP 200 3383 B
+  layer 'DGT_Ortos2021' — Ortos2021
+  layer 'Ortos2021-RGB' — Ortos2021-RGB
+fetching Ortos2021-RGB from https://cartografia.dgterritorio.gov.pt/ortos2021/service as ortho2021
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+WMS https://cartografia.dgterritorio.gov.pt/ortos2018/service: HTTP 200 3383 B
+  layer 'DGT_Ortos2018' — Ortos2018
+  layer 'Ortos2018-RGB' — Ortos2018-RGB
+fetching Ortos2018-RGB from https://cartografia.dgterritorio.gov.pt/ortos2018/service as ortho2018
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+  tile 0,0: HTTP 200 text/xml; charset=utf-8 '<?xml version="1.0"?>\n<ServiceExceptionReport version="1.3.0"\n  xmlns="http://www.opengis.net/ogc"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://www.opengis.net/'
+WMS https://cartografia.dgterritorio.gov.pt/ortos2024/service: HTTP 404 196 B
+WMS https://cartografia.dgterritorio.gov.pt/ortos2025/service: HTTP 404 9 B
 WMS https://ortos.dgterritorio.gov.pt/wms/ortos2023: HTTP 404 196 B
-WMS https://ortos.dgterritorio.gov.pt/wms/ortos2021: HTTP 404 196 B
-WMS https://ortos.dgterritorio.gov.pt/wms/ortos2018: HTTP 404 196 B
-WMS https://ortos.dgterritorio.gov.pt/wms/ortosat2023: HTTP 200 10541 B
-  layer 'OrtoSat2023' — OrtoSat2023
-  layer 'ortoSat2023-CorVerdadeira' — ortoSat2023-CorVerdadeira
-  layer 'ortoSat2023-FalsaCor' — ortoSat2023-FalsaCor
-fetching ortoSat2023-CorVerdadeira from https://ortos.dgterritorio.gov.pt/wms/ortosat2023
-ortho ortoSat2023-CorVerdadeira: 9722×7124 px in 20 tiles → telheiras_ortho.tif 15 MB
-WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2021: HTTP 404 196 B
+ortho2021: have it
+ortho2018: have it
+orthosat2023: have it
+ortho2021: have it
 WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2023: HTTP 404 196 B
+no new orthophoto
