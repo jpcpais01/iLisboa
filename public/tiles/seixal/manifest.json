@@ -127,7 +127,7 @@
     5675.082414790893,
     -6576.887349320264
    ],
-   "bytes": 92936,
+   "bytes": 92932,
    "balconies": "bal_7_0.bin",
    "detail": "d_7_0.glb"
   },
@@ -225,7 +225,7 @@
     5391.69413826358,
     -6076.887349320264
    ],
-   "bytes": 301800,
+   "bytes": 301440,
    "balconies": "bal_6_1.bin",
    "detail": "d_6_1.glb"
   },
@@ -239,7 +239,7 @@
     5675.082414790893,
     -6076.887349320264
    ],
-   "bytes": 250944,
+   "bytes": 250964,
    "balconies": "bal_7_1.bin",
    "detail": "d_7_1.glb"
   },
@@ -309,7 +309,7 @@
     4391.69413826358,
     -5576.887349320264
    ],
-   "bytes": 79476,
+   "bytes": 79464,
    "balconies": "bal_4_2.bin",
    "detail": "d_4_2.glb"
   },
@@ -337,7 +337,7 @@
     5391.69413826358,
     -5576.887349320264
    ],
-   "bytes": 811616,
+   "bytes": 811624,
    "balconies": "bal_6_2.bin",
    "detail": "d_6_2.glb"
   },
@@ -351,7 +351,7 @@
     5675.082414790893,
     -5576.887349320264
    ],
-   "bytes": 446180,
+   "bytes": 446200,
    "balconies": "bal_7_2.bin",
    "detail": "d_7_2.glb"
   },
@@ -449,7 +449,7 @@
     5391.69413826358,
     -5076.887349320264
    ],
-   "bytes": 176788,
+   "bytes": 176776,
    "balconies": "bal_6_3.bin",
    "detail": "d_6_3.glb"
   },
@@ -463,7 +463,7 @@
     5675.082414790893,
     -5076.887349320264
    ],
-   "bytes": 236640,
+   "bytes": 236676,
    "balconies": "bal_7_3.bin",
    "detail": "d_7_3.glb"
   },
@@ -695,10 +695,10 @@
  "stats": {
   "authored": 2,
   "buildings": 3149,
-  "lidar": 1946,
+  "lidar": 1950,
   "height": 1,
   "levels": 26,
-  "estimated": 1174,
+  "estimated": 1170,
   "planar": 1309,
   "skeleton": 69,
   "flat": 1769,
@@ -706,11 +706,12 @@
   "parts": 22,
   "skippedOutlines": 5,
   "partyEdges": 8061,
-  "balconies": 1546,
+  "balconies": 1543,
   "statues": 3,
   "wallsM": 5209.10854602125,
   "pillars": 0,
-  "chimneys": 1231,
+  "chimneys": 1232,
+  "remainders": 1,
   "sawtooth": 1,
   "churches": 2,
   "dormers": 4,
@@ -726,19 +727,19 @@
   "miradouros": 0,
   "ponte": 0,
   "waterSource": "osm-coastline",
-  "trees": 1420,
+  "trees": 1051,
   "treesMapped": 701,
   "lamps": 983,
   "cars": 1894,
   "water": 0.8473,
-  "bytes": 6302347,
+  "bytes": 6296151,
   "detailTris": 95146,
-  "triangles": 522597
+  "triangles": 522586
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T14:13:03.137Z",
+ "built": "2026-11-26T14:51:04.851Z",
  "far": {
-  "bytes": 349688,
+  "bytes": 349700,
   "tris": 55139
  }
 }

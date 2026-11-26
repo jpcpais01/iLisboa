@@ -365,7 +365,7 @@
     2391.6941382635796,
     584.6225301362629
    ],
-   "bytes": 86800,
+   "bytes": 86788,
    "balconies": "bal_0_3.bin",
    "detail": "d_0_3.glb"
   },
@@ -477,7 +477,7 @@
     2391.6941382635796,
     1084.6225301362629
    ],
-   "bytes": 389412,
+   "bytes": 389436,
    "balconies": "bal_0_4.bin",
    "detail": "d_0_4.glb"
   },
@@ -589,7 +589,7 @@
     2391.6941382635796,
     1415.377469864526
    ],
-   "bytes": 317476,
+   "bytes": 320152,
    "balconies": "bal_0_5.bin",
    "detail": "d_0_5.glb"
   },
@@ -603,7 +603,7 @@
     2891.6941382635796,
     1415.377469864526
    ],
-   "bytes": 105296,
+   "bytes": 105336,
    "balconies": "bal_1_5.bin",
    "detail": "d_1_5.glb"
   },
@@ -694,24 +694,25 @@
  ],
  "stats": {
   "authored": 1,
-  "buildings": 209,
-  "lidar": 189,
+  "buildings": 210,
+  "lidar": 196,
   "height": 2,
   "levels": 3,
-  "estimated": 14,
-  "planar": 132,
-  "skeleton": 16,
-  "flat": 60,
+  "estimated": 8,
+  "planar": 134,
+  "skeleton": 17,
+  "flat": 58,
   "skeletonFail": 0,
   "parts": 168,
-  "skippedOutlines": 16,
-  "partyEdges": 185,
-  "balconies": 824,
+  "skippedOutlines": 15,
+  "partyEdges": 192,
+  "balconies": 775,
   "statues": 0,
   "wallsM": 4792.734140578423,
   "pillars": 0,
-  "chimneys": 141,
-  "thinParts": 21,
+  "chimneys": 138,
+  "remainders": 7,
+  "thinParts": 22,
   "dormers": 16,
   "churches": 1,
   "landmarks": 3,
@@ -727,19 +728,19 @@
   "ponte": 0,
   "hedgeM": 674.5820563060142,
   "waterSource": "osm-coastline",
-  "trees": 404,
+  "trees": 295,
   "treesMapped": 202,
   "lamps": 336,
   "cars": 684,
   "water": 0.9445,
-  "bytes": 3351390,
-  "detailTris": 17638,
-  "triangles": 384893
+  "bytes": 3346882,
+  "detailTris": 17288,
+  "triangles": 384680
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T13:35:19.174Z",
+ "built": "2026-11-26T14:13:02.001Z",
  "far": {
-  "bytes": 136608,
-  "tris": 37062
+  "bytes": 136904,
+  "tris": 37108
  }
 }
