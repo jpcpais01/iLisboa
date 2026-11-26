@@ -31,6 +31,11 @@ def say(*a):
 
 
 WMS = [
+    "https://cartografia.dgterritorio.gov.pt/ortos2023/service",
+    "https://cartografia.dgterritorio.gov.pt/ortos2021/service",
+    "https://cartografia.dgterritorio.gov.pt/ortos2018/service",
+    "https://cartografia.dgterritorio.gov.pt/ortos2024/service",
+    "https://cartografia.dgterritorio.gov.pt/ortos2025/service",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2023",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2021",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2018",
@@ -58,12 +63,12 @@ def wms_layers(s, url):
     return out
 
 
-def wms_fetch(s, url, layer, res_m=0.25):
+def wms_fetch(s, url, layer, res_m=0.25, tag="ortho"):
     """GetMap the pilot box at res_m in EPSG:4326 as 2048 px JPEG tiles, mosaicked into one GeoTIFF."""
     dlat = res_m / 111320.0; dlon = res_m / (111320.0 * np.cos(np.radians((PS + PN) / 2)))
     W = int(round((PE - PW) / dlon)); H = int(round((PN - PS) / dlat))
     T = 2048
-    dst = OUT / f"{PNAME}_ortho.tif"
+    dst = OUT / f"{PNAME}_{tag}.tif"
     ds = gdal.GetDriverByName("GTiff").Create(str(dst), W, H, 3, gdal.GDT_Byte,
                                               ["COMPRESS=JPEG", "JPEG_QUALITY=88", "PHOTOMETRIC=YCBCR", "TILED=YES"])
     ds.SetGeoTransform((PW, dlon, 0, PN, 0, -dlat)); ds.SetProjection("EPSG:4326")
@@ -101,7 +106,8 @@ def cdd_collections(s):
     try:
         r = s.get(SITE + "/dgt-be/v1/collections", timeout=60)
         say(f"CDD collections: HTTP {r.status_code}")
-        cols = r.json().get("collections", [])
+        j = r.json(); say("  raw:", json.dumps(j)[:600])
+        cols = j.get("collections", []) if isinstance(j, dict) else j
     except Exception as e:
         say(f"CDD collections: {type(e).__name__} {e}"); return []
     for c in cols: say(f"  {c.get('id')!r} — {c.get('title')}")
@@ -164,14 +170,16 @@ def main():
             say(f"dsm from {c}: {a.shape[1]}×{a.shape[0]} → {PNAME}_dsm.tif (absolute dm)")
 
     # orthophotos: newest WMS that answers
-    got = None
+    got = []
     for url in WMS:
+        tag = "ortho" + (re.search(r"(sat)?20\d\d", url).group(0) if re.search(r"(sat)?20\d\d", url) else "")
+        if (OUT / f"{PNAME}_{tag}.tif").exists() or any(g.endswith(tag) for g in got): say(f"{tag}: have it"); continue
         layers = wms_layers(s, url)
-        if not layers or got: continue
+        if not layers: continue
         pick = next((l for l in layers if re.search(r"rgb|cor.?verdadeira|true", l, re.I)), layers[-1])
-        say(f"fetching {pick} from {url}")
-        got = wms_fetch(s, url, pick)
-    if not got: say("no orthophoto service answered")
+        say(f"fetching {pick} from {url} as {tag}")
+        if wms_fetch(s, url, pick, tag=tag): got.append(tag)
+    if not got: say("no new orthophoto")
     (OUT / "probe.txt").write_text("\n".join(log) + "\n")
 
 
