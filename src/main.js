@@ -39,6 +39,7 @@ const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 3000
 const Q = new URLSearchParams(location.search);
 const sky = createSky(renderer, scene, { mobile: isMobile });
 if (Q.has('clouds')) sky.clouds = +Q.get('clouds');
+if (Q.get('tm')) renderer.toneMapping = { neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping }[Q.get('tm')];
 
 // The sun casts two shadow cascades: a sharp map around the view (follows it closely) and a wide, coarse one out to the
 // horizon (re-drawn only every few hundred metres of travel or when the sun moves), so the far city keeps its form at a
@@ -262,7 +263,7 @@ function adopt(tile, gltf, mode) {
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
       map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
-      o.material = terrainMaterial(map, a.mask, a.bounds);
+      o.material = terrainMaterial(map, a.mask, a.bounds, !!a.surf);
       o.receiveShadow = true; o.castShadow = true; bigCaster(o);   // hills shade the valleys at a low sun (back faces only: no acne)
     }
   });
@@ -599,7 +600,10 @@ function setTime(h, now = false) {
     sunLit = sun.intensity * Math.max(sun.color.r, sun.color.g, sun.color.b) > 1e-3;   // (never toggle .visible: a light count change recompiles every shader)
     // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
     const E = Math.max(0, Math.max(sunDir.y, 0) * (st.sunColor.r + st.sunColor.g * 2 + st.sunColor.b) / 4 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.16, 0.45) + 0.02);
-    renderer.toneMappingExposure = EXPOSURE * THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night));
+    // in daylight the exposure is photographic: a sunlit horizontal albedo comes out of ACES as itself (E is ~3.95× the
+    // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain), so photos and measured colours read true instead
+    // of ~2.5× brighter and milky. Dusk and night keep the eye's partial adaptation (the min hands over smoothly).
+    renderer.toneMappingExposure = EXPOSURE * Math.min(1.71 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
     scene.environmentIntensity = 1;
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);

@@ -1833,17 +1833,26 @@ const VR = new Raster(minX - 40, minY - 40, maxX + 40, maxY + 40, 4), villaF = n
   for (const p of polysB) if (isVilla(p) && bigNear(...p.c) < 4000) VR.disc(p.c[0], p.c[1], 16 + Math.sqrt(Math.abs(p.area)) * 0.5, (i) => { villaF[i] = 1; });
 }
 const villaAt = (x, y) => { const c = Math.floor(VR.px(x)), r = Math.floor(VR.py(y)); return c >= 0 && r >= 0 && c < VR.w && r < VR.h && villaF[r * VR.w + c] === 1; };
+// Albedos as the DGT 25 cm photo actually sees them (median of clean, unshadowed open ground per class over Telheiras,
+// CALIB=1 logs them; ~30–60 % darker than the old pastel palette, which is what made every floor look milky)
 const C = {
-  ground: srgb('#d0c8b9'), calcada: srgb('#d6d0c4'), asphalt: srgb('#85827e'), road_edge: srgb('#c9c2b5'),
-  park: srgb('#98b774'), grass: srgb('#a7c184'), wood: srgb('#7fa465'), pitch: srgb('#87b871'), turf: srgb('#5f9452'), tartan: srgb('#b5644e'), court: srgb('#5b87a0'), hardcourt: srgb('#a9aaa4'), clay: srgb('#c27a52'), sand: srgb('#e3cf9f'),
-  parking: srgb('#b7b2aa'), rail: srgb('#4f4b47'), ballast: srgb('#9a9186'), setts: srgb('#76736e'), tramRail: srgb('#c4c1ba'), yard: srgb('#b3aa9d'), platform: srgb('#d9d3c8'), water: srgb('#4c8296'), cemetery: srgb('#cdc6b6'), rough: srgb('#a3b07c'), pond: srgb('#5d93a3'), pier: srgb('#b8aa94'), plaza: srgb('#e4ddce'),
+  ground: srgb('#96918b'), calcada: srgb('#a0998f'), asphalt: srgb('#68696a'), road_edge: srgb('#a0998f'),
+  park: srgb('#647054'), grass: srgb('#686e56'), wood: srgb('#54624e'), pitch: srgb('#5c7c50'), turf: srgb('#4e7646'), tartan: srgb('#a05846'), court: srgb('#4c7086'), hardcourt: srgb('#80807e'), clay: srgb('#aa6c4c'), sand: srgb('#beb08c'),
+  parking: srgb('#8c8985'), rail: srgb('#4f4b47'), ballast: srgb('#7c776e'), setts: srgb('#767471'), tramRail: srgb('#969490'), yard: srgb('#8a8378'), platform: srgb('#9e9891'), water: srgb('#4c8296'), cemetery: srgb('#8c8780'), rough: srgb('#767562'), pond: srgb('#5d93a3'), pier: srgb('#807a70'), plaza: srgb('#a29c93'),
 };
-const paint = (col) => (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; };
+// surface class beside the colour (the ground texture's alpha): tells the terrain shader which close-up surface to draw —
+// limestone calçada, granite setts, asphalt, grass, or plain ground — whatever colour the map or the photo gives it. Codes
+// are spaced so that bilinear filtering between neighbours lands on a harmless code (asphalt|calçada → setts: a kerb).
+const SURF = { calcada: 255, setts: 215, asphalt: 175, grass: 135, plain: 128 };
+const surfOf = new Map([[C.calcada, SURF.calcada], [C.plaza, SURF.calcada], [C.platform, SURF.calcada], [C.road_edge, SURF.calcada], [C.setts, SURF.setts], [C.asphalt, SURF.asphalt], [C.parking, SURF.asphalt], [C.hardcourt, SURF.asphalt],
+  [C.park, SURF.grass], [C.grass, SURF.grass], [C.wood, SURF.grass], [C.pitch, SURF.grass], [C.rough, SURF.grass]]);
+const gcls = new Uint8Array(gm.w * gm.h).fill(SURF.plain);
+const paint = (col) => { const k = surfOf.get(col) ?? (col[1] > col[0] + 6 && col[1] > col[2] + 6 ? SURF.grass : SURF.plain); return (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; gcls[i] = k; }; };
 let openAtG = null;   // set by the ground pass below: how far a point is from anything built (0 near buildings … 1 open land)
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
 // earth and cement drifting into each other over ~20 m, with plot-sized (≈6 m) shifts in value — not one pale fill, not camouflage
 {
-  const GREEN = srgb('#99a07c'), EARTH = srgb('#a99c84'), CEMENT = srgb('#aba79e');
+  const GREEN = srgb('#70765a'), EARTH = srgb('#7e7462'), CEMENT = srgb('#827f78');   // measured: undescribed yards read ~0.74× the old fill
   const hh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
   const vn = (x, y) => { const i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
     return (hh(i, j) * (1 - fx) + hh(i + 1, j) * fx) * (1 - fy) + (hh(i, j + 1) * (1 - fx) + hh(i + 1, j + 1) * fx) * fy; };
@@ -1864,7 +1873,7 @@ let openAtG = null;   // set by the ground pass below: how far a point is from a
     const d = (dist[i] * (1 - u) + dist[i + 1] * u) * (1 - v) + (dist[i + dr.w] * (1 - u) + dist[i + dr.w + 1] * u) * v;
     const t = Math.min(1, Math.max(0, (d - 16) / 26)); return t * t * (3 - 2 * t); };
   openAtG = openAt;
-  const DRY = srgb('#b4ad84'), MEAD = srgb('#9ea472'), SCRUB = srgb('#8a9463'), LAWN = srgb('#8fa86c');
+  const DRY = srgb('#868062'), MEAD = srgb('#727854'), SCRUB = srgb('#646c48'), LAWN = srgb('#687c4e');
   for (let r = 0; r < gm.h; r++) {
     const y = maxY - (r + 0.5) * SS;
     for (let c = 0; c < gm.w; c++) {
@@ -1877,6 +1886,7 @@ let openAtG = null;   // set by the ground pass below: how far a point is from a
         const yard = (EARTH[q] * e + CEMENT[q] * (1 - e)) * (1 - g) + (va ? LAWN[q] : GREEN[q]) * g, wild = (DRY[q] * m + MEAD[q] * (1 - m)) * (1 - sc) + SCRUB[q] * sc;
         gm.data[i + q] = Math.min(255, (yard * (1 - o) + wild * o) * k);
       }
+      if ((va ? g : g * (1 - o) + (1 - sc) * 0.5 * o) > 0.6) gcls[i / 3] = SURF.grass;
     }
   }
 }
@@ -2095,6 +2105,7 @@ const GW = Math.round((maxX - minX) / 0.5), GH = Math.round((maxY - minY) / 0.5)
 let groundAO = null;   // the baked contact darkening, kept so the photo ground can paint without it
 let ground1 = await sharp(Buffer.from(gm.data.buffer), { raw: { width: gm.w, height: gm.h, channels: 3 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'lanczos3' }).raw().toBuffer();
 gm.data = null;
+const cls1 = await sharp(Buffer.from(gcls.buffer), { raw: { width: gm.w, height: gm.h, channels: 1 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'nearest' }).raw().toBuffer();
 {
   const bm = new Raster(minX, minY, maxX, maxY, (maxX - minX) / GW);
   const mask = new Float32Array(bm.w * bm.h);
@@ -2126,7 +2137,7 @@ function detailRoadAt() {
 }
 if (DETAIL) {   // the ground as photographed: dry grass, paving, car parks, paths; buildings lifted out, shadows lightened
   const buildings = polysB.filter((p) => !p.skip && DETAIL.covers(p.c[0], p.c[1])).map((p) => { const d = DET.get(p.id); const z = LIDAR ? measured(p) : null; return { outer: p.outer, h: d?.h ?? z?.top ?? 0, shift: d?.shift }; }).filter((b) => b.h > 1.5);
-  DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt(), ao: groundAO });
+  DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt(), ao: groundAO, palette: C, cls: cls1, SURF });
 }
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
@@ -2413,6 +2424,7 @@ const cars = [];
 }
 const manifest = {
   area: AREA, origin: { lat: lat0, lon: lon0 }, bbox: { S, W, N, E }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
+  surf: 1,   // ground textures carry the surface class in alpha
   tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3, cars: cars.length / 6 },
   attribution: '© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus',
   built: new Date().toISOString(),
@@ -2426,7 +2438,9 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   const py0 = Math.round(((maxY - y1) / (maxY - minY)) * GH), py1 = Math.round(((maxY - y0) / (maxY - minY)) * GH);
   const tw = Math.max(16, Math.round((TEX_PX * (x1 - x0)) / 1000)), th = Math.max(16, Math.round((TEX_PX * (y1 - y0)) / 1000));   // TEX_PX per km
   const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } })
-    .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).sharpen({ sigma: 0.7, m1: 0.6, m2: 1.4 }).webp({ quality: 80, effort: 6 }).toBuffer();
+    .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).sharpen({ sigma: 0.7, m1: 0.6, m2: 1.4 }).raw().toBuffer()
+    .then(async (rgb) => sharp(rgb, { raw: { width: tw, height: th, channels: 3 } }).joinChannel(await sharp(cls1, { raw: { width: GW, height: GH, channels: 1 } }).extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'nearest' }).raw().toBuffer(), { raw: { width: tw, height: th, channels: 1 } })
+      .webp({ quality: 80, alphaQuality: 100, effort: 6 }).toBuffer());
   doc.createExtension(EXTTextureWebP).setRequired(true);
   const tex = doc.createTexture('ground').setImage(webp).setMimeType('image/webp');
   const gmat = doc.createMaterial('ground').setBaseColorTexture(tex).setRoughnessFactor(1).setMetallicFactor(0);

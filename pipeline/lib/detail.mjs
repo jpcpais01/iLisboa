@@ -259,7 +259,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
   // from the survey, not from the map: every cell over 2.2 m that is not leaves, swept along the photo's lean from its foot to
   // where its top appears, so roofs, walls and unmapped sheds all leave the ground (a squashed roof on the pavement otherwise).
   // The hole is filled with the photo's colour from around it over the painted ground's own texture (kerbs, paving, grass).
-  const ground = ({ ground1, GW, GH, buildings, Raster, roadAt = () => false, ao = null }) => {
+  const ground = ({ ground1, GW, GH, buildings, Raster, roadAt = () => false, ao = null, palette = null, cls = null, SURF = null }) => {
     const mpp = (maxX - minX) / GW, N = GW * GH;
     const cov = new Uint8Array(N), out = new Float32Array(N * 3), mask = new Uint8Array(N);
     const mark = (x, y) => { const c = Math.floor((x - minX) / mpp), r = Math.floor((maxY - y) / mpp); if (c >= 0 && r >= 0 && c < GW && r < GH) mask[r * GW + c] = 1; };
@@ -268,25 +268,17 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
       const [dx, dy] = b.shift || [leanAt(b.outer[0][0], b.outer[0][1])[0] * b.h, leanAt(b.outer[0][0], b.outer[0][1])[1] * b.h];
       for (let t = 0; t <= 1.0001; t += 0.125) R.fillRings([b.outer.map(([x, y]) => [x + dx * t, y + dy * t])], (i) => { mask[i] = 1; });
     }
-    let nSurv = 0;
-    if (fines.length) for (let y = minY + mpp / 2; y < maxY; y += mpp) for (let x = minX + mpp / 2; x < maxX; x += mpp) {
-      const z = fine(x, y); if (!(z > 2.2) || !covers(x, y) || roadAt(x, y)) continue;   // bridges and overpasses keep their road
-      const [lx, ly] = leanAt(x, y), c = rgb(x + lx * z, y + ly * z);
-      if (c && 2 * c[1] - c[0] - c[2] > 4) continue;   // leaves: a tree stays in the photo, under its own 3D tree
-      const c0 = rgb(x, y); if (c0 && 2 * c0[1] - c0[0] - c0[2] > 4 && z < 14) continue;   // its crown seen straight down
-      const L = Math.hypot(lx, ly) * z, n = Math.ceil(L / (mpp * 0.7)) + 1;
-      for (let k = 0; k <= n; k++) mark(x + (lx * z * k) / n, y + (ly * z * k) / n);
-      nSurv++;
-    }
-    { // dilate by 2.5 m: roof edges, eaves, balconies and the dark foot of each façade bleed in the photo
-      const d = Math.round(2.5 / mpp);
+    // (the survey is not swept cell by cell any more: every tree, car and lamp over 2.2 m became a hole, and holes merged
+    // into whole erased blocks. Only the mapped buildings leave, along their measured lean, plus 1 m for eaves and blur.)
+    const nSurv = 0;
+    { const d = Math.round(1 / mpp);
       for (let pass = 0; pass < d; pass++) { const m2 = mask.slice(); for (let r = 1; r < GH - 1; r++) for (let c = 1; c < GW - 1; c++) { const i = r * GW + c; if (mask[i]) continue; if (mask[i - 1] || mask[i + 1] || mask[i - GW] || mask[i + GW]) m2[i] = 1; } mask.set(m2); }
     }
     const sh = new Float32Array(N);
     for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) sh[r * GW + c] = shadowAt(minX + (c + 0.5) * mpp, maxY - (r + 0.5) * mpp);
     for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) {
       const i = r * GW + c, x = minX + (c + 0.5) * mpp, y = maxY - (r + 0.5) * mpp, q = rgb(x, y);
-      if (!q) continue; cov[i] = 1; out[i * 3] = q[0]; out[i * 3 + 1] = q[1]; out[i * 3 + 2] = q[2];
+      if (!q) continue; cov[i] = 1; out[i * 3] = q[0] * 1.01; out[i * 3 + 1] = q[1]; out[i * 3 + 2] = q[2] * 0.96;   // the survey's slight blue cast (grey paving reads B > R)
     }
     if (P.sun) {
       const ratio_ = ratio();
@@ -297,34 +289,59 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
         for (let k = 0; k < 3; k++) out[i * 3 + k] *= 1 + (ratio_[k] - 1) * w * 0.95;
       }
     }
-    // the photo's tone in the toned space, the painted ground's texture at the same scale, both pushed into the hole
+    // The photo goes in as photographed: no gamma lift or saturation push (the renderer's exposure is calibrated so a sunlit
+    // albedo comes out as itself, so any lift here is what made the floor milky). Where something stood up, the hole is filled
+    // with the ground just outside it: only clean ground (2 m clear of the hole, not in shadow) is pulled in, pyramid
+    // push-pull, so a pavement stays pavement and a lawn stays lawn and no façade or shadow colour can bleed into it. The
+    // painted ground (kerbs, paving, lawn from the map) lends only its fine texture, as a luminance ratio to its own 6 m mean.
     const g0 = new Float32Array(N * 3); for (let i = 0; i < N * 3; i++) g0[i] = ground1[i];
-    const gna = new Float32Array(N * 3); for (let i = 0; i < N * 3; i++) gna[i] = ao ? ground1[i] / Math.max(0.5, ao[(i / 3) | 0]) : ground1[i];   // painted ground without its baked halo
-    const gp = g0.slice();
-    for (let i = 0; i < N; i++) if (cov[i]) { const t = tone([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]], 1.12); out[i * 3] = t[0]; out[i * 3 + 1] = t[1]; out[i * 3 + 2] = t[2]; }
-    // the hole is NOT refilled from the photo around it (that smeared façades and shadows into building-shaped blotches):
-    // it takes the painted ground (paving, lawn, kerbs from the map), toned only at a 60 m scale towards the photo's
-    // open ground, and the photo fades into it over 3 m so no edge or fringe of a building survives on the floor
-    const open = new Uint8Array(N); for (let i = 0; i < N; i++) open[i] = cov[i] && !mask[i] && !(sh[i] > 0.3) ? 1 : 0;
-    const big = Math.round(30 / mpp), pm = new Float32Array(N * 3), gm = new Float32Array(N * 3);
-    for (let k = 0; k < 3; k++) {
-      const a = new Float32Array(N), b = new Float32Array(N), w = new Float32Array(N);
-      for (let i = 0; i < N; i++) if (open[i]) { a[i] = out[i * 3 + k]; b[i] = gna[i * 3 + k]; w[i] = 1; }
-      const A = boxBlur1(a, GW, GH, big), B = boxBlur1(b, GW, GH, big), Wt = boxBlur1(w, GW, GH, big);
-      for (let i = 0; i < N; i++) { pm[i * 3 + k] = Wt[i] > 0.02 ? A[i] / Wt[i] : gna[i * 3 + k]; gm[i * 3 + k] = Wt[i] > 0.02 ? B[i] / Wt[i] : gna[i * 3 + k]; }
-    }
     const notMask = new Uint8Array(N); for (let i = 0; i < N; i++) notMask[i] = mask[i] ? 0 : 1;
-    const fromHole = distToZero(notMask, GW, GH, Math.ceil(3 / mpp));
+    const fromHole = distToZero(notMask, GW, GH, Math.ceil(2 / mpp));
+    const clean = new Uint8Array(N); for (let i = 0; i < N; i++) clean[i] = cov[i] && fromHole[i] >= 1 / mpp ? 1 : 0;
+    const fill = out.slice(); pushPull(fill, clean, new Uint8Array(N), GW, GH);
+    if (process.env.DUMP_GROUND) {   // debugging: the masks as images over the area
+      const d = process.env.DUMP_GROUND, img = Buffer.alloc(N * 3);
+      for (let i = 0; i < N; i++) { img[i * 3] = mask[i] ? 255 : 0; img[i * 3 + 1] = clean[i] ? 255 : 0; img[i * 3 + 2] = sh[i] > 0.3 ? 255 : 0; }
+      const fz = Buffer.alloc(N * 3); for (let i = 0; i < N; i++) { const z = fine(minX + ((i % GW) + 0.5) * mpp, maxY - (Math.floor(i / GW) + 0.5) * mpp); fz[i * 3] = fz[i * 3 + 1] = fz[i * 3 + 2] = Number.isFinite(z) ? clamp(z * 8, 0, 255) : 0; if (!Number.isFinite(z)) fz[i * 3] = 255; }
+      sharp(img, { raw: { width: GW, height: GH, channels: 3 } }).png().toFile(`${d}/mask.png`); sharp(fz, { raw: { width: GW, height: GH, channels: 3 } }).png().toFile(`${d}/ndsm.png`);
+    }
+    if (palette && process.env.CALIB) {   // what each painted class really looks like in the photo (clean open ground only)
+      const names = Object.keys(palette), acc = {};
+      for (let i = 0; i < N; i += 3) { if (!clean[i]) continue;
+        const a = ao ? Math.max(0.5, ao[i]) : 1, q = [0, 1, 2].map((k) => g0[i * 3 + k] / a); let best = null, bd = 1e9;
+        for (const nm of names) { const c = palette[nm]; const d = (q[0] - c[0]) ** 2 + (q[1] - c[1]) ** 2 + (q[2] - c[2]) ** 2; if (d < bd) { bd = d; best = nm; } }
+        if (bd > 14 * 14 * 3) continue; (acc[best] ||= [[], [], []]).forEach((arr, k) => arr.push(out[i * 3 + k])); }
+      for (const [nm, a] of Object.entries(acc)) { const m = a.map((arr) => { arr.sort((x, y) => x - y); return arr[arr.length >> 1]; }); log(`CALIB ${nm} n=${a[0].length} painted ${palette[nm].map(Math.round)} photo ${m.map(Math.round)} p25L ${Math.round(a[0][a[0].length >> 2])} p75L ${Math.round(a[0][(a[0].length * 3) >> 2])}`); }
+    }
+    // a hole is mostly the strip where the photo saw a leaning wall: the ground there is like the ground just beyond it, so it
+    // is filled by reflection across the hole's edge (paving, kerbs, parked cars and grass continue with their real texture,
+    // no blur). Nearest clean pixel by vector distance transform; the mirror image must itself be clean, else push-pull.
+    const mir = new Int32Array(N).fill(-1);
+    { const nx = new Int32Array(N).fill(-1), ny = new Int32Array(N).fill(-1), dd = new Float32Array(N).fill(1e9);
+      for (let i = 0; i < N; i++) if (clean[i]) { nx[i] = i % GW; ny[i] = (i / GW) | 0; dd[i] = 0; }
+      const relax = (i, j, x, y) => { if (nx[j] < 0) return; const d = (nx[j] - x) ** 2 + (ny[j] - y) ** 2; if (d < dd[i]) { dd[i] = d; nx[i] = nx[j]; ny[i] = ny[j]; } };
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { const i = y * GW + x; if (x) relax(i, i - 1, x, y); if (y) { relax(i, i - GW, x, y); if (x) relax(i, i - GW - 1, x, y); if (x < GW - 1) relax(i, i - GW + 1, x, y); } }
+      for (let y = GH - 1; y >= 0; y--) for (let x = GW - 1; x >= 0; x--) { const i = y * GW + x; if (x < GW - 1) relax(i, i + 1, x, y); if (y < GH - 1) { relax(i, i + GW, x, y); if (x < GW - 1) relax(i, i + GW + 1, x, y); if (x) relax(i, i + GW - 1, x, y); } }
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { const i = y * GW + x; if (clean[i] || nx[i] < 0 || dd[i] > (14 / mpp) ** 2) continue;
+        const mx = 2 * nx[i] - x, my = 2 * ny[i] - y; if (mx < 0 || my < 0 || mx >= GW || my >= GH) continue; const j = my * GW + mx; if (clean[j]) mir[i] = j; }
+    }
+    const gl = new Float32Array(N); for (let i = 0; i < N; i++) gl[i] = (ao ? 1 / Math.max(0.5, ao[i]) : 1) * (g0[i * 3] * 0.3 + g0[i * 3 + 1] * 0.59 + g0[i * 3 + 2] * 0.11);
+    const glm = boxBlur1(gl, GW, GH, Math.round(3 / mpp));
     const edgeD = distToZero(cov, GW, GH, Math.ceil(25 / mpp));
     let n = 0, nm = 0;
     for (let i = 0; i < N; i++) {
       if (!cov[i]) continue;
-      const f = clamp(edgeD[i] / (25 / mpp), 0, 1), ph = mask[i] ? 0 : clamp(fromHole[i] / (3 / mpp), 0, 1);
-      const rr = [0, 1, 2].map((k) => clamp(pm[i * 3 + k] / Math.max(4, gm[i * 3 + k]), 0.7, 1.3)), rm = (rr[0] + rr[1] + rr[2]) / 3;   // brightness follows the photo, hue only halfway (no purple cast)
+      const f = clamp(edgeD[i] / (25 / mpp), 0, 1), ph = mask[i] ? 0 : clamp(fromHole[i] / (2 / mpp), 0, 1);
+      const hp = clamp(gl[i] / Math.max(4, glm[i]), 0.8, 1.2);
       for (let k = 0; k < 3; k++) {
-        const paint = gna[i * 3 + k] * (rm + (rr[k] - rm) * 0.5);
-        const v = out[i * 3 + k] * ph + paint * (1 - ph);
-        ground1[i * 3 + k] = g0[i * 3 + k] * (1 - f) + v * f;
+        const v = out[i * 3 + k] * ph + (mir[i] >= 0 ? out[mir[i] * 3 + k] : fill[i * 3 + k] * hp) * (1 - ph);
+        ground1[i * 3 + k] = clamp(g0[i * 3 + k] * (1 - f) + v * f, 0, 255);
+      }
+      // ground the map leaves undescribed takes its close-up surface from what the photo shows: grey and light is paving,
+      // grey and dark is asphalt, green is grass (the map's own classes stand)
+      if (cls && SURF && cls[i] === SURF.plain && f > 0.5) {
+        const r = ground1[i * 3], g = ground1[i * 3 + 1], b = ground1[i * 3 + 2], L = r * 0.3 + g * 0.59 + b * 0.11, sat = Math.max(r, g, b) - Math.min(r, g, b);
+        cls[i] = g > r + 5 && g > b + 3 ? SURF.grass : sat < 24 && L > 128 ? SURF.calcada : sat < 18 && L < 100 ? SURF.asphalt : SURF.plain;
       }
       n++; if (mask[i]) nm++;
     }
