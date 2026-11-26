@@ -323,7 +323,7 @@
     8675.082414790893,
     84.62253013626287
    ],
-   "bytes": 69552,
+   "bytes": 69548,
    "balconies": null,
    "detail": "d_5_2.glb"
   },
@@ -728,12 +728,12 @@
   "lamps": 160,
   "cars": 342,
   "water": 0.7339,
-  "bytes": 3057933,
+  "bytes": 3057929,
   "detailTris": 516,
   "triangles": 340741
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T05:44:26.331Z",
+ "built": "2026-11-26T14:02:04.483Z",
  "far": {
   "bytes": 146508,
   "tris": 34316

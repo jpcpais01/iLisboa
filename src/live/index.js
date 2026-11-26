@@ -133,7 +133,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase })
     update(_dt, now) {
       const dt = Math.min(0.5, last ? (now - last) / 1000 : 0); last = now;
       const any = layers.traffic.on || layers.transit.on || layers.planes.on;
-      if (!any) return;
+      if (!any) { if (chase.busy) ground.scan(now); return; }   // drive mode follows with every layer off: still needs the ground
       ground.scan(now);
       // on-screen widths: metres per CSS pixel at unit distance
       ribbonUniforms.uPx.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, canvas.clientHeight);
