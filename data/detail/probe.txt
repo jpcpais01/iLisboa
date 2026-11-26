@@ -23,59 +23,39 @@ CDD collections: HTTP 200
   'ACORES-MDS-10' — Modelo digital de Superfície Açores 10 m - MDS, apenas cobertura do arquipélago dos Açores
   'ACORES-MDE-10' — Modelo digital de Elevação Açores 10 m - MDE, apenas cobertura do arquipélago dos Açores
   MDT-50cm: 12 items over the pilot; first MDT-50cm-110201-07-2024 {"bands": [{"band": 1, "type": "Float32", "block": [2000, 1], "metadata": {}, "noDataValue": -999, "colorInterpretation": "Gray"}], "version": "01", "datetime": "2025-07-16T05:33:00Z", "file:size": 16012379, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSE
-      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/de17975f00db06e874c477d960bc4f4d2df69b8128734f3aa6d8ab115d6fe19f
+      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/24dbed5d11df6127730aecf927baee0d9670e437c87c3030d2492951b022a009
   MDT-2m: 12 items over the pilot; first MDT-2m-111201-07-2024 {"version": "01", "datetime": "2024-09-26T00:00:00Z", "eo:bands": [{"name": "B01", "type": "Float32", "block": [500, 4], "metadata": {}, "noDataValue": -999, "colorInterpretation": "Gray"}], "file:size": 1001129, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n       
-      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/cadf61d5e1fa2ad265a0d95f44a6081fdc5aae1f3b429602eed3ff48a1ed0afc
+      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/9dce49cf0a858b730f7781ca0d6a60eaa86a18a397037d3d6cd48b7b386e354a
   MDS-50cm: 12 items over the pilot; first MDS-50cm-111201-07-2024 {"version": "01", "datetime": "2024-09-26T00:00:00Z", "eo:bands": [{"name": "B01", "type": "Float32", "block": [2000, 1], "metadata": {}, "noDataValue": -999, "colorInterpretation": "Gray"}], "file:size": 16012379, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n     
-      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/d780791c0d20af82dd6bf35e8f914e66f69544242618b078c7b60ca6ba25f88d
+      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/324b7e63352f444bc2ad02a4a6cc1a0e013a35cf29fce41c6e2fd57bcf542e18
   MDS-2m: 12 items over the pilot; first MDS-2m-111201-07-2024 {"version": "01", "datetime": "2024-09-26T00:00:00Z", "eo:bands": [{"name": "B01", "type": "Float32", "block": [500, 4], "metadata": {}, "noDataValue": -999, "colorInterpretation": "Gray"}], "file:size": 1001129, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n       
-      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/c565f0ca662fa41f1385582787d0989aa730e75f5e20663ac2f9de8b6a65b229
+      asset data: image/tiff; application=geotiff https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/9e2fedb2c6b2a67552eba70b398ec3233866a110ca9d8dd746d617f6e189d1c7
   LAZ: 12 items over the pilot; first LO-110201-07-2024 {"pc:type": "Lidar", "version": "01", "datetime": "2025-07-16T05:33:00Z", "pc:count": 15200234, "file:size": 199958666, "proj:bbox": [-90000, -100000, 75.904, -89000.001, -99000.001, 189.857], "proj:wkt2": "PROJCS[\"ETRS89 / Portugal TM06\",GEOGCS[\"ETRS89\",DATUM[\"European_Terrestrial_Reference_Sy
-      asset data: application/vnd.laszip https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/ef071dd032cb11ee6b11be85c156db5a3521da4ac9c29c0c4c7061c5f4eba28e
+      asset data: application/vnd.laszip https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/e6277551d33593d25576864b90c440f297f6b4aeca3b36b35dfc8eeff8f751d4
   ORTOS-2025: 2 items over the pilot; first ORTOS-2025-cog-25cm-431-1 {"size": [32000, 20000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-08-07T15:07:45.792491Z", "pixelSize": [0.25, -0.25], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/f37a09f3309507d377610bf2fbeba7740f549041d63114dbfba09abdaad94180
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/90aa01fdaf74407af2b479fb674c4d328a61447e5c372581c43456cff4c25aa1
   ORTOS-2018: 2 items over the pilot; first ORTOS-2018-cog-25cm-431-1 {"size": [32000, 20000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-13T17:44:56.205686Z", "pixelSize": [0.25, -0.25], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/0ce9301ffe153d9af55d161752296a537e3af10222397bcdf237504406d7feb7
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/45d5f2784c12e56686ff2a53a91ad26f2c3be2616b27042685a6576d0ff22925
   ORTOS-2015: 2 items over the pilot; first ORTOS-2015-cog-50cm-431-1 {"size": [16000, 10000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-12T18:25:44.798160Z", "pixelSize": [0.5, -0.5], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 e
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/b9d3ecb5930c00028eb7e9b2c36de7715e5c6260d0547cb38d72f80a820dded1
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/8707a88af62a1bd7e6f9a284bf457c4dae527b6d6b9bd385f9e5675d26eac549
   ORTOS-2012: 2 items over the pilot; first ORTOS-2012-cog-50cm-417-3 {"size": [16000, 10000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-12T18:12:26.691120Z", "pixelSize": [0.5, -0.5], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 e
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/23765073a610a5e83755e52303d1f064e37681d9c5362f8f08901d08efd47714
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/421315d12160e97d4a8add0ced81e6a2677a4511a9939bc564712746e2158e19
   ORTOS-2010: 2 items over the pilot; first ORTOS-2010-cog-50cm-431-1 {"size": [16000, 10000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-12T17:58:50.330781Z", "pixelSize": [0.5, -0.5], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 e
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/93e2a3f1e9802f82b6164d6880228782b2b0d37c9f7a07600f9032431d0b5914
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/2153368f2a5330cf829a1d4b4b029cbe9de4c59fd89f206d6683b4ae7b4f1115
   ORTOS-2007: 2 items over the pilot; first ORTOS-2007-cog-50cm-431-1 {"size": [16000, 10000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-12T17:46:17.568416Z", "pixelSize": [0.5, -0.5], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 e
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/8200206871be5d3b2ba38cbe5736e42fc49ed009645d36633286c044b46517b4
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/94f7740917819c980a41b62f3bf219b49a74d2441b343feb335697ee52ce2e91
   ORTOS-2004: 2 items over the pilot; first ORTOS-2004-cog-50cm-431-1 {"size": [16000, 10000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-04-27T09:30:57.892835Z", "pixelSize": [0.5, -0.5], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 e
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/f2099edc019259121e7286be38451a48f231925d10404286704b5d5ed15044a1
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/cfd44d6a4d852952d3810c8b6624b96976c826cc34130265dc5dd0a56200f0c9
   ORTOS-1995: 2 items over the pilot; first ORTOS-1995-cog-1m-417-3 {"size": [8000, 5000], "driver": "GTiff/GeoTIFF", "version": "01", "datetime": "2026-02-13T17:17:25.068983Z", "pixelSize": [1, -1], "proj:epsg": 3763, "proj:wkt2": "PROJCRS[\"ETRS89 / Portugal TM06\",\n    BASEGEOGCRS[\"ETRS89\",\n        ENSEMBLE[\"European Terrestrial Reference System 1989 ensembl
-      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/2aeee39bcf5e017fee9c4bdf0fc149395eb8a49352f960a3b897cb9fbd805aa0
+      asset visual: image/tiff; application=geotiff; profile=cloud-optimized https://cdd.dgterritorio.gov.pt/dgt-be/v1/download/517edb9e1238cc468abb8d1413453782931e83db28320dbefcc956d8f2f965ff
 finer surface collections over the pilot: ['MDS-50cm']
-MDS-50cm: 12 / 12 files
-MDT-50cm: 12 / 12 files
-ndsm 50 cm from MDS-50cm − MDT-50cm: 4861×3562 → telheiras_ndsm50.tif (100.0% covered)
-WMS https://cartografia.dgterritorio.gov.pt/ortos2023/service: HTTP 404 196 B
-WMS https://cartografia.dgterritorio.gov.pt/ortos2021/service: HTTP 200 3383 B
-  layer 'DGT_Ortos2021' — Ortos2021
-  layer 'Ortos2021-RGB' — Ortos2021-RGB
-fetching Ortos2021-RGB from https://cartografia.dgterritorio.gov.pt/ortos2021/service as ortho2021
-  probe 1.3.0 EPSG:4326 image/jpeg: w.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidFormat">unsupported image format: image/jpeg</ServiceException> </ServiceExceptionReport>
-  probe 1.1.1 EPSG:4326 image/jpeg: <?xml version="1.0"?> <!DOCTYPE ServiceExceptionReport SYSTEM "http://schemas.opengis.net/wms/1.1.1/exception_1_1_1.dtd"> <ServiceExceptionReport version="1.1.1"> <ServiceException code="InvalidFormat">unsupported image format: image/jpeg</ServiceException> </ServiceExceptionReport>
-  probe 1.3.0 EPSG:4326 image/png: ns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidCRS">unsupported crs: EPSG:4326</ServiceException> </ServiceExceptionReport>
-  probe 1.1.1 EPSG:4326 image/png: <?xml version="1.0"?> <!DOCTYPE ServiceExceptionReport SYSTEM "http://schemas.opengis.net/wms/1.1.1/exception_1_1_1.dtd"> <ServiceExceptionReport version="1.1.1"> <ServiceException code="InvalidSRS">unsupported srs: EPSG:4326</ServiceException> </ServiceExceptionReport>
-  probe 1.3.0 CRS:84 image/png: xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidCRS">unsupported crs: CRS:84</ServiceException> </ServiceExceptionReport>
-WMS https://cartografia.dgterritorio.gov.pt/ortos2018/service: HTTP 200 3383 B
-  layer 'DGT_Ortos2018' — Ortos2018
-  layer 'Ortos2018-RGB' — Ortos2018-RGB
-fetching Ortos2018-RGB from https://cartografia.dgterritorio.gov.pt/ortos2018/service as ortho2018
-  probe 1.3.0 EPSG:4326 image/jpeg: w.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidFormat">unsupported image format: image/jpeg</ServiceException> </ServiceExceptionReport>
-  probe 1.1.1 EPSG:4326 image/jpeg: <?xml version="1.0"?> <!DOCTYPE ServiceExceptionReport SYSTEM "http://schemas.opengis.net/wms/1.1.1/exception_1_1_1.dtd"> <ServiceExceptionReport version="1.1.1"> <ServiceException code="InvalidFormat">unsupported image format: image/jpeg</ServiceException> </ServiceExceptionReport>
-  probe 1.3.0 EPSG:4326 image/png: ns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidCRS">unsupported crs: EPSG:4326</ServiceException> </ServiceExceptionReport>
-  probe 1.1.1 EPSG:4326 image/png: <?xml version="1.0"?> <!DOCTYPE ServiceExceptionReport SYSTEM "http://schemas.opengis.net/wms/1.1.1/exception_1_1_1.dtd"> <ServiceExceptionReport version="1.1.1"> <ServiceException code="InvalidSRS">unsupported srs: EPSG:4326</ServiceException> </ServiceExceptionReport>
-  probe 1.3.0 CRS:84 image/png: xmlns="http://www.opengis.net/ogc" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/ogc http://schemas.opengis.net/wms/1.3.0/exceptions_1_3_0.xsd"> <ServiceException code="InvalidCRS">unsupported crs: CRS:84</ServiceException> </ServiceExceptionReport>
-WMS https://cartografia.dgterritorio.gov.pt/ortos2024/service: HTTP 404 196 B
-WMS https://cartografia.dgterritorio.gov.pt/ortos2025/service: HTTP 404 9 B
+ORTOS-2025: 2 / 2 files, 1239 MB
+ORTOS-2025 → telheiras_ortho2025.tif 17 MB
+ORTOS-2018: 2 / 2 files, 976 MB
+ORTOS-2018 → telheiras_ortho2018.tif 12 MB
 WMS https://ortos.dgterritorio.gov.pt/wms/ortos2023: HTTP 404 196 B
 WMS https://ortos.dgterritorio.gov.pt/wms/ortos2021: HTTP 404 196 B
-WMS https://ortos.dgterritorio.gov.pt/wms/ortos2018: HTTP 404 196 B
+ortho2018: have it
 orthosat2023: have it
 WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2021: HTTP 404 196 B
 WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2023: HTTP 404 196 B
