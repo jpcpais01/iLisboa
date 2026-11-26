@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
 export const cityUniforms = { uNight: { value: 0 } };
+// map overlay (src/layers/overlay.js): one texture draped over ground, walls and roofs alike (temperature, rain, freguesias)
+export const overlayUniforms = { uOv: { value: null }, uOvBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uOvK: { value: 0 }, uOvLev: { value: 0 }, uOvMode: { value: 0 } };
 
 // Buildings: one material for walls, roofs, trims and monuments. Everything a façade shows
 // (bays, frames, shutters, balconies, shopfronts, azulejos, roof tiles, dormers, ashlar) is
@@ -24,7 +26,7 @@ float rect(vec2 lo, vec2 hi, vec2 p, float aa) { return box1(lo.x, hi.x, p.x, aa
 export function buildingMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uNight = cityUniforms.uNight;
+    s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 surf; attribute vec4 aInfo; attribute vec4 aStyle;\nvarying vec2 vSurf; varying vec4 vInfo; varying vec4 vStyle; varying vec3 vWP;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -314,7 +316,7 @@ export function waterMaterial(mask) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = waterUniformTime;
-    s.uniforms.uNight = cityUniforms.uNight;
+    s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -396,7 +398,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 export function terrainMaterial(map, mask, bounds, surf = false) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight;
+    s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
     s.uniforms.uBounds = { value: new THREE.Vector4(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY) };
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
@@ -487,7 +489,7 @@ float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); 
 export function farBuildingMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uNight = cityUniforms.uNight;
+    s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vFW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.)).xyz;');

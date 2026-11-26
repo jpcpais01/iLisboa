@@ -9,6 +9,7 @@ import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, 
 import { sunDirection } from './sun.js';
 import { createSky } from './sky.js';
 import { initLive } from './live/index.js';
+import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
 import { initLandmarks } from './landmarks.js';
@@ -689,6 +690,8 @@ controls.addEventListener('end', () => {
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
+// map layers (weather: temperature, wind, rain; city: freguesias, density): src/layers, off until toggled
+const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
@@ -714,7 +717,7 @@ renderer.setAnimationLoop((now) => {
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
-  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
+  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy || layers.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
   idleN = active ? 0 : idleN + 1;
   // motion resolution: while the view moves, draw at ~2/3 the pixel ratio (≈2.2× fewer pixels); full sharpness ~0.15 s after it settles
@@ -740,6 +743,7 @@ renderer.setAnimationLoop((now) => {
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   live.update(dt, now);
+  layers.update(dt, now);
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones (timed on consecutive moving frames only)
