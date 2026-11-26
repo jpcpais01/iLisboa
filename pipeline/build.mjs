@@ -497,6 +497,8 @@ const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 
 // type, its façade colour and its rooftop structures, every tree and the ground itself come from the photo and the survey,
 // not from palettes and scatter rules. NO_DETAIL=1 builds without it.
 const DETAIL = LIDAR ? await loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar: LIDAR }) : null;
+// Telheiras by eye: wall, roof colour and roof form per building, read off Google Earth 3D views (sampled per face, corrected by hand where it misread)
+const LOOKS = DETAIL && fs.existsSync(path.join(ROOT, 'data/detail/telheiras_looks.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'data/detail/telheiras_looks.json'), 'utf8')) : {};
 const DET = new Map();   // per building: what the photo says, and the height and lean it was read at
 const detailOf = (p, h) => { if (!DETAIL) return null; if (!DET.has(p.id)) DET.set(p.id, DETAIL.read(p, h)); const d = DET.get(p.id); if (d) { d.h = h; d.c = p.c; } return d; };
 // a wall no photo saw well (in shade from every side, or behind trees): the walls read around it, weighted by distance and by
@@ -883,6 +885,8 @@ function buildingSpec(p) {
   if (det && p.mass) {   // a slab of the survey massing: its roof as the photo and survey read it, slab by slab
     spec.detail = true; spec.mass = p.mass;
     const m = p.mass, rescale = (eave) => { if (!spec.floorH) return; const f = (eave - minH) / Math.max(1, spec.h - minH); spec.floorH = Math.max(2.6, spec.floorH * f); spec.groundH = Math.max(spec.floorH, spec.groundH * f); };
+    const lk0 = LOOKS[m.parent.id];
+    if (lk0?.roof && m.level === m.levels - 1 && !m.looked) { m.looked = 1; if (lk0.roof !== 'flat' || m.roof !== 'flat') m.roof = lk0.roof; }
     if (hall && m.roof !== 'flat') m.roof = 'flat';
     if (m.roof === 'hip') { const eave = Math.max(minH + 2.2, Math.min(m.lo, m.deck)); rescale(eave); spec.shape = 'hipped'; spec.pitch = 22; spec.h = eave; spec.roofH = Math.max(1, Math.min(6, m.top - eave)); }
     else if (m.roof === 'rim') { const rise = Math.min(2.4, (m.rimD || 2.4) * 0.45); spec.shape = 'rim'; spec.rimD = m.rimD || 2.4; spec.h = m.deck + 0.3; spec.roofH = rise; spec.parapet = 0; }
@@ -902,6 +906,14 @@ function buildingSpec(p) {
     if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
     if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
     if (!t['building:colour'] && !site) { const w = det.wall || nearWall(p, lid.top); if (w) spec.wall = w; }
+  }
+  const lk = det && !t['building:colour'] && !site && LOOKS[p.mass ? p.mass.parent.id : p.id];
+  if (lk) {
+    if (lk.wall) spec.wall = srgb(lk.wall);
+    if (lk.roofCol && !t['roof:colour']) spec.roofCol = srgb(lk.roofCol);
+    if (lk.flatCol && !t['roof:colour']) spec.flatCol = srgb(lk.flatCol);
+    if (lk.sub8 !== undefined) spec.sub8 = lk.sub8;
+    spec.looked = true;
   }
   const o = p.ovr || OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
@@ -2069,6 +2081,7 @@ log(`ground map painted ${gm.w}×${gm.h}`);
 
 // downsample to 1 m and bake contact AO around buildings
 const GW = Math.round((maxX - minX) / 0.5), GH = Math.round((maxY - minY) / 0.5);   // painted at 0.32 m, filtered down to 0.5 m: crisp kerbs without stair-steps
+let groundAO = null;   // the baked contact darkening, kept so the photo ground can paint without it
 let ground1 = await sharp(Buffer.from(gm.data.buffer), { raw: { width: gm.w, height: gm.h, channels: 3 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'lanczos3' }).raw().toBuffer();
 gm.data = null;
 {
@@ -2076,8 +2089,9 @@ gm.data = null;
   const mask = new Float32Array(bm.w * bm.h);
   for (const p of polysB) if (!p.skip) bm.fillRings([p.outer, ...p.holes], (i) => { if (i < mask.length) mask[i] = 1; });
   const ao = boxBlur(mask, bm.w, bm.h, 6, 3);
+  groundAO = new Float32Array(GW * GH);
   for (let i = 0; i < GW * GH; i++) {
-    const k = 1 - Math.min(1, ao[i] * 1.15) * 0.42;
+    const k = 1 - Math.min(1, ao[i] * 1.15) * 0.42; groundAO[i] = k;
     ground1[i * 3] *= k; ground1[i * 3 + 1] *= k; ground1[i * 3 + 2] *= k;
   }
 }
@@ -2101,7 +2115,7 @@ function detailRoadAt() {
 }
 if (DETAIL) {   // the ground as photographed: dry grass, paving, car parks, paths; buildings lifted out, shadows lightened
   const buildings = polysB.filter((p) => !p.skip && DETAIL.covers(p.c[0], p.c[1])).map((p) => { const d = DET.get(p.id); const z = LIDAR ? measured(p) : null; return { outer: p.outer, h: d?.h ?? z?.top ?? 0, shift: d?.shift }; }).filter((b) => b.h > 1.5);
-  DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt() });
+  DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt(), ao: groundAO });
 }
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];

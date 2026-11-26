@@ -29,7 +29,7 @@
     -1391.694138263734,
     4746.132409592789
    ],
-   "bytes": 312080,
+   "bytes": 303864,
    "balconies": "bal_0_0.bin",
    "detail": "d_0_0.glb"
   },
@@ -43,7 +43,7 @@
     -891.694138263734,
     4746.132409592789
    ],
-   "bytes": 350688,
+   "bytes": 349952,
    "balconies": "bal_1_0.bin",
    "detail": "d_1_0.glb"
   },
@@ -141,7 +141,7 @@
     -1391.694138263734,
     5246.132409592789
    ],
-   "bytes": 518788,
+   "bytes": 527532,
    "balconies": "bal_0_1.bin",
    "detail": "d_0_1.glb"
   },
@@ -155,7 +155,7 @@
     -891.694138263734,
     5246.132409592789
    ],
-   "bytes": 293984,
+   "bytes": 291948,
    "balconies": "bal_1_1.bin",
    "detail": "d_1_1.glb"
   },
@@ -253,7 +253,7 @@
     -1391.694138263734,
     5746.132409592789
    ],
-   "bytes": 452752,
+   "bytes": 458704,
    "balconies": "bal_0_2.bin",
    "detail": "d_0_2.glb"
   },
@@ -267,7 +267,7 @@
     -891.694138263734,
     5746.132409592789
    ],
-   "bytes": 367620,
+   "bytes": 370756,
    "balconies": "bal_1_2.bin",
    "detail": "d_1_2.glb"
   },
@@ -365,7 +365,7 @@
     -1391.694138263734,
     6246.132409592789
    ],
-   "bytes": 450992,
+   "bytes": 439432,
    "balconies": "bal_0_3.bin",
    "detail": "d_0_3.glb"
   },
@@ -379,7 +379,7 @@
     -891.694138263734,
     6246.132409592789
    ],
-   "bytes": 197044,
+   "bytes": 196572,
    "balconies": "bal_1_3.bin",
    "detail": "d_1_3.glb"
   },
@@ -736,24 +736,24 @@
   "bridges": {
    "decks": 85,
    "ramps": 34,
-   "piers": 288,
+   "piers": 334,
    "abutments": 126,
-   "tris": 39627
+   "tris": 40537
   },
   "waterSource": "dem",
   "trees": 17023,
   "treesMapped": 2076,
-  "lamps": 6941,
+  "lamps": 6962,
   "cars": 8756,
   "water": 0,
-  "bytes": 17979331,
+  "bytes": 17978711,
   "detailTris": 411754,
-  "triangles": 1029310
+  "triangles": 1030220
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T17:51:38.023Z",
+ "built": "2026-11-26T19:17:26.665Z",
  "far": {
-  "bytes": 1250240,
-  "tris": 129867
+  "bytes": 1254556,
+  "tris": 130767
  }
 }
