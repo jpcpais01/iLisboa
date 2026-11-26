@@ -133,8 +133,22 @@ export function createWorld(scene) {
         if (d < R && d > 1e-4 && (!best || R - d > best.depth)) best = { nx: dx / d, nz: dz / d, depth: R - d, car: true };
       }
     }
+    for (let q = 0; q < movers.length; q += 3) {   // the traffic around (circles, refreshed every frame)
+      if (Math.abs(movers[q + 1] + 0.8 - c.y) > 3) continue;
+      const dx = c.x - movers[q], dz = c.z - movers[q + 2], d = Math.hypot(dx, dz);
+      if (d < R && d > 1e-4 && (!best || R - d > best.depth)) best = { nx: dx / d, nz: dz / d, depth: R - d, car: true };
+    }
     return best;
   }
+  // moving cars near the player, from the ambient traffic: [{ x, y (north), z (height), head (atan2(dx, dy)), half: [L, W] }]
+  let movers = [];
+  function setMovers(list) {
+    movers = [];
+    for (const m of list) {
+      const ux = Math.sin(m.head), uz = -Math.cos(m.head), off = Math.max(0, m.half[0] - 1);
+      for (const k of off > 1.6 ? [-1, 0, 1] : [-1, 1]) movers.push(m.x + ux * off * k, m.z, -m.y + uz * off * k);
+    }
+  }
 
-  return { update, ground, wall: (c, r) => { const a = wall(c, r), b = carPush(c, r); return !a ? b : !b ? a : a.depth > b.depth ? a : b; }, cast, addCar, get size() { return active.length; }, get stats() { return { buildMs: Math.round(buildMs), maxMs: Math.round(maxMs) }; }, get pending() { return todo.length; } };
+  return { update, ground, setMovers, wall: (c, r) => { const a = wall(c, r), b = carPush(c, r); return !a ? b : !b ? a : a.depth > b.depth ? a : b; }, cast, addCar, get size() { return active.length; }, get stats() { return { buildMs: Math.round(buildMs), maxMs: Math.round(maxMs) }; }, get pending() { return todo.length; } };
 }

@@ -232,3 +232,12 @@ body.driving #attrib { opacity: 0.55; }
   .drive-hud .speedo { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 50px); }
 }
 @media (pointer: coarse) { body.driving #attrib { top: auto; bottom: 2px; left: 0; right: 0; font-size: 8.5px; opacity: 0.5; text-align: center; max-width: none; } }
+.drive-hud .road {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 64px);
+  font-size: 15px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; max-width: 70vw; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+.drive-hud .road.in { animation: roadIn 0.5s ease; }
+@keyframes roadIn { from { opacity: 0; transform: translate(-50%, 6px); } }
+@media (pointer: fine) { .drive-hud .road { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 80px); } }
+@media (pointer: coarse) and (orientation: portrait) { .drive-hud .road { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 108px); } }

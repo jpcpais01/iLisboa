@@ -10,7 +10,7 @@ import { createCar } from './physics.js';
 import { createCarModel } from './model.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
-import { loadNetwork } from '../live/network.js';
+import { loadNetwork, loadNames } from '../live/network.js';
 
 const VIEWS = [
   { name: 'perto', dist: 6.8, pitch: 0.2, ahead: 3, fov: 58, overRoofs: false },
@@ -18,7 +18,7 @@ const VIEWS = [
   { name: 'capô', h: 1.3, fov: 66, hood: true },
 ];
 
-export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, uNight, home, ll }) {
+export function initDrive({ scene, camera, controls, canvas, chase, live, waterY = 0, uNight, home, ll }) {
   const world = createWorld(scene);
   const car = createCar(world);
   const model = createCarModel();
@@ -39,9 +39,11 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
       <button type="button" class="snd" aria-label="Som"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path class="w" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
     </div>
     <div class="speedo"><b>0</b><small>km/h</small></div>
+    <div class="road" hidden></div>
     <div class="keys">W / ↑ acelerar · S / ↓ travar e marcha-atrás · A D / ← → virar · Espaço travão de mão · C câmara · R estrada · Esc sair</div>`;
   document.body.appendChild(hud);
-  const speedEl = hud.querySelector('.speedo b'), msgEl = hud.querySelector('.msg');
+  const speedEl = hud.querySelector('.speedo b'), msgEl = hud.querySelector('.msg'), roadEl = hud.querySelector('.road');
+  let names = null, roadT = 0, roadName = '';
   hud.querySelector('.exit').onclick = () => exit();
   hud.querySelector('.reset').onclick = () => respawn();
   hud.querySelector('.view').onclick = () => { view = (view + 1) % VIEWS.length; film(0.35); flash(`câmara: ${VIEWS[view].name}`); };
@@ -70,6 +72,7 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
 
   // ─── camera: the shared chase camera (orbit / pinch it, it eases back behind the car), or our own from the bonnet ───
   const f = new THREE.Vector3(), tmp = new THREE.Vector3(), q = new THREE.Quaternion(), e3 = new THREE.Euler(0, 0, 0, 'YXZ');
+  const nudge = new THREE.Vector3();
   const cam = { shake: 0, aim: new THREE.Vector3(), pos: new THREE.Vector3() };
   const carView = () => ({ pos: car.s.p, heading: car.s.psi, speed: Math.abs(car.speed) });
   function film(fly = 1.3) {
@@ -78,7 +81,8 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
     controls.enabled = true;
     chase.follow(carView, {
       // a portrait phone sees a narrow slice: step back and up so the street ahead shows above the car
-      dist: V.dist * (camera.aspect < 1 ? 1.45 : 1), minDist: 3.2, maxDist: 60, pitch: V.pitch + (camera.aspect < 1 ? 0.08 : 0), turn: 4.5, recenter: 1.6, fly,
+      dist: V.dist * (camera.aspect < 1 ? 1.45 : 1) + V.ahead,   // the arm is measured from the aim point, which is ahead of the car
+      minDist: 3.2, maxDist: 60, pitch: V.pitch + (camera.aspect < 1 ? 0.08 : 0), turn: 4.5, recenter: 1.6, fly,
       height: 1.15, lookAhead: V.ahead, distPerSpeed: 0.06, fov: V.fov, fovPerSpeed: 0.3, near: 0.25, clearance: 0.9,
       overRoofs: V.overRoofs, occlude: (a, b) => world.cast(a, b),
       inputExclude: (e) => !!e.target.closest?.('.drive-pads button, .drive-pads .wheel-zone, .drive-hud button'),
@@ -173,16 +177,19 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
     // pushed right up to it (backed against a wall)
     afterCamera(dt) {
       if (!active) return;
+      const p0 = camera.position.clone();
       if (cam.shake > 0.01) { camera.position.x += (Math.random() - 0.5) * cam.shake * 0.5; camera.position.y += (Math.random() - 0.5) * cam.shake * 0.4; cam.shake *= Math.exp(-dt * 9); }
       // never under the street: the chase camera's own ground is the live layers' height grid, which is only kept while they're on
       if (!VIEWS[view].hood) { const g = world.ground(camera.position.x, camera.position.z, camera.position.y + 60, 120, true); if (g && camera.position.y < g.y + 0.8) { camera.position.y = g.y + 0.8; camera.lookAt(controls.target); } }
       model.object.visible = VIEWS[view].hood || camera.position.distanceTo(car.s.p) > 2.6;
+      nudge.subVectors(camera.position, p0);   // taken back out next frame, so the chase camera never reads it as the user's orbit
     },
     // checks: put the car on the highest surface at lat, lon (a bridge deck counts), heading in degrees from north
     teleport(lat, lon, hdg = 0) { const v = ll(lat, lon), psi = Math.PI / 2 - (hdg * Math.PI) / 180; car.place(v.x, v.z, psi); const g = world.ground(v.x, v.z, 400, 800); if (g) car.s.p.y = g.y; },
     update(dt, now) {
       if (!active) return false;
       const s = car.s;
+      camera.position.sub(nudge); nudge.set(0, 0, 0);
       world.update(s.p, now, entering > 0 ? 12 : 6);
       if (!s.grounded) {   // the ground under the car is still streaming in: wait for it, then drop the car onto it
         waitT += dt;
@@ -191,6 +198,9 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
         else if (waitT > 0.6) flash('a carregar as ruas…', 0.5);
       }
       const inp = input.update(dt);
+      // the traffic around is solid too
+      const near = live?.cars?.near?.(s.p.x, -s.p.z, 25);
+      world.setMovers(near || []);
       if (s.grounded) car.update(entering > 0.8 ? { steer: 0, throttle: 0, brake: 0, handbrake: false } : inp, dt);
       entering = Math.max(0, entering - dt);
 
@@ -221,6 +231,14 @@ export function initDrive({ scene, camera, controls, canvas, chase, waterY = 0, 
       if (VIEWS[view].hood) hoodCamera(dt);
       else if (!chase.active) film();   // something else took the chase camera (tapped a bus): take it back
 
+      // the street you're on, from the road graph's names
+      if ((roadT -= dt) <= 0) {
+        roadT = 0.6;
+        if (!names) { names = []; loadNames().then((n) => { names = n; }).catch(() => {}); }
+        const sn = net?.snap(s.p.x, -s.p.z, false, 14), nm = sn ? names[net.edges?.[sn.e]?.name] || '' : '';
+        if (nm && nm !== roadName) { roadName = nm; roadEl.textContent = nm; roadEl.hidden = false; roadEl.classList.remove('in'); void roadEl.offsetWidth; roadEl.classList.add('in'); }
+        else if (!sn) { roadName = ''; roadEl.hidden = true; }
+      }
       const kmh = Math.round(Math.abs(car.speed) * 3.6);
       if (kmh !== shownKmh) { shownKmh = kmh; speedEl.textContent = kmh; }
       if (msgT > 0 && (msgT -= dt) <= 0) msgEl.classList.remove('in');
