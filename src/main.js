@@ -9,6 +9,7 @@ import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cit
 import { sunDirection } from './sun.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
+import { initDrive } from './drive/index.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -420,6 +421,7 @@ function addCars(buf) {
       const o = i * 6; e.set(0, d[o + 3], d[o + 4]); q.setFromEuler(e);
       m.compose(p.set(d[o], d[o + 1], d[o + 2]), q, one); mesh.setMatrixAt(j, m); hi.setMatrixAt(j, m);
       col.setHex(pick((d[o + 5] * 7.31) % 1)); mesh.setColorAt(j, col); hi.setColorAt(j, col);
+      drive?.addParked(d[o], d[o + 1], d[o + 2], d[o + 3]);
     });
     for (const x of [mesh, hi]) { x.castShadow = x === mesh; x.receiveShadow = true; x.computeBoundingSphere(); x.visible = false; scene.add(x); }
     carChunks.push({ mesh, hi, c: mesh.boundingSphere.center.clone(), r: mesh.boundingSphere.radius });
@@ -571,6 +573,8 @@ controls.addEventListener('end', () => {
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase }); window.__live = live;
+// drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
+const drive = initDrive({ scene, camera, controls, canvas, chase, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -585,9 +589,11 @@ renderer.setAnimationLoop((now) => {
     const e = 1 - (1 - introT) ** 3;
     camera.position.lerpVectors(startPos, endPos, e);
   }
+  const driving = drive.update(raw, now);   // before the chase camera, so it films where the car is now; real elapsed time (the car runs its own fixed steps)
   const touching = touch.update(dt);
-  const moved = controls.update(dt) || touching;
+  const moved = controls.update(dt) || touching || driving;
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
+  if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
   const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
