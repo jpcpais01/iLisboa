@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
+import { initTouch } from './touch.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
@@ -60,6 +61,8 @@ controls.minDistance = 60;
 controls.maxDistance = 7000;
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
+// fingers get their own maps-style navigation (pan / pinch / twist / tilt, fling); MapControls keeps the mouse
+const touch = initTouch({ camera, controls, canvas, onStart: () => { introT = 1; } });
 
 
 // ─── load: the city is several areas of 500 m tiles; tiles stream in and out around the view ───
@@ -602,7 +605,7 @@ controls.addEventListener('end', () => {
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY } }); window.__live = live;
-window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
+window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
@@ -616,7 +619,8 @@ renderer.setAnimationLoop((now) => {
     const e = 1 - (1 - introT) ** 3;
     camera.position.lerpVectors(startPos, endPos, e);
   }
-  const moved = controls.update(dt);
+  const touching = touch.update(dt);
+  const moved = controls.update(dt) || touching;
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
   const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
