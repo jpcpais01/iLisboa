@@ -209,9 +209,9 @@ export function buildRoofAndWalls(S, ctx) {
           const z = ground + spec.groundH + (fl - 1) * spec.floorH;
           if (z + 2.4 > wallTop) continue;
           for (let k = 0; k < bays; k++) {
-            if (spec.balconyChance < 1 && rng(`${i}_${k}_${fl}`) > spec.balconyChance) continue;
+            if (spec.balconyChance < 1 && rng(spec.balconyModern ? `${i}_${k}` : `${i}_${k}_${fl}`) > spec.balconyChance) continue;   // modern blocks stack theirs bay by bay
             const t = (k + 0.5) / bays;
-            out.balconies.push([a[0] + (b[0] - a[0]) * t + ox * 0.02, z, -(a[1] + (b[1] - a[1]) * t + oy * 0.02), Math.atan2(ox, -oy), Math.min(bw * 0.62, 1.7)]);
+            out.balconies.push([a[0] + (b[0] - a[0]) * t + ox * 0.02, z, -(a[1] + (b[1] - a[1]) * t + oy * 0.02), Math.atan2(ox, -oy), spec.balconyModern ? -Math.min(bw * 0.92, 3.4) : Math.min(bw * 0.62, 1.7)]);   // negative width: concrete slab, solid white parapet
           }
         }
       }
