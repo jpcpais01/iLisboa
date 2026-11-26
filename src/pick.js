@@ -10,3 +10,4 @@ export function tapOwner() { return tapClaimed() ? claimedBy : ''; }
 const probes = {};
 export function setProbe(name, fn) { probes[name] = fn; }
 export function probe(name, x, y) { return probes[name] ? probes[name](x, y) : null; }
+if (typeof window !== 'undefined') window.__tapClaimed = tapClaimed;   // for layers that would rather not import this module
