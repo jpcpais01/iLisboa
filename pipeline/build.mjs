@@ -496,13 +496,17 @@ const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 
 // Per-building detail (pipeline/lib/detail.mjs): where a DGT orthophoto covers the area, each building's roof colour and roof
 // type, its façade colour and its rooftop structures, every tree and the ground itself come from the photo and the survey,
 // not from palettes and scatter rules. NO_DETAIL=1 builds without it.
-const DETAIL = LIDAR ? await loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar: LIDAR }) : null;
+const DETAIL = LIDAR ? await loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar: LIDAR, area: AREA }) : null;
+if (process.env.DETAIL_ONLY) process.exit(0);   // testing the detail sources alone
 // Telheiras by eye: wall, roof colour and roof form per building, read off Google Earth 3D views (sampled per face, corrected by hand where it misread)
 const LOOKS = DETAIL && fs.existsSync(path.join(ROOT, 'data/detail/telheiras_looks.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'data/detail/telheiras_looks.json'), 'utf8')) : {};
 const DET = new Map();   // per building: what the photo says, and the height and lean it was read at
 const detailOf = (p, h) => { if (!DETAIL) return null; if (!DET.has(p.id)) DET.set(p.id, DETAIL.read(p, h)); const d = DET.get(p.id); if (d) { d.h = h; d.c = p.c; } return d; };
 // a wall no photo saw well (in shade from every side, or behind trees): the walls read around it, weighted by distance and by
 // how alike the heights are (an estate is built in one render; a villa beside a tower is not)
+// Wall colours from the aerial photos: off. Measured against Google Earth on the 216 Telheiras buildings, the photo's wall reads
+// carry no information about the real colour (see CAL in lib/detail.mjs): the district palettes do better. PHOTO_WALLS=1 restores them.
+const PHOTO_WALLS = !!process.env.PHOTO_WALLS;
 const nearWall = (p, h) => {
   const v = [];
   for (const d of DET.values()) { if (!d || !d.wall || !d.c || d.c === p.c) continue; const r = Math.hypot(d.c[0] - p.c[0], d.c[1] - p.c[1]); if (r > 90) continue; v.push([d.wall, 1 / (r + 10) / (1 + Math.abs((d.h || h) - h) / 8)]); }
@@ -525,6 +529,11 @@ const measured = (p) => {
   }
   return null;
 };
+if (process.env.CALIB_LOOKS) {   // photo reads beside Google Earth's colours for the buildings read by eye in Telheiras: fits the photo → look calibration
+  const o = [];
+  for (const p of polysB) { const lk = LOOKS[p.id]; if (!lk || !DETAIL) continue; const z = measured(p); if (!z) continue; const d = DETAIL.read(p, z.top); if (d) o.push({ id: p.id, h: z.top, lk, tileRaw: d.tileRaw, flatRaw: d.flatRaw, wallRaw: d.wallRaw, tile: d.tile, flat: d.flat, wall: d.wall, tf: d.tileFrac, src: d.wallSrc }); }
+  fs.writeFileSync(process.env.CALIB_LOOKS, JSON.stringify(o)); log(`calibration pairs: ${o.length}`); process.exit(0);
+}
 // Stepped landmarks (CGD's Campus XXI): one height cannot stand for a building that climbs in terraces. The survey is cut
 // into storey bands; each band becomes a slab over the part of the plan that reaches it, stacked on the band below, so
 // the massing is the measured one and no two walls share a plane. OVERRIDES set terraces: { step, minArea }.
@@ -703,11 +712,11 @@ const surveyMass_ = (p) => {
       const eL = E.filter(([, , d]) => d <= 2), iL = I; const mL = (A) => { const v = A.map(([c]) => DETAIL.L3(c)).sort((a, b) => a - b); return v[v.length >> 1] || 0; };
       const eZ = eL.map(([, z]) => z).sort((a, b) => a - b), iZ = iL.map(([, z]) => z).sort((a, b) => a - b);
       if (nI >= 20 && eL.length >= 20 && mL(eL) < mL(iL) * 0.8 && (eZ[eZ.length >> 1] ?? 0) < (iZ[iZ.length >> 1] ?? 0) - 1.0 && s.deck > 12) {
-        s.roof = 'mansard'; const g = eL.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark * 0.8); s.edgeCol = g.length ? DETAIL.tone([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1]), 1.0) : null;
+        s.roof = 'mansard'; const g = eL.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark * 0.8); s.edgeCol = g.length ? DETAIL.calFlat([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1])) : null;
       }
       // a ridged roof the photo does not see as clay: slate, zinc or fibre-cement hips, in their own grey
       else if (nI >= 6 && (iZ[iZ.length >> 1] ?? 0) - (eZ[eZ.length >> 1] ?? 0) >= 1.5 && s.top - s.lo >= 2) {
-        s.roof = 'hip'; const g = A.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark); s.edgeCol = g.length ? DETAIL.tone([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1]), 1.0) : null;
+        s.roof = 'hip'; const g = A.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark); s.edgeCol = g.length ? DETAIL.calFlat([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1])) : null;
       }
     }
     // rooftop boxes: blobs standing 1.6–7 m over this deck, too small to be a level (no boxes on tiled slopes)
@@ -900,7 +909,7 @@ function buildingSpec(p) {
     else { spec.shape = 'flat'; spec.h = Math.max(m.deck, minH + 2); spec.roofH = undefined; spec.parapet = m.level < m.levels - 1 ? 1.0 : Math.max(spec.parapet, 0.9); }
     if (m.edgeCol && !t['roof:colour']) spec.roofCol = m.edgeCol; else if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
     if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
-    if (!t['building:colour'] && !site) { const w = det.wall || nearWall(p.mass.parent, lid.top); if (w) spec.wall = w; }
+    if (PHOTO_WALLS && !t['building:colour'] && !site) { const w = det.wall || nearWall(p.mass.parent, lid.top); if (w) spec.wall = w; }
   }
   else if (det && det.n >= 12) {
     spec.detail = true;
@@ -911,7 +920,7 @@ function buildingSpec(p) {
     }
     if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
     if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
-    if (!t['building:colour'] && !site) { const w = det.wall || nearWall(p, lid.top); if (w) spec.wall = w; }
+    if (PHOTO_WALLS && !t['building:colour'] && !site) { const w = det.wall || nearWall(p, lid.top); if (w) spec.wall = w; }
   }
   const lk = det && !t['building:colour'] && !site && LOOKS[p.mass ? p.mass.parent.id : p.id];
   if (lk) {
@@ -2210,7 +2219,8 @@ const groundPx = (x, y) => { const c = Math.floor(((x - minX) / (maxX - minX)) *
 const PALMS = /^(phoenix|chamaerops|howea|jubaea|washingtonia|cocos|trachycarpus|syagrus|livistona|butia|archontophoenix)/i, CONIFERS = /^(pinus|cupressus|cedrus|araucaria|taxus|juniperus|abies|picea)/i;
 const treeKind = (t) => { const g = t.genus || t.taxon || t.species || ''; return t.leaf_type === 'palm' || PALMS.test(g) ? 1 : /^cupressus/i.test(g) ? 3 : t.leaf_type === 'needleleaved' || CONIFERS.test(g) ? 2 : 0; };
 // under a photo every tree is the survey's (below): mapped and scattered ones there are dropped
-const addTree = (x, y, sc, kind = 0, measured = false) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; if (!measured && DETAIL && DETAIL.covers(x, y)) return; trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
+const treeHints = [];   // mapped or planted trees under a photo: not drawn themselves, but they name the species of the survey's crown there
+const addTree = (x, y, sc, kind = 0, measured = false) => { if (x < minX || x > maxX || y < minY || y > maxY || isWaterAt(x, y)) return; if (!measured && DETAIL && DETAIL.covers(x, y)) { if (kind) treeHints.push([x, y, kind]); return; } trees.push(x, meshAt(x, y), -y, sc + 10 * kind); };
 // size by species where the city's tree survey tagged it: the Avenida's planes and elms are big, the lódãos medium
 const treeScale = (t, h) => {
   const ht = parseMeters(t.height); if (ht && ht > 2 && ht < 40) return Math.max(0.6, Math.min(2.4, ht / 7.5));
@@ -2356,7 +2366,10 @@ if (DETAIL) {   // every tree the survey and the photo see: canopy peaks away fr
   for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { bl[i] = 1; });
   const blockedAt = (x, y) => { for (const [a, b] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) { const c = Math.floor(bm.px(x + a)), r = Math.floor(bm.py(y + b)); if (c >= 0 && r >= 0 && c < bm.w && r < bm.h && bl[r * bm.w + c]) return true; } return false; };
   const lt = DETAIL.trees({ blockedAt, roadAt: detailRoadAt() });
-  for (const [x, y, z, r] of lt) addTree(x, y, Math.max(0.45, Math.min(2.6, z / 7.5)), 0, true);
+  const hg = new Map(), hk = (x, y) => `${Math.floor(x / 5)},${Math.floor(y / 5)}`; for (const h of treeHints) { const k = hk(h[0], h[1]); if (!hg.has(k)) hg.set(k, []); hg.get(k).push(h); }
+  const hintAt = (x, y) => { let best = null, bd = 4.5; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const h of hg.get(`${Math.floor(x / 5) + a},${Math.floor(y / 5) + b}`) || []) { const d = Math.hypot(h[0] - x, h[1] - y); if (d < bd) { bd = d; best = h[2]; } } return best; };
+  let named = 0; for (const [x, y, z, r, shape] of lt) { const k = hintAt(x, y); if (k) named++; addTree(x, y, Math.max(0.45, Math.min(2.6, z / 7.5)), k ?? shape ?? 0, true); }
+  log(`trees: ${named} of the survey's crowns take the species mapped there`);
   log(`trees from the survey: ${lt.length}`);
 }
 log(`trees: ${nTagged} mapped + ${trees.length / 4 - nTagged} scattered`);
