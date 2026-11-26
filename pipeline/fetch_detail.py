@@ -31,11 +31,6 @@ def say(*a):
 
 
 WMS = [
-    "https://cartografia.dgterritorio.gov.pt/ortos2023/service",
-    "https://cartografia.dgterritorio.gov.pt/ortos2021/service",
-    "https://cartografia.dgterritorio.gov.pt/ortos2018/service",
-    "https://cartografia.dgterritorio.gov.pt/ortos2024/service",
-    "https://cartografia.dgterritorio.gov.pt/ortos2025/service",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2023",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2021",
     "https://ortos.dgterritorio.gov.pt/wms/ortos2018",
@@ -187,6 +182,30 @@ def main():
             o.SetGeoTransform(ds.GetGeoTransform()); o.SetProjection(ds.GetProjection())
             o.GetRasterBand(1).WriteArray(nd); o.FlushCache(); o = None
             say(f"ndsm 50 cm from {c} − {tdt}: {a.shape[1]}×{a.shape[0]} → {PNAME}_ndsm50.tif ({100 * ok.mean():.1f}% covered)")
+
+    # aerial orthophotos (25 cm COGs in the CDD): an aerial survey photographs each block from its own side of a wide-angle
+    # frame, so towers lean every way and between them every façade shows somewhere — unlike one satellite look
+    if have_login:
+        import fetch_lidar
+        for c in ("ORTOS-2025", "ORTOS-2018"):
+            tag = "ortho" + c[-4:]
+            if c not in interesting or (OUT / f"{PNAME}_{tag}.tif").exists(): continue
+            fetch_lidar.login(s)
+            files = []
+            for f in interesting[c]:
+                href = fetch_lidar.tiff_href(f)
+                if not href: continue
+                dst = TMP / (c + "_" + str(f.get("id")).replace("/", "_") + ".tif")
+                if fetch_lidar.download(s, href, dst, lambda: fetch_lidar.login(s)): files.append(str(dst))
+            say(f"{c}: {len(files)} / {len(interesting[c])} files, {sum(pathlib.Path(x).stat().st_size for x in files) >> 20} MB")
+            if not files: continue
+            v = gdal.BuildVRT(str(TMP / f"{c}.vrt"), files); v.FlushCache()
+            res = 0.25 / 111320.0
+            gdal.Warp(str(OUT / f"{PNAME}_{tag}.tif"), str(TMP / f"{c}.vrt"), dstSRS="EPSG:4326", outputBounds=(PW, PS, PE, PN),
+                      xRes=res / np.cos(np.radians((PS + PN) / 2)), yRes=res, resampleAlg="bilinear", bandList=[1, 2, 3],
+                      creationOptions=["COMPRESS=JPEG", "JPEG_QUALITY=88", "PHOTOMETRIC=YCBCR", "TILED=YES"])
+            say(f"{c} → {PNAME}_{tag}.tif {(OUT / f'{PNAME}_{tag}.tif').stat().st_size >> 20} MB")
+            for x in files: pathlib.Path(x).unlink()
 
     # orthophotos: newest WMS that answers
     got = []
