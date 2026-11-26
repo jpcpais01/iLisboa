@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export const cityUniforms = { uNight: { value: 0 } };
 // map overlay (src/layers/overlay.js): one texture draped over ground, walls and roofs alike (temperature, rain, freguesias)
-export const overlayUniforms = { uOv: { value: null }, uOvBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uOvK: { value: 0 }, uOvLev: { value: 0 }, uOvMode: { value: 0 } };
+export const overlayUniforms = { uOv: { value: null }, uOvBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uOvK: { value: 0 }, uOvLev: { value: 0 }, uOvMode: { value: 0 }, uOvLift: { value: 0 } };
 
 // Buildings: one material for walls, roofs, trims and monuments. Everything a façade shows
 // (bays, frames, shutters, balconies, shopfronts, azulejos, roof tiles, dormers, ashlar) is
