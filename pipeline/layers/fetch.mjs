@@ -33,8 +33,14 @@ await probe('open-meteo-15', 'https://api.open-meteo.com/v1/forecast?latitude=38
 const st = await probe('ipma-stations', 'https://api.ipma.pt/open-data/observation/meteorology/stations/stations.json');
 const ob = await probe('ipma-obs', 'https://api.ipma.pt/open-data/observation/meteorology/stations/observations.json');
 await probe('ipma-obs3h', 'https://api.ipma.pt/open-data/observation/meteorology/stations/obs-surface.geojson');
-await probe('rainviewer', 'https://api.rainviewer.com/public/weather-maps.json');
-await probe('ipma-radar-list', 'https://api.ipma.pt/open-data/observation/meteorology/radar/radar.json');
+const rv = await probe('rainviewer', 'https://api.rainviewer.com/public/weather-maps.json');
+try {
+  const m = JSON.parse(rv.text()), last = m.radar.past.at(-1);
+  for (const [z, x, y] of [[6, 30, 24], [7, 60, 48], [8, 121, 97], [10, 486, 391]]) for (const c of [0, 2]) {
+    const u = `${m.host}${last.path}/256/${z}/${x}/${y}/${c}/0_0.png`, r = await get(u);
+    writeFileSync(`${PROBE}/rv-${z}-${c}.txt`, `${r.status} ${r.type} ${r.buf.length} cors=${r.status} ${u}`);
+  }
+} catch (e) { console.log('rv tiles ERR', e.message); }
 
 if (st && st.status === 200) {
   try {
@@ -59,8 +65,14 @@ await probe('ine-meta', 'https://www.ine.pt/ine/json_indicador/pindicaMeta.jsp?v
 // ─── borders: OSM boundary relations (imported from the official CAOP) ───
 const gj = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const inBox = (r) => r.some(([lon, lat]) => lon > BOX.W && lon < BOX.E && lat > BOX.S && lat < BOX.N);
-function simplify(pts, tol) {   // Douglas–Peucker on [x,y]
+function simplify(pts, tol) {   // Douglas–Peucker on [x,y]; a closed ring is split at its farthest point first
   if (pts.length < 4) return pts;
+  const [fx, fy] = pts[0], [lx, ly] = pts[pts.length - 1];
+  if (fx === lx && fy === ly) {
+    let far = 1, fd = 0;
+    for (let i = 1; i < pts.length - 1; i++) { const d = Math.hypot(pts[i][0] - fx, pts[i][1] - fy); if (d > fd) { fd = d; far = i; } }
+    return [...simplify(pts.slice(0, far + 1), tol).slice(0, -1), ...simplify(pts.slice(far), tol)];
+  }
   const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
   const st = [[0, pts.length - 1]];
   while (st.length) {
@@ -91,30 +103,23 @@ for (const f of gj.features) {
 console.log('regions', regions.length, regions.filter((r) => r.lvl === 8).length, 'freguesias');
 writeFileSync(`${PROBE}/osm-regions.txt`, regions.map((r) => `${r.lvl} ${r.ine} ${r.wd} ${r.popOsm} ${r.popDate} ${r.area} ${r.name}`).join('\n'));
 
-// population: Censos 2021 from Wikidata (P1082 with point in time 2021), by the OSM wikidata link
-const qids = regions.map((r) => r.wd).filter(Boolean);
-if (qids.length) {
-  const q = `SELECT ?f ?pop ?t ?code WHERE { VALUES ?f { ${qids.map((x) => 'wd:' + x).join(' ')} }
-    OPTIONAL { ?f p:P1082 ?s . ?s ps:P1082 ?pop . OPTIONAL { ?s pq:P585 ?t } }
-    OPTIONAL { ?f wdt:P6324 ?code } }`;
-  const r = await probe('wikidata', 'https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(q), { headers: { accept: 'application/sparql-results+json' } });
-  try {
-    const rows = JSON.parse(r.text()).results.bindings, by = {};
-    for (const b of rows) {
-      const id = b.f.value.split('/').pop(), t = b.t ? b.t.value.slice(0, 4) : '', pop = b.pop ? +b.pop.value : null;
-      const e = (by[id] ||= { all: [] });
-      if (pop) e.all.push([t, pop]);
-      if (b.code) e.code = b.code.value;
-    }
-    for (const reg of regions) {
-      const e = by[reg.wd]; if (!e) continue;
-      const c21 = e.all.find(([t]) => t === '2021');
-      const best = c21 || e.all.sort((a, b) => b[0].localeCompare(a[0]))[0];
-      if (best) { reg.pop = best[1]; reg.popYear = best[0] || null; }
-      if (e.code && !reg.ine) reg.ine = e.code;
-    }
-    writeFileSync(`${PROBE}/wikidata-pop.txt`, regions.map((r) => `${r.lvl} ${r.name}: ${r.pop} (${r.popYear}) all=${JSON.stringify(by[r.wd]?.all || [])}`).join('\n'));
-  } catch (e) { console.log('wikidata parse ERR', e.message); }
-}
-writeFileSync(`${OUT}/freguesias.json`, JSON.stringify(regions.map(({ popOsm, popDate, ...r }) => ({ ...r, pop: r.pop ?? popOsm ?? null, popYear: r.popYear ?? (popOsm ? popDate : null) }))));
+// population: OSM carries the Censos 2021 count on most boundaries; INE's own table fills the gaps (and checks the rest)
+const norm = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+try {
+  const ine = JSON.parse((await get('https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0011609&Dim1=S7A2021&Dim3=T&Dim4=T&lang=PT')).text());
+  const rows = ine[0].Dados['2021'], by = new Map();
+  writeFileSync(`${PROBE}/ine-rows.txt`, JSON.stringify(rows.slice(0, 5), null, 1));
+  for (const r of rows) if ((r.dim_3 === 'T' || r.dim_3_t === 'HM') && (r.dim_4 === 'T' || /total/i.test(r.dim_4_t || ''))) {
+    const k = norm(r.geodsg); if (!by.has(k)) by.set(k, []); by.get(k).push({ code: r.geocod, pop: +r.valor });
+  }
+  const log = [];
+  for (const reg of regions) {
+    const c = by.get(norm(reg.name)) || [];
+    const pick = c.find((e) => (reg.lvl === 8 ? e.code.length === 6 : e.code.length === 4)) || c[0];
+    if (pick) { reg.ine = reg.ine || pick.code; reg.popIne = pick.pop; }
+    log.push(`${reg.lvl} ${reg.name}: osm ${reg.popOsm} (${reg.popDate}) ine ${pick?.pop} ${pick?.code} [${c.length}]`);
+  }
+  writeFileSync(`${PROBE}/ine-match.txt`, log.join('\n'));
+} catch (e) { console.log('ine ERR', e.message); }
+writeFileSync(`${OUT}/freguesias.json`, JSON.stringify(regions.map(({ popOsm, popDate, popIne, ...r }) => ({ ...r, pop: popIne ?? popOsm ?? null, popSrc: popIne ? 'INE Censos 2021' : popOsm ? `OSM (${popDate || '?'})` : null }))));
 console.log('wrote', `${OUT}/freguesias.json`);
