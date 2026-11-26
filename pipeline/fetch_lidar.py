@@ -55,6 +55,7 @@ def login(s):
     s.get(SITE, timeout=30)
     q = dict(client_id="aai-oidc-dgt", response_type="code", redirect_uri=SITE + "/auth/callback", scope="openid profile email")
     r = s.get(AUTH + "?" + urlencode(q), timeout=30); r.raise_for_status()
+    if r.url.startswith(SITE): say("session still valid"); return   # Keycloak sent us straight back: already signed in
     f = LoginForm(); f.feed(r.text)
     if not f.action: sys.exit("login page has no kc-form-login form")
     data = dict(f.hidden, username=os.environ["DGT_USER"], password=os.environ["DGT_PASSWORD"])
@@ -81,15 +82,18 @@ def search(s, coll):
 def tiff_href(f):
     for a in f.get("assets", {}).values():
         if "tiff" in (a.get("type") or "") or (a.get("href") or "").lower().endswith((".tif", ".tiff")): return a["href"]
-    return None
+    hrefs = [a.get("href") for a in f.get("assets", {}).values() if a.get("href")]
+    return hrefs[0] if len(hrefs) == 1 else None
 
 
-def download(s, href, dst):
+def download(s, href, dst, relogin=None):
     if dst.exists() and dst.stat().st_size > 0: return True
     for k in range(3):
         try:
             with s.get(href, stream=True, timeout=120) as r:
                 ct = r.headers.get("content-type", "")
+                if (r.status_code in (401, 403) or "html" in ct) and relogin and k < 2:
+                    say(f"  {dst.name}: signed out, signing in again"); relogin(); continue
                 if r.status_code != 200 or "html" in ct:
                     say(f"  {dst.name}: HTTP {r.status_code} {ct}"); return False
                 tmp = dst.with_suffix(".part")
@@ -130,8 +134,9 @@ def main():
         for i, (fid, href, _) in enumerate(items):
             if not href: continue
             dst = d / (str(fid).replace("/", "_") + ".tif")
-            if download(s, href, dst): files[coll].append(str(dst))
-            if have_login and i % 40 == 39: login(s)   # sessions last ~25 min
+            if download(s, href, dst, (lambda: login(s)) if have_login else None): files[coll].append(str(dst))
+            time.sleep(0.3)   # be gentle with the national server
+            if i % 50 == 49: say(f"  {coll}: {i + 1} / {len(items)}")
         say(f"{coll}: {len(files[coll])} / {len(items)} files")
         if not files[coll]: sys.exit(f"no {coll} files downloaded")
     vrt = {c: gdal.BuildVRT(str(TMP / f"{c}.vrt"), files[c]) for c in files}
