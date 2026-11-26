@@ -1166,12 +1166,15 @@ function addBuilding_(p) {
 }
 
 // ─── structures that cross area seams: built whole, each area keeps the triangles over its own ground ───
+const FARX = new Map();   // tile → triangles of authored structures (bridges, aqueduct) that the far level must keep too
 function distribute(T) {
   let kept = 0;
   for (let t = 0; t < T.pos.length / 9; t++) {
     const o = t * 9, cx = (T.pos[o] + T.pos[o + 3] + T.pos[o + 6]) / 3, cy = -(T.pos[o + 2] + T.pos[o + 5] + T.pos[o + 8]) / 3;
     if (cx < minX || cx >= maxX || cy < minY || cy >= maxY) continue;
     const D = tileB0(cx, cy); kept++;
+    { const [ti, tj] = tileOf(cx, cy), k = `${ti}_${tj}`, F = FARX.get(k) || FARX.set(k, { P: [], C: [] }).get(k);
+      for (let q = 0; q < 9; q++) { F.P.push(T.pos[o + q]); F.C.push(T.col[o + q]); } }
     for (let k = 0; k < 9; k++) { D.pos.push(T.pos[o + k]); D.nrm.push(T.nrm[o + k]); D.col.push(T.col[o + k]); }
     for (let k = 0; k < 12; k++) { D.info.push(T.info[t * 12 + k]); D.style.push(T.style[t * 12 + k]); }
     for (let k = 0; k < 6; k++) D.surf.push(T.surf[t * 6 + k]);
@@ -2019,6 +2022,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
         if (triNormal(a, b, c)[1] < 0) tri(a, c, b, roof); else tri(a, b, c, roof);
       }
     }
+    { const F = FARX.get(`${i}_${j}`); if (F) for (let q = 0; q < F.P.length; q++) { P.push(F.P[q]); C.push(F.C[q]); } }   // the bridges stand at every distance
     if (P.length) {
       addMesh(doc, scene, `fb_${i}_${j}`, { POSITION: [Float32Array.from(P), 'VEC3'], COLOR_0: [Uint8Array.from(C, (v) => Math.round(Math.min(1, v) * 255)), 'VEC3', true] }, bmat);
       farTris += P.length / 9;
