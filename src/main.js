@@ -601,9 +601,9 @@ function setTime(h, now = false) {
     // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
     const E = Math.max(0, Math.max(sunDir.y, 0) * (st.sunColor.r + st.sunColor.g * 2 + st.sunColor.b) / 4 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.16, 0.45) + 0.02);
     // in daylight the exposure is photographic: a sunlit horizontal albedo comes out of ACES as itself (E is ~3.95× the
-    // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain), so photos and measured colours read true instead
+    // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain; +10 % for its toe, which crushes asphalt and shade), so photos and measured colours read true instead
     // of ~2.5× brighter and milky. Dusk and night keep the eye's partial adaptation (the min hands over smoothly).
-    renderer.toneMappingExposure = EXPOSURE * Math.min(1.71 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
+    renderer.toneMappingExposure = EXPOSURE * Math.min(1.9 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
     scene.environmentIntensity = 1;
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
