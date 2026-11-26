@@ -8,9 +8,10 @@
 //    live city is right now compared with that model.
 //  · How: each lane is a queue of cars that keep a safe gap (a car brakes for the one ahead, queues spill back
 //    through junctions), pick their next street at the end of each one, preferring streets that are short of cars.
-//    Only the streets in view are simulated; far away, cars are drawn a little larger (so they never vanish below a
-//    pixel) and proportionally fewer, which keeps the look of the density at any zoom inside a fixed budget.
-//  · Cost: one instanced draw (~40 triangles per car), 32 bytes per car per frame. Phones get a smaller budget.
+//    Only the streets in view are simulated. Every car is true scale at any distance: the nearest streets get their
+//    real density, the far ones share what is left of a fixed budget (10k cars on phones, 32k on computers).
+//  · Cost: two instanced draws (modelled cars ~40 triangles close up, plain 10-triangle blocks beyond 380 m),
+//    32 bytes per car per frame.
 import * as THREE from 'three';
 import { loadNetwork, loadNames } from './network.js';
 import { getFlow } from './flow.js';
@@ -28,19 +29,21 @@ const KJAM = 125;                                                 // jam density
 const DAY = [0.17, 0.1, 0.07, 0.05, 0.05, 0.09, 0.26, 0.62, 0.95, 0.86, 0.68, 0.66, 0.72, 0.72, 0.68, 0.72, 0.8, 0.94, 1, 0.88, 0.66, 0.48, 0.37, 0.26];
 const END = [0.26, 0.19, 0.13, 0.08, 0.06, 0.06, 0.1, 0.17, 0.27, 0.4, 0.52, 0.6, 0.64, 0.62, 0.58, 0.58, 0.6, 0.62, 0.6, 0.55, 0.48, 0.42, 0.36, 0.3];
 const GAP0 = 2.2, HEADWAY = 1.15, ACC = 2.2, DEC = 7;             // car following: standstill gap (m), time gap (s), m/s²
-const MIN_PX = 3.2, MAX_INFL = 7, CAR_L = 4.4;                    // far cars: never shorter than this many pixels
-const THIN = 0.65;                                                // a car drawn k× larger stands for k^THIN cars (far roads read a little busier than life, in proportion)
+const CAR_L = 4.4;                                                // every car is drawn at true scale, at any distance
+const NEAR = 380;                                                 // closer than this: the modelled car; beyond, a plain box (10 triangles)
 
 export function createCars(ctx) {
   const { scene, ground, ll, camera, canvas, night, mobile, lod } = ctx;
-  const BUDGET = mobile ? 4000 : 14000;
-  const geo = carGeometry(BUDGET);
+  // cars in view at once; the closest share is always simulated at full density, the rest of the budget is spread
+  // evenly over the far streets (so a far view stays full of tiny cars instead of a few big ones)
+  const BUDGET = mobile ? 10000 : 32000, NEAR_MAX = mobile ? 3000 : 8000;
   const mat = carMaterial(night);
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.name = 'ambient-cars';
-  geo.instanceCount = 0;
-  scene.add(mesh);
-  const pose = geo.attributes.aPose, ext = geo.attributes.aExt;
+  const mk = (n, plain, name) => {
+    const g = carGeometry(n, plain), m = new THREE.Mesh(g, mat);
+    m.frustumCulled = false; m.receiveShadow = !plain; m.name = name; g.instanceCount = 0; scene.add(m);
+    return { g, pose: g.attributes.aPose, ext: g.attributes.aExt, max: n };
+  };
+  const near = mk(NEAR_MAX, false, 'ambient-cars'), far = mk(BUDGET, true, 'ambient-cars-far');
 
   let net = null, info = null;   // per edge: { cls, nl (lanes per direction), mid, rad, sens, seed, r: [fwd, back] live relative speed or NaN }
   let liveK = 1, source = '', flowT = 0, matching = false;
@@ -154,7 +157,6 @@ export function createCars(ctx) {
     demand = T[i0] * (1 - f) + T[(i0 + 1) % 24] * f; pModel = pressure();
     camera.updateMatrixWorld(); pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm);
     cp.copy(camera.position);
-    const pxK = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, canvas.clientHeight);
     const R = Math.min(mobile ? 6000 : 9000, 1400 + Math.max(0, cp.y) * 4.5);
     for (const l of lanes.values()) l.active = false;
     let want = 0;
@@ -166,23 +168,26 @@ export function createCars(ctx) {
       const gz = ground.at(I.mid[0], I.mid[1]);
       const d3 = Math.hypot(dd, cp.y - gz);
       if (d3 - I.rad > 300) { sph.center.set(I.mid[0], gz, -I.mid[1]); sph.radius = I.rad + 40; if (!frustum.intersectsSphere(sph)) continue; }
-      // thinning with distance: a car drawn k× larger stands for k^THIN cars
-      const infl = Math.min(MAX_INFL, Math.max(1, (MIN_PX * pxK * d3) / CAR_L));
       const E = net.edges[e];
       for (const dir of E.oneway ? [0] : [0, 1]) {
-        const k = (density(e, dir) * E.L) / 1000 / infl ** THIN;
-        cand.push(e, dir, k, d3); want += k * I.nl;
+        const k = (density(e, dir) * E.L) / 1000;
+        cand.push({ e, dir, k, d: d3 }); want += k * I.nl;
       }
     }
-    const scale = Math.min(1, (BUDGET * Math.max(0.55, lod())) / Math.max(1, want));
-    dbg = { want: Math.round(want), scale: +scale.toFixed(3), lanes: lanes.size, R: Math.round(R) };
-    for (let i = 0; i < cand.length; i += 4) {
-      const e = cand[i], dir = cand[i + 1], k = cand[i + 2] * scale, nl = info[e].nl;
+    // nearest streets first at their real density, up to 70% of the budget; every street beyond shares the rest
+    cand.sort((a, b) => a.d - b.d);
+    const B = BUDGET * Math.max(0.55, lod());
+    let used = 0, iFull = cand.length;
+    for (let i = 0; i < cand.length; i++) { const w = cand[i].k * info[cand[i].e].nl; if (used + w > B * 0.7) { iFull = i; break; } used += w; }
+    const rest = want - used, scale = rest > 0 ? Math.min(1, (B - used) / rest) : 1;
+    dbg = { want: Math.round(want), fullTo: Math.round(cand[iFull]?.d ?? Infinity), scale: +scale.toFixed(3), lanes: lanes.size, R: Math.round(R) };
+    for (let i = 0; i < cand.length; i++) {
+      const { e, dir } = cand[i], k = cand[i].k * (i < iFull ? 1 : scale), nl = info[e].nl;
       for (let li = 0; li < nl; li++) {
         const key = e * 16 + dir * 8 + li;
         let l = lanes.get(key);
         if (!l) { l = makeLane(e, dir, li); lanes.set(key, l); }
-        l.active = true; l.d = cand[i + 3]; l.v = laneSpeed(e, dir);
+        l.active = true; l.d = cand[i].d; l.v = laneSpeed(e, dir);
         l.target = Math.floor(k + l.frac);
       }
     }
@@ -291,13 +296,12 @@ export function createCars(ctx) {
     return tmp;
   }
   function draw() {
-    const P = pose.array, X = ext.array, pxK = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, canvas.clientHeight);
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
-    let n = 0;
+    let nn = 0, nf = 0;
     for (const l of lanes.values()) {
       if (l.tunnel) continue;
       for (const c of l.cars) {
-        if (n >= BUDGET) break;
+        if (nf >= BUDGET) break;
         const a = at(l, c);
         let x = a.x, y = a.y;
         if (c.jx || c.jy) {
@@ -313,15 +317,16 @@ export function createCars(ctx) {
         // pitch along the slope (Lisbon's hills), looked up 2.5 m ahead and behind
         if (!Number.isFinite(pitch)) pitch = l.deck && l.vg ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
         const d = Math.hypot(x - cx, z - cy, -y - cz);
-        const infl = Math.min(MAX_INFL, Math.max(1, (MIN_PX * pxK * d) / CAR_L));
+        const T = d < NEAR && nn < NEAR_MAX ? near : far, n = T === near ? nn++ : nf++, P = T.pose.array, X = T.ext.array;
         P[n * 4] = x; P[n * 4 + 1] = z + 0.05; P[n * 4 + 2] = -y; P[n * 4 + 3] = Math.atan2(a.hx, a.hy);
-        X[n * 4] = pitch; X[n * 4 + 1] = c.fade * infl; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
-        n++;
+        X[n * 4] = pitch; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
       }
     }
-    geo.instanceCount = n;
-    for (const A of [pose, ext]) { A.clearUpdateRanges(); A.addUpdateRange(0, n * 4); A.needsUpdate = true; }
-    return n;
+    for (const [T, n] of [[near, nn], [far, nf]]) {
+      T.g.instanceCount = n;
+      for (const A of [T.pose, T.ext]) { A.clearUpdateRanges(); A.addUpdateRange(0, n * 4); A.needsUpdate = true; }
+    }
+    return nn + nf;
   }
 
   let shown = 0;
@@ -382,7 +387,7 @@ function paintIndex(h) { let x = h * PAL_TOT; for (let i = 0; i < carPalette.len
 
 // one tiny car (+x forward, y up, origin on the ground): painted body, dark glass cabin with a painted roof, dark
 // sills. Faces pointing straight down are dropped (never seen). glow: headlamps on the nose, tail lamps on the back.
-function carGeometry(max) {
+function carGeometry(max, plain) {
   const pos = [], nor = [], col = [], tint = [], glow = [];
   const box = (cx, cy, cz, L, H, W, c, t, lamps) => {
     const g = new THREE.BoxGeometry(L, H, W).translate(cx, cy, cz).toNonIndexed();
@@ -397,10 +402,13 @@ function carGeometry(max) {
       }
     }
   };
-  box(0, 0.6, 0, 4.4, 0.72, 1.78, [1, 1, 1], 1, true);              // body
-  box(-0.3, 1.2, 0, 2.3, 0.5, 1.6, [0.09, 0.11, 0.13], 0, false);   // glass
-  box(-0.35, 1.47, 0, 2.0, 0.06, 1.5, [1, 1, 1], 1, false);          // roof
-  box(0, 0.12, 0, 4.0, 0.24, 1.7, [0.06, 0.06, 0.06], 0, false);    // sills and tyres
+  if (plain) box(0, 0.75, 0, 4.4, 1.3, 1.78, [1, 1, 1], 1, true);   // far: one painted block with its lamps
+  else {
+    box(0, 0.6, 0, 4.4, 0.72, 1.78, [1, 1, 1], 1, true);              // body
+    box(-0.3, 1.2, 0, 2.3, 0.5, 1.6, [0.09, 0.11, 0.13], 0, false);   // glass
+    box(-0.35, 1.47, 0, 2.0, 0.06, 1.5, [1, 1, 1], 1, false);          // roof
+    box(0, 0.12, 0, 4.0, 0.24, 1.7, [0.06, 0.06, 0.06], 0, false);    // sills and tyres
+  }
   const base = new THREE.BufferGeometry();
   base.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   base.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
