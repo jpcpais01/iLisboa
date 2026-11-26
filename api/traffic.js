@@ -1,6 +1,6 @@
 // Live road traffic from TomTom Traffic Flow vector tiles (free tier, needs TOMTOM_KEY in the Vercel env).
 // Without a key it answers {source: "none"} and the viewer falls back to its typical-traffic estimate.
-// The whole city is fetched as one CDN-cached response (~48 tiles every 3 min at most, well inside the free tile quota).
+// The whole city is fetched as one CDN-cached response (~100 z14 tiles every 5 min at most, inside the free 50k-tile daily quota).
 import { decodeTile } from './_lib/mvt.js';
 import { fwd, BBOX, r1 } from './_lib/geo.js';
 
@@ -27,11 +27,12 @@ export default async function handler(req, res) {
         const lvl = F.props.road_closure ? 0 : F.props.traffic_level;
         if (typeof lvl !== 'number') continue;
         const cls = { Motorway: 0, 'International road': 0, 'Major road': 1, 'Secondary road': 2, 'Connecting road': 3, 'Major local road': 4, 'Local road': 5, 'Minor local road': 6 }[F.props.road_type] ?? 4;
+        if (cls > 5) continue;   // minor local streets: noise on a city-wide map, a third of the payload
         for (const line of F.lines) {
           const pts = [];
           for (const [px, py] of line) {
             const [mx, my] = fwd(latOf(y + py / L.extent), lonOf(x + px / L.extent));
-            pts.push(r1(mx), r1(my));
+            pts.push(Math.round(mx), Math.round(my));
           }
           if (pts.length >= 4) segs.push([Math.round(lvl * 100), cls, ...pts]);
         }
@@ -39,6 +40,6 @@ export default async function handler(req, res) {
     } catch (e) { failed++; lastErr = String(e.message || e); }
   }));
   if (failed === jobs.length) { res.setHeader('Cache-Control', 'public, s-maxage=60'); return res.status(502).send(JSON.stringify({ source: 'tomtom', error: lastErr })); }
-  res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=120');
+  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=120');   // ~100 tiles × 288/day stays well inside TomTom's free 50k tiles
   res.status(200).send(JSON.stringify({ source: 'tomtom', t: Math.round(Date.now() / 1000), tiles: jobs.length, failed, segs }));
 }
