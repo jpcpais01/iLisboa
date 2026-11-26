@@ -241,3 +241,44 @@ body.driving #attrib { opacity: 0.55; }
 @keyframes roadIn { from { opacity: 0; transform: translate(-50%, 6px); } }
 @media (pointer: fine) { .drive-hud .road { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 80px); } }
 @media (pointer: coarse) and (orientation: portrait) { .drive-hud .road { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 108px); } }
+
+/* ─── landmark card: photo, name, Wikipedia summary, link ─── */
+.lm-card {
+  position: fixed; z-index: 5; left: max(16px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 58px);
+  width: min(360px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 200px)); display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 18px; background: var(--glass); border: 1px solid var(--line); color: var(--ink);
+  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 12px 40px rgba(40, 30, 20, 0.2);
+  opacity: 0; transform: translateY(14px); transition: opacity 0.3s ease, transform 0.35s cubic-bezier(.2, .8, .2, 1);
+}
+.lm-card.in { opacity: 1; transform: none; }
+.lm-card[hidden] { display: none; }
+.lm-card .ph { flex: none; height: 168px; background: var(--line); overflow: hidden; }
+.lm-card .ph img { width: 100%; height: 100%; object-fit: cover; display: block; animation: lm-fade 0.4s ease; }
+.lm-card .tx { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; }
+.lm-card .ti { font-size: 17px; line-height: 1.25; padding-right: 22px; letter-spacing: -0.01em; }
+.lm-card small { color: var(--muted); font-size: 12.5px; line-height: 1.3; }
+.lm-card .ex { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; }
+.lm-card .ex.none { color: var(--muted); }
+.lm-card .ft { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.lm-card .go {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--terracotta); color: #fff;
+  font-weight: 650; font-size: 13.5px; text-decoration: none;
+}
+.lm-card .go svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.lm-card em { font-style: normal; font-size: 10.5px; color: var(--muted); }
+.lm-card .x {
+  position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(20, 18, 16, 0.42); color: #fff; font-size: 19px; line-height: 30px; padding: 0;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.lm-card .sk { color: var(--muted); }
+.lm-card .ph.sk { background: linear-gradient(100deg, var(--line) 30%, rgba(255, 255, 255, 0.25) 50%, var(--line) 70%) 0 0 / 300% 100%; animation: lm-shine 1.2s linear infinite; }
+@keyframes lm-shine { to { background-position: -150% 0; } }
+@keyframes lm-fade { from { opacity: 0; } }
+@media (max-width: 600px) {
+  /* phone: a sheet across the bottom, the building framed in the space above it */
+  .lm-card { left: 10px; right: 10px; width: auto; max-height: 46vh; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 56px); border-radius: 20px; }
+  .lm-card .ph { height: 128px; }
+  .lm-card .ex { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+}
+body.driving .lm-card { display: none !important; }

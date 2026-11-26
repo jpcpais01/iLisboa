@@ -8,6 +8,7 @@ import { createTraffic } from './traffic.js';
 import { createTransit } from './transit.js';
 import { createPlanes } from './planes.js';
 import { createCars } from './cars.js';
+import { claimTap, probe } from '../pick.js';
 
 const LAYERS = [
   { key: 'traffic', label: 'Trânsito', icon: '<rect x="7.5" y="2.5" width="9" height="19" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>' },
@@ -66,6 +67,9 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
       }
     }
     if (!best) { if (!followed) card.hidden = true; return; }   // while following, a stray tap on the map does not end it
+    // a passing ambient car only wins over a landmark behind it when the tap is right on it
+    if (best.key === 'cars' && bd > 12 && probe('landmark', e.clientX, e.clientY)) return;
+    claimTap('live');   // a vehicle wins the tap over a landmark or the ground layers behind it (src/pick.js)
     if (best.id != null && layers[best.key]?.track) startFollow(best.key, best.id);
     else showCard(best.key, best.info(), false);
   });

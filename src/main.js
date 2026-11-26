@@ -11,6 +11,7 @@ import { createSky } from './sky.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
+import { initLandmarks } from './landmarks.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -681,6 +682,8 @@ controls.addEventListener('end', () => {
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
+// landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
+const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -696,8 +699,9 @@ renderer.setAnimationLoop((now) => {
     camera.position.lerpVectors(startPos, endPos, e);
   }
   const driving = drive.update(raw, now);   // before the chase camera, so it films where the car is now; real elapsed time (the car runs its own fixed steps)
+  const flying = marks.update(dt, now);   // a tapped landmark: the camera flies round to frame it
   const touching = touch.update(dt);
-  const moved = controls.update(dt) || touching || driving;
+  const moved = controls.update(dt) || touching || driving || flying;
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
