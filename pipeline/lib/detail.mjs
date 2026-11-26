@@ -18,14 +18,26 @@ const tone = (c, sat = 1.18) => {
   const t = c.map((v) => 255 * Math.pow(clamp(v, 0, 255) / 255, 0.86) * 1.04), l = (t[0] + t[1] + t[2]) / 3;
   return t.map((v) => clamp(l + (v - l) * sat, 0, 255));
 };
+// photo → the colour Google Earth shows (what João compares against): fitted on the 216 Telheiras buildings read by eye
+// (data/detail/telheiras_looks.json) against this module's own photo reads. In log-linear light, a surface's colour is the
+// class mean plus k × how far its photo read sits from the photo mean. Leave-one-out error (sRGB distance): tiles 13.3 at
+// k 0.25 (old tone() 61), flat roofs 41 at k 0.5 (tone() 49). Walls: the aerial reads do not predict the wall colour at all
+// (hue correlation 0.1–0.26, every k worse than the mean), so walls are not taken from the photos.
+const CAL = { tile: { mX: [-0.4312, -1.2919, -1.6889], mY: [-0.4209, -1.6917, -2.191], k: 0.25 }, flat: { mX: [-0.6428, -0.8915, -1.0887], mY: [-0.6245, -0.7542, -0.748], k: 0.5 } };
+const calib = (c, C, k = C.k) => c.map((v, i) => 255 * Math.pow(clamp(Math.exp(C.mY[i] + k * (Math.log(Math.pow(clamp(v, 0, 255) / 255, 2.2) + 1e-3) - C.mX[i])), 0, 1), 1 / 2.2));
 const median3 = (arr) => { if (!arr.length) return null; const m = [0, 1, 2].map((k) => arr.map((c) => c[k]).sort((a, b) => a - b)[arr.length >> 1]); return m; };
 const isTile = ([r, g, b]) => r > g * 1.1 && r > b * 1.25 && r - b > 32;   // fired clay: orange to salmon to brown-red
 
-export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar }) {
-  const dir = path.join(ROOT, 'data/detail');
-  if (process.env.NO_DETAIL || !fs.existsSync(dir)) return null;
+export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar, area }) {
+  const dir0 = path.join(ROOT, 'data/detail');
+  if (process.env.NO_DETAIL || !fs.existsSync(dir0)) return null;
+  // the area's own sources (data/detail/city, from the detail-city release: node pipeline/get_detail.mjs <area>) cover all of
+  // it; without them, whatever pilot sources overlap it (Telheiras)
+  const cityDir = path.join(dir0, 'city'), own = area && fs.existsSync(path.join(cityDir, `${area}_ortho2025.tif`));
+  const dir = own ? cityDir : dir0, mine = (f) => !own || f.startsWith(area + '_');
+  if (own) log(`detail: ${area}'s own photos and 50 cm survey`);
   const photos = [];
-  for (const f of fs.readdirSync(dir).filter((f) => /_ortho.*\.tif$/.test(f)).sort()) {
+  for (const f of fs.readdirSync(dir).filter((f) => /_ortho.*\.tif$/.test(f) && mine(f)).sort()) {
     const meta = path.join(dir, f.replace(/\.tif$/, '.json')); if (!fs.existsSync(meta)) continue;
     const img = await (await fromFile(path.join(dir, f))).getImage(), [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution();
     const w = img.getWidth(), h = img.getHeight();
@@ -39,7 +51,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
   if (!photos.length) return null;
   // the 50 cm LiDAR surface (heights above ground, dm) where fetched: rooftop structures, crowns and shadows at 4× the detail
   const fines = [];
-  for (const f of fs.readdirSync(dir).filter((f) => /_ndsm50\.tif$/.test(f))) {
+  for (const f of fs.readdirSync(dir).filter((f) => /_ndsm50\.tif$/.test(f) && mine(f))) {
     const img = await (await fromFile(path.join(dir, f))).getImage(), [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution(), [r] = await img.readRasters();
     fines.push({ ox, oy, rx, ry, w: img.getWidth(), h: img.getHeight(), r }); log(`detail survey ${f} ${img.getWidth()}×${img.getHeight()}`);
   }
@@ -82,6 +94,53 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
   const L3 = (c) => c[0] * 0.3 + c[1] * 0.55 + c[2] * 0.15;
   const lum = (x, y, ph) => { const c = rgb(x, y, ph); return c ? L3(c) : NaN; };
   const covers = (x, y) => rgb(x, y) !== null;
+
+  // the sun when a photo was taken, measured from the photo itself: the survey casts shadows for any sun, and the right sun
+  // is the one whose shadows fall where the photo is dark. For ~20k open-ground points, the steepest skyline towards each
+  // azimuth (from the 50 cm survey); a point is in shade when that skyline is above the sun. Score = how well "in shade"
+  // separates dark from light ground (point-biserial correlation), coarse then fine in azimuth, every degree of elevation.
+  const fitSun = (ph, bx = [minX, minY, maxX, maxY], quiet = false) => {
+    const t0 = Date.now(), st = 3, all = [];
+    for (let y = bx[1] + st / 2; y < bx[3]; y += st) for (let x = bx[0] + st / 2; x < bx[2]; x += st) {
+      const c = rgb(x, y, ph); if (!c) continue; const z0 = fine(x, y); if (!(z0 < 0.3)) continue; all.push([x, y, Math.max(0, z0), L3(c)]);
+    }
+    const every = Math.max(1, Math.floor(all.length / 20000)), smp = all.filter((_, i) => i % every === 0);
+    if (smp.length < (quiet ? 1200 : 2000)) { if (!quiet) log(`detail ${ph.name}: too little open ground to fit the sun (${smp.length})`); return null; }
+    const RS = []; for (let s = 1; s <= 70; s += s < 20 ? 1 : 2.5) RS.push(s);
+    const els = []; for (let e = 20; e <= 80; e++) els.push(e);
+    const score = (azd) => {
+      const az = (azd * Math.PI) / 180, ux = Math.sin(az), uy = Math.cos(az), T = new Float32Array(smp.length);
+      for (let i = 0; i < smp.length; i++) { const [x, y, z0] = smp[i]; let m = -1; for (const s of RS) { const z = fine(x + ux * s, y + uy * s); if (z > 0.5) { const t = (z - z0 - 0.3) / s; if (t > m) m = t; } } T[i] = m; }
+      let best = [-2, 0], n = smp.length, sL = 0, sL2 = 0; for (const q of smp) { sL += q[3]; sL2 += q[3] * q[3]; }
+      const sd = Math.sqrt(Math.max(1, sL2 / n - (sL / n) ** 2));
+      for (const e of els) {
+        const tn = Math.tan((e * Math.PI) / 180); let k = 0, sh = 0;
+        for (let i = 0; i < n; i++) if (T[i] > tn) { k++; sh += smp[i][3]; }
+        if (k < 30 || k > n - 30) continue;
+        const r = ((sL - sh) / (n - k) - sh / k) / sd * Math.sqrt((k / n) * (1 - k / n)); if (r > best[0]) best = [r, e];
+      }
+      return best;
+    };
+    let top = [-2, 0, 0];
+    for (let a = 0; a < 360; a += 10) { const [r, e] = score(a); if (r > top[0]) top = [r, e, a]; }
+    const a0 = top[2]; for (let a = a0 - 8; a <= a0 + 8; a += 2) if (a !== a0) { const [r, e] = score((a + 360) % 360); if (r > top[0]) top = [r, e, (a + 360) % 360]; }
+    if (!quiet) log(`detail ${ph.name}: sun fitted az ${top[2]}° el ${top[1]}° (r ${top[0].toFixed(3)}, ${smp.length} points, ${((Date.now() - t0) / 1000).toFixed(0)} s)${ph.sun ? ` — given az ${ph.sun.az} el ${ph.sun.el} scores r ${score(ph.sun.az)[0].toFixed(3)} at its best el ${score(ph.sun.az)[1]}` : ''}`);
+    return top[0] > 0.05 ? { az: top[2], el: top[1], r: top[0], fitted: true } : null;
+  };
+  // an aerial survey is flown in strips, on different days and hours: the sun is fitted again for each ~1 km block, and a
+  // block keeps the area's sun unless its own fit is clearly better at explaining its shadows
+  const BK = 1000, bw = Math.max(1, Math.round((maxX - minX) / BK)), bh = Math.max(1, Math.round((maxY - minY) / BK));
+  if (lidar) for (const ph of photos) if (!ph.sun || process.env.SUN_FIT) {
+    const f = fitSun(ph); if (!f || ph.sun) continue; ph.sun = f; ph.suns = [];
+    const own = [];
+    for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) {
+      const bx = [minX + ((maxX - minX) * i) / bw, minY + ((maxY - minY) * j) / bh, minX + ((maxX - minX) * (i + 1)) / bw, minY + ((maxY - minY) * (j + 1)) / bh];
+      const g = fitSun(ph, bx, true), useOwn = g && g.r > Math.max(0.15, f.r * 0.8) && (Math.abs(((g.az - f.az + 540) % 360) - 180) > 6 || Math.abs(g.el - f.el) > 4);
+      ph.suns.push(useOwn ? g : f); if (useOwn) own.push(`${i},${j}: ${g.az}°/${g.el}°`);
+    }
+    if (own.length) log(`detail ${ph.name}: blocks flown under another sun: ${own.join(', ')}`);
+  }
+  const sunAt = (ph, x, y) => { if (!ph.suns) return ph.sun; const i = clamp(Math.floor(((x - minX) / (maxX - minX)) * bw), 0, bw - 1), j = clamp(Math.floor(((y - minY) / (maxY - minY)) * bh), 0, bh - 1); return ph.suns[j * bw + i]; };
   const bbox = (R) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of R) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } return [x0, y0, x1, y1]; };
   const inside = (p, x, y) => pointInRing(x, y, p.outer) && !p.holes.some((hh) => pointInRing(x, y, hh));
 
@@ -108,28 +167,29 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
 
   // cast shadows in each photo, from the survey heights and the sun of that photo (2 m grid), and how much darker they are
   const S2 = 2, sw = Math.ceil((maxX - minX) / S2), shh = Math.ceil((maxY - minY) / S2);
-  const shadowGrid = (ph = P) => {
-    if (ph.shg) return ph.shg;
-    const g = ph.shg = new Uint8Array(sw * shh);
-    if (!ph.sun || !lidar) return g;
-    const az = (ph.sun.az * Math.PI) / 180, tn = Math.tan((ph.sun.el * Math.PI) / 180), ux = Math.sin(az), uy = Math.cos(az);   // towards the sun
-    for (let r = 0; r < shh; r++) for (let c = 0; c < sw; c++) {
-      const x = minX + (c + 0.5) * S2, y = maxY - (r + 0.5) * S2; if (!rgb(x, y, ph)) continue;
-      const z0 = fine(x, y); if (!(z0 < 1.5)) continue;
-      for (let s = 1; s < 90; s += 1) { const z = fine(x + ux * s, y + uy * s); if (z > s * tn + Math.max(0, z0) + 0.3) { g[r * sw + c] = 1; break; } }
+  // computed cell by cell on demand (a whole area at 2 m is ~3M rays a photo): 0 not yet asked, 1 lit, 2 in shade
+  const shadowCell = (ph, r, c) => {
+    const g = ph.shg ||= new Uint8Array(sw * shh), i = r * sw + c; if (g[i]) return g[i] - 1;
+    let v = 0;
+    if (ph.sun && lidar) {
+      const x = minX + (c + 0.5) * S2, y = maxY - (r + 0.5) * S2, z0 = rgb(x, y, ph) ? fine(x, y) : NaN;
+      if (z0 < 1.5) {
+        const sn = sunAt(ph, x, y), az = (sn.az * Math.PI) / 180, tn = Math.tan((sn.el * Math.PI) / 180), ux = Math.sin(az), uy = Math.cos(az);   // towards the sun
+        for (let s = 1; s < 90; s += 1) { const z = fine(x + ux * s, y + uy * s); if (z > s * tn + Math.max(0, z0) + 0.3) { v = 1; break; } }
+      }
     }
-    return g;
+    g[i] = v + 1; return v;
   };
-  const shadowAt = (x, y, ph = P) => { const g = shadowGrid(ph), c = Math.floor((x - minX) / S2), r = Math.floor((maxY - y) / S2); return c >= 0 && r >= 0 && c < sw && r < shh ? g[r * sw + c] : 0; };
+  const shadowAt = (x, y, ph = P) => { const c = Math.floor((x - minX) / S2), r = Math.floor((maxY - y) / S2); return c >= 0 && r >= 0 && c < sw && r < shh ? shadowCell(ph, r, c) : 0; };
   // per channel: sunlit over shaded open ground, just either side of the shadow edges (same pavement, same lawn)
   const ratio = (ph = P) => {
     if (ph.ratio) return ph.ratio;
-    const g = shadowGrid(ph), sun = [[], [], []], shd = [[], [], []];
-    for (let r = 3; r < shh - 3; r++) for (let c = 3; c < sw - 3; c++) {
-      const i = r * sw + c, x = minX + (c + 0.5) * S2, y = maxY - (r + 0.5) * S2;
-      if (!(g[i] !== g[i + 2] || g[i] !== g[i - 2] || g[i] !== g[i + 2 * sw] || g[i] !== g[i - 2 * sw])) continue;
+    const sun = [[], [], []], shd = [[], [], []], at = (r, c) => shadowCell(ph, r, c), st = Math.max(1, Math.round(Math.sqrt((sw * shh) / 400000)));   // ~400k cells looked at
+    for (let r = 3; r < shh - 3; r += st) for (let c = 3; c < sw - 3; c += st) {
+      const x = minX + (c + 0.5) * S2, y = maxY - (r + 0.5) * S2;
       if (!(fine(x, y) < 0.3)) continue;
-      const q = rgb(x, y, ph); if (!q) continue; const a = g[i] ? shd : sun; for (let k = 0; k < 3; k++) a[k].push(q[k]);
+      const g = at(r, c); if (!(g !== at(r, c + 2) || g !== at(r, c - 2) || g !== at(r + 2, c) || g !== at(r - 2, c))) continue;
+      const q = rgb(x, y, ph); if (!q) continue; const a = g ? shd : sun; for (let k = 0; k < 3; k++) a[k].push(q[k]);
     }
     const med = (a) => { a.sort((x, y) => x - y); return a[a.length >> 1] || 1; };
     ph.ratio = [0, 1, 2].map((k) => clamp(med(sun[k]) / Math.max(8, med(shd[k])), 1, 5));
@@ -192,7 +252,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
     const lm = all.map(L3).sort((a, b) => a - b), roofL = lm[Math.floor(lm.length * 0.7)], dark = lm[Math.floor(lm.length * 0.5)] * 0.62;
     for (const c of all) { if (L3(c) < dark) continue; (isTile(c) ? tile : flat).push(c); }
     const n = tile.length + flat.length;
-    let wall = null, wallSrc = null;
+    let wall = null, wallSrc = null, wallRaw = null;
     if (h > 6) {
       const cand = [];
       for (const ph of photos) {
@@ -201,7 +261,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
         const rl = ph === P ? roofL : (() => { const v = []; for (let y = y0 + st / 2; y < y1; y += st * 2) for (let x = x0 + st / 2; x < x1; x += st * 2) if (inside(p, x, y) && segDist(x, y, p.outer) > 0.9) { const q = rgb(x + s[0], y + s[1], ph); if (q) v.push(L3(q)); } v.sort((a, b) => a - b); return v[Math.floor(v.length * 0.7)] || 1; })();
         const lit = L3(f.c) / rl;
         // which wall is in view: the one facing back from the lean (the camera's side). Is it facing the sun of that photo?
-        const L = Math.hypot(s[0], s[1]) || 1, az = ((ph.sun?.az ?? 180) * Math.PI) / 180, facing = (-s[0] / L) * Math.sin(az) + (-s[1] / L) * Math.cos(az);
+        const L = Math.hypot(s[0], s[1]) || 1, az = ((ph.sun ? sunAt(ph, p.c[0], p.c[1]).az : 180) * Math.PI) / 180, facing = (-s[0] / L) * Math.sin(az) + (-s[1] / L) * Math.cos(az);
         cand.push({ ph, lit, f, s, facing, sunny: facing > 0.12 && lit > 0.5 });
       }
       // a wall turned to the sun beats one in shade (most turned first; the newest photo on a near tie); in shade, the
@@ -213,11 +273,12 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
         const c2 = b.sunny ? c : c.map((v, k) => v * ratio(b.ph)[k]), mx = Math.max(...c2), c3 = mx > 242 ? c2.map((v) => (v * 242) / mx) : c2;   // never burn a wall to paper: scale back, keep the hue
         const w = tone(c3, b.sunny ? 1.08 : 1.0);
         if (L3(w) < 110) continue;
-        wall = w; wallSrc = { photo: b.ph.name, lit: +b.lit.toFixed(2), facing: +b.facing.toFixed(2), n: b.f.n }; break;
+        wall = w; wallRaw = c3; wallSrc = { photo: b.ph.name, lit: +b.lit.toFixed(2), facing: +b.facing.toFixed(2), n: b.f.n }; break;
       }
       var cands = cand.map((b) => [b.ph.name.slice(10, 22), +b.lit.toFixed(2), +b.facing.toFixed(2), b.f.c.map(Math.round)]);
     }
-    return { shift: sh0, n, tileFrac: n ? tile.length / n : 0, tile: tile.length > 8 ? tone(median3(tile), 1.08) : null, flat: flat.length > 8 ? tone(median3(flat), 1.05) : null, wall, wallSrc, cands };
+    const tileRaw = tile.length > 8 ? median3(tile).map((v, k) => v * wb(P)[k]) : null, flatRaw = flat.length > 8 ? median3(flat).map((v, k) => v * wb(P)[k]) : null;
+    return { shift: sh0, n, tileFrac: n ? tile.length / n : 0, tile: tileRaw ? calib(tileRaw, CAL.tile) : null, flat: flatRaw ? calib(flatRaw, CAL.flat) : null, wall, wallSrc, cands, tileRaw, flatRaw, wallRaw };
   };
 
   // trees: canopy peaks of the survey, one per crown, kept only where the survey sees a full crown around the peak and the
@@ -249,9 +310,15 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
       for (let k = 0; k < 9; k++) { const t = (k * Math.PI) / 4, rr = k ? cr * 0.7 : 0, c = rgb(x + ox + Math.cos(t) * rr, y + oy + Math.sin(t) * rr); if (!c) continue; eg += 2 * c[1] - c[0] - c[2]; sm += c[0] + c[1] + c[2]; ne++; }
       if (!ne) continue; eg /= ne; sm /= ne;
       if (!(eg > 6 || (sm < 190 && eg > 1.5))) { grey++; continue; }
-      const t = [x, y, z, r]; out.push(t); const k = key(x, y); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(t);
+      // its shape, from the survey: how far out the crown stays above half the tree's height (8 rays), and how flat its top is.
+      // A cypress is a narrow spire; a stone pine a broad flat umbrella high on a bare trunk; the rest are broadleaves
+      const rad = []; for (let k = 0; k < 8; k++) { const t = (k * Math.PI) / 4; let d = 0.5; while (d < 10 && fine(x + Math.cos(t) * d, y + Math.sin(t) * d) > z * 0.5) d += 0.5; rad.push(d); }
+      rad.sort((a, b) => a - b); const rh = rad[4];
+      let flat = 0; for (let k = 0; k < 12; k++) { const t = (k * Math.PI) / 6; if (fine(x + Math.cos(t) * rh * 0.5, y + Math.sin(t) * rh * 0.5) > z * 0.88) flat++; }
+      const kind = z >= 6 && rh <= Math.max(1.5, z * 0.16) ? 3 : z >= 8 && rh >= 3.5 && flat >= 8 ? 2 : 0;
+      const t = [x, y, z, r, kind]; out.push(t); const k = key(x, y); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(t);
     }
-    log(`detail trees: ${out.length} kept of ${cand.length} peaks (${noCrown} without a crown, ${grey} not green)`);
+    log(`detail trees: ${out.length} kept of ${cand.length} peaks (${noCrown} without a crown, ${grey} not green); ${out.filter((t) => t[4] === 3).length} cypress-shaped, ${out.filter((t) => t[4] === 2).length} umbrella pines`);
     return out;
   };
 
@@ -349,7 +416,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
     return { cov, edgeD, mpp };
   };
 
-  return { photos, covers, fineCovers, leanAt, read, trees, ground, tone, rgb, shadowAt, fine, isTile, L3 };
+  return { photos, covers, fineCovers, leanAt, read, trees, ground, tone, rgb, calFlat: (c) => calib(c.map((v, k) => v * wb(P)[k]), CAL.flat), shadowAt, fine, isTile, L3 };
 }
 
 function boxBlur1(a, w, h, r) {
