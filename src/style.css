@@ -101,6 +101,21 @@ body.night .brand h1, body.night .brand p, body.night #attrib { text-shadow: 0 1
   .live button .s { max-width: 150px; }
 }
 .live .legend[hidden], .live-card[hidden] { display: none; }
+.live-card .ln { margin: 0; display: flex; flex-direction: column; gap: 1px; }
+/* following: the chip says what the camera is riding along with, and the way out is a big, obvious button */
+.live-card.follow { padding: 10px 10px 10px 12px; align-items: center; max-width: min(380px, calc(100vw - 32px)); animation: chip-in 0.35s cubic-bezier(.2, .8, .2, 1); }
+.live-card.follow > div { flex: 1; min-width: 0; }
+.live-card.follow .ti { font-size: 15px; }
+.live-card.follow small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-card .exit {
+  position: static; flex: none; display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 14px 0 10px; border-radius: 999px;
+  background: var(--terracotta); color: #fff; font: inherit; font-weight: 650; font-size: 14px; align-self: center;
+}
+.live-card .exit svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+@keyframes chip-in { from { opacity: 0; transform: translateY(12px); } }
+@media (max-width: 600px) {
+  .live-card.follow { left: 50%; transform: translateX(-50%); width: calc(100vw - 24px); max-width: none; animation: none; }
+}
 
 /* ─── installed app ─── */
 /* the status bar floats over the scene: a soft scrim keeps its white clock legible over a pale sky */

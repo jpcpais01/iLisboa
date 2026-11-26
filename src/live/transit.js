@@ -47,7 +47,7 @@ export function createTransit(ctx) {
     await netReady;
     const now = performance.now() / 1000, seen = new Set();
     counts = {};
-    for (const [kind, id, line, x, y, bearing, speed, age, name] of d.v) {
+    for (const [kind, id, line, x, y, bearing, speed, age, name, pattern] of d.v) {
       seen.add(id); counts[kind] = (counts[kind] || 0) + 1;
       const rail = railOf(kind), elevator = line === '54E';   // Santa Justa goes up, not along anything
       // onto the network: rail for trams (falls back to streets where the rail isn't mapped), streets for buses
@@ -72,6 +72,7 @@ export function createTransit(ctx) {
       }
       if (bearing >= 0 && v.cum[v.cum.length - 1] < 1) v.head = (bearing * Math.PI) / 180;
       Object.assign(v, { kind, line, name, speed, age, fixAt: now - age, seen: now, rail });
+      if (pattern && v.pattern !== pattern) { v.pattern = pattern; v.dest = null; }
     }
     for (const [k, v] of vehicles) if (!seen.has(k) && now - v.seen > 60) vehicles.delete(k);
   }
@@ -172,12 +173,16 @@ export function createTransit(ctx) {
     for (const v of vehicles.values()) {
       const f = Math.min(1, (now - v.t0) / v.dur), ef = f * f * (3 - 2 * f) * 0.6 + f * 0.4, L = v.cum[v.cum.length - 1];
       along(v.path, v.cum, L * ef, v);
-      const h = isFinite(v.head) ? v.head : 0, sx = Math.sin(h), sy = Math.cos(h);
+      // the path turns sharply at every street vertex: the body (and a following camera) turns smoothly instead
+      const hr = isFinite(v.head) ? v.head : 0;
+      v.hs = v.hs == null ? hr : v.hs + Math.atan2(Math.sin(hr - v.hs), Math.cos(hr - v.hs)) * Math.min(1, dt * 5);
+      const h = v.hs, sx = Math.sin(h), sy = Math.cos(h);
       // drive on the right: buses keep to their lane, trams sit on the rail
       const off = v.rail ? 0 : 1.7, dx = v.x + sy * off, dy = v.y - sx * off;
       const z = ground.at(dx, dy), zf = ground.at(dx + sx * 4, dy + sy * 4), zb = ground.at(dx - sx * 4, dy - sy * 4);
       e.set(0, Math.PI / 2 - h, Math.atan2(zf - zb, 8)); q.setFromEuler(e);
       const tramLike = v.kind === 'tram' || v.kind === 'lift';
+      v.rx = dx; v.ry = dy; v.rz = z;
       m.compose(p.set(dx, z, -dy), q, v.kind === 'lift' ? lift : one);
       col.setHex(BODY[v.kind]);
       if (tramLike) { if (nt < 200) { trams.setMatrixAt(nt, m); trams.setColorAt(nt, col); nt++; } }
@@ -199,7 +204,7 @@ export function createTransit(ctx) {
       let i = 0;
       trainPins.begin();
       for (const t of metroNow) {
-        const a = trainAt(t.l, t.dir, t.age); t.pos = a;
+        const a = trainAt(t.l, t.dir, t.age); t.pos = a; t.key = `${t.l.name}|${t.dir}|${t.n}`;
         const z = ground.at(a.x, a.y) + 1.5;
         e.set(0, Math.PI / 2 - a.head, 0); q.setFromEuler(e);
         m.compose(p.set(a.x, z, -a.y), q, one);
@@ -210,6 +215,18 @@ export function createTransit(ctx) {
       trainPins.end();
       trains.count = i; trains.instanceMatrix.needsUpdate = true; if (trains.instanceColor) trains.instanceColor.needsUpdate = true;
     }
+  }
+
+  function vInfo(v) {
+    return {
+      icon: v.kind === 'tram' || v.kind === 'lift' ? '🚋' : '🚌', title: `${NAME[v.kind]} ${v.line}`, sub: v.dest ? `→ ${v.dest}` : v.name || OP[v.kind],
+      lines: [v.speed >= 0 ? `${Math.round(v.speed * 3.6)} km/h` : null, `posição de há ${Math.max(0, Math.round(performance.now() / 1000 - v.fixAt))} s`].filter(Boolean),
+      src: `ao vivo · GPS ${OP[v.kind]}`, speedKnown: v.speed >= 0, pattern: v.pattern, dest: v.dest, setDest: (d) => { v.dest = d; },
+    };
+  }
+  function mInfo(t) {
+    const st = t.l.stops, dest = t.dir ? st[0].name : st[st.length - 1].name;
+    return { icon: 'Ⓜ', title: `Metro · ${t.l.name}`, sub: `sentido ${dest}`, lines: [t.pos.stop ? `parado em ${t.pos.stop.name}` : 'em circulação'], src: 'estimado · horário típico (o Metro não publica posições)', speedKnown: true };
   }
 
   return {
@@ -224,16 +241,23 @@ export function createTransit(ctx) {
     },
     pickables() {
       const out = [];
-      for (const v of vehicles.values()) out.push({ pos: [v.x, ground.at(v.x, v.y) + 3, -v.y], info: () => ({
-        icon: v.kind === 'tram' || v.kind === 'lift' ? '🚋' : '🚌', title: `${NAME[v.kind]} ${v.line}`, sub: v.name || OP[v.kind],
-        lines: [v.speed >= 0 ? `${Math.round(v.speed * 3.6)} km/h` : null, `posição de há ${Math.max(0, Math.round(performance.now() / 1000 - v.fixAt))} s`].filter(Boolean),
-        src: `ao vivo · GPS ${OP[v.kind]}`,
-      }) });
-      for (const t of metroNow) if (t.pos) out.push({ pos: [t.pos.x, t.z, -t.pos.y], info: () => {
-        const st = t.l.stops, dest = t.dir ? st[0].name : st[st.length - 1].name;
-        return { icon: 'Ⓜ', title: `Metro · ${t.l.name.replace('Linha ', 'Linha ')}`, sub: `sentido ${dest}`, lines: [t.pos.stop ? `parado em ${t.pos.stop.name}` : 'em circulação'], src: 'estimado · horário típico (o Metro não publica posições)' };
-      } });
+      for (const v of vehicles.values()) out.push({ id: v.id, pos: [v.x, ground.at(v.x, v.y) + 3, -v.y], info: () => vInfo(v) });
+      for (const t of metroNow) if (t.pos) out.push({ id: t.key, pos: [t.pos.x, t.z, -t.pos.y], info: () => mInfo(t) });
       return out;
+    },
+    // for the chase camera: the live state of one vehicle or train, null once it has gone
+    track(id) {
+      if (!on) return null;
+      const v = vehicles.get(id);
+      if (v) {
+        if (v.rx == null) return null;
+        const tramLike = v.kind === 'tram' || v.kind === 'lift';
+        return { x: v.rx, y: v.ry, z: v.rz + 1.6, heading: Math.PI / 2 - (v.hs ?? 0), speed: v.speed >= 0 ? v.speed : null, kind: v.kind, info: () => vInfo(v),
+          chase: tramLike ? { dist: 48, minDist: 14, pitch: 0.42 } : { dist: 62, minDist: 16, pitch: 0.45 } };
+      }
+      const t = metroNow.find((x) => x.key === id);
+      if (!t || !t.pos) return null;
+      return { x: t.pos.x, y: t.pos.y, z: t.z, heading: Math.PI / 2 - t.pos.head, speed: null, kind: 'metro', info: () => mInfo(t), chase: { dist: 240, minDist: 60, pitch: 0.75 } };
     },
   };
 }

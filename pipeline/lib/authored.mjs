@@ -91,6 +91,8 @@ export const OVERRIDES = {
   r7873771_0: { shape: 'flat', wall: '#d9bfa9', variant: 3, parapet: 0.8 },   // Centro Ismaili (Raj Rewal)
   r6902258_0: { shape: 'flat', wall: '#e4e0d8', variant: 3, parapet: 0.8 },   // Hospital Fernando Fonseca
   r21949748_0: { shape: 'flat', variant: 3, parapet: 0.8 },   // Edifício Fidelidade
+  // FIL exhibition halls (Parque das Nações): mapped as building=roof, but they are closed halls ~20 m high (LiDAR 2024)
+  ...Object.fromEntries([['w821643074', 23], ['w821643075', 20], ['w821643076', 20], ['w821643077', 20]].map(([id, h]) => [id, { h, minH: 0, shape: 'flat', variant: 1, floorH: 0, wall: '#d9dbd8', flatCol: [196, 198, 196], parapet: 0.6, stone: false }])),
   // Caixa Geral de Depósitos HQ (Campus XXI, Arsénio Cordeiro, 1993): nine storeys above ground climbing in terraces to the
   // central ridge — the 'castle' of Campo Pequeno. Massing is cut from the 2024 LiDAR in storey bands (see terraceSlabs).
   r5742899_0: { terraces: { step: 4.4, minArea: 40 }, variant: 3, stone: false, wall: '#c8c0b3', flatCol: [168, 164, 156], bayW: 1.9 },

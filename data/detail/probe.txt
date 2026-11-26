@@ -1,0 +1,14 @@
+pilot telheiras: 38.752,-9.183 → 38.768,-9.155
+CDD collections: HTTP 200
+finer surface collections over the pilot: none
+WMS https://ortos.dgterritorio.gov.pt/wms/ortos2023: HTTP 404 196 B
+WMS https://ortos.dgterritorio.gov.pt/wms/ortos2021: HTTP 404 196 B
+WMS https://ortos.dgterritorio.gov.pt/wms/ortos2018: HTTP 404 196 B
+WMS https://ortos.dgterritorio.gov.pt/wms/ortosat2023: HTTP 200 10541 B
+  layer 'OrtoSat2023' — OrtoSat2023
+  layer 'ortoSat2023-CorVerdadeira' — ortoSat2023-CorVerdadeira
+  layer 'ortoSat2023-FalsaCor' — ortoSat2023-FalsaCor
+fetching ortoSat2023-CorVerdadeira from https://ortos.dgterritorio.gov.pt/wms/ortosat2023
+ortho ortoSat2023-CorVerdadeira: 9722×7124 px in 20 tiles → telheiras_ortho.tif 15 MB
+WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2021: HTTP 404 196 B
+WMS https://ortos.dgterritorio.gov.pt/wms-inspire/ortos2023: HTTP 404 196 B

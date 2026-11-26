@@ -150,6 +150,39 @@ await (async () => {
     return (a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty) / 10;
   };
   dem.ground = (x, y) => { const [la, lo] = proj.inv(x, y), v = at(la, lo); return isFinite(v) ? v : cop(x, y); };
+  // The survey's ground filter swallows some wide flat roofs (showrooms, markets, halls): the 'terrain' climbs onto the roof,
+  // the height above it reads ~0 and the building stands on a plateau. Re-derive the ground under every footprint from the
+  // street around it (filled inward ring by ring); where the survey's ground stood >1.5 m above that, it was a roof.
+  const raw0 = Uint16Array.from(r);
+  dem.lidarFix = (polys) => {
+    const mask = new Uint8Array(w * h);
+    for (const p of polys) {
+      let la0 = Infinity, la1 = -Infinity, lo0 = Infinity, lo1 = -Infinity;
+      for (const [x, y] of p.outer) { const [la, lo] = proj.inv(x, y); la0 = Math.min(la0, la); la1 = Math.max(la1, la); lo0 = Math.min(lo0, lo); lo1 = Math.max(lo1, lo); }
+      const c0 = Math.max(0, Math.floor((lo0 - ox) / rx)), c1 = Math.min(w - 1, Math.floor((lo1 - ox) / rx)), k0 = Math.max(0, Math.floor((la1 - oy) / ry)), k1 = Math.min(h - 1, Math.floor((la0 - oy) / ry));
+      for (let k = k0; k <= k1; k++) for (let c = c0; c <= c1; c++) {
+        const [x, y] = proj.fwd(oy + (k + 0.5) * ry, ox + (c + 0.5) * rx);
+        if (pointInRing(x, y, p.outer) && !p.holes.some((q) => pointInRing(x, y, q))) mask[k * w + c] = 1;
+      }
+    }
+    let front = [];
+    for (let k = 0; k < h; k++) for (let c = 0; c < w; c++) if (mask[k * w + c] || r[k * w + c] === 65535) { const i = k * w + c; if (r[i] === 65535) mask[i] = 2; else front.push(i); }
+    const fix = Float32Array.from(r, (v, i) => (mask[i] ? NaN : v));
+    let todo = front.filter((i) => mask[i] === 1), guard = 0;
+    while (todo.length && guard++ < 400) {
+      const vals = [];
+      for (const i of todo) { const k = (i / w) | 0, c = i % w; let s = 0, n = 0;
+        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const kk = k + b, cc = c + a; if (kk < 0 || cc < 0 || kk >= h || cc >= w) continue; const v = fix[kk * w + cc]; if (isFinite(v) && mask[kk * w + cc] !== 2) { s += v; n++; } }
+        vals.push(n ? s / n : NaN); }
+      const next = [];
+      todo.forEach((i, j) => { if (isFinite(vals[j])) fix[i] = vals[j]; else next.push(i); });
+      if (next.length === todo.length) break; todo = next;
+    }
+    let roofs = 0;
+    for (let i = 0; i < r.length; i++) if (mask[i] === 1 && isFinite(fix[i]) && raw0[i] - fix[i] > 15) { r[i] = Math.round(fix[i]); roofs++; }   // dm: >1.5 m
+    dem.dtmLift = (x, y) => { const [la, lo] = proj.inv(x, y), c = Math.floor((lo - ox) / rx), k = Math.floor((la - oy) / ry); return c < 0 || k < 0 || c >= w || k >= h ? 0 : (raw0[k * w + c] - r[k * w + c]) / 10; };
+    log(`LiDAR ground under footprints: ${roofs} cells were roofs (${(roofs * Math.abs(rx * ry) * 111000 * 87000 / 1e4).toFixed(1)} ha)`);
+  };
   log(`LiDAR terrain ${w}×${h}`);
 })();
 
@@ -170,6 +203,7 @@ const polysB = (() => {   // the same footprint mapped twice (a convent relation
   console.log('duplicate footprints dropped', all.length - out.length);
   return out;
 })();
+if (dem.lidarFix) dem.lidarFix(polysB.filter((p) => !p.tags['building:part']));
 { // building-aware ground (see dem.refine)
   const cr = new Raster(minX - 400, minY - 400, maxX + 400, maxY + 400, 3);
   for (const p of polysB) if (!p.tags['building:part']) cr.fillRings([p.outer, ...p.holes], (i) => { cr.data[i] = 1; });
@@ -426,7 +460,7 @@ const LIDAR = await (async () => {
   const img = await (await fromFile(f)).getImage(), [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution();
   const [r] = await img.readRasters(), w = img.getWidth(), hh = img.getHeight();
   log(`LiDAR heights ${w}×${hh}`);
-  return (x, y) => { const [la, lo] = proj.inv(x, y), c = Math.floor((lo - ox) / rx), k = Math.floor((la - oy) / ry); return c < 0 || k < 0 || c >= w || k >= hh ? NaN : r[k * w + c] / 10; };
+  return (x, y) => { const [la, lo] = proj.inv(x, y), c = Math.floor((lo - ox) / rx), k = Math.floor((la - oy) / ry); return c < 0 || k < 0 || c >= w || k >= hh ? NaN : r[k * w + c] / 10 + (dem.dtmLift ? dem.dtmLift(x, y) : 0); };
 })();
 const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 1; i < R.length; j = i++) { const [ax, ay] = R[j], [bx, by] = R[i], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)); m = Math.min(m, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } return m; };
 const measured = (p) => {
@@ -513,9 +547,13 @@ function buildingSpec(p) {
   let levels = parseFloat(t['building:levels']);
   // a measured height beats a mapped one and any estimate; a footprint the survey sees as open ground (demolished, or
   // built after 2024) keeps the old way. A storey count that cannot fit the measured height is dropped.
-  const lid = p.ovr || OVERRIDES[p.id] || p.tags.man_made === 'tower' || ['roof', 'carport'].includes(t.building) ? null : measured(p);
+  let lid = p.ovr || OVERRIDES[p.id] || p.tags.man_made === 'tower' || t.building === 'carport' ? null : measured(p);
+  // canopies (building=roof) sit at their measured height, not a default 3.5 m (FIL's halls, Estufa Fria, market roofs); a reading
+  // above 30 m under a canopy is the bridge or a tower over it, not the canopy
+  if (lid && kind === 'roof' && lid.mid > 30) lid = null;
   const lidOk = lid && lid.mid >= 2.2 && lid.mid < 200;
   if (lid && !lidOk) heightSrc.lidarSkip++;
+  if (lid && !lidOk && lid.top < 2 && lid.n >= 20 && (kind === 'storage_tank' || /reservoir/.test(t.man_made || ''))) h = 2;   // covered reservoirs: a grassed lid, not a 16 m block
   if (lidOk) { h = Math.max(lid.mid, (parseMeters(t.min_height) ?? 0) + 2); if (isFinite(levels) && Math.abs(levels * LEVEL_H + 1.2 - h) > 4.5) levels = NaN; }
   const roofLevels = parseFloat(t['roof:levels']) || 0;
   let minH = parseMeters(t.min_height) ?? (isFinite(parseFloat(t['building:min_level'])) ? parseFloat(t['building:min_level']) * LEVEL_H : 0);
@@ -790,6 +828,32 @@ function addBuilding_(p) {
     (['church', 'chapel', 'basilica'].includes(p.tags.building) || (p.tags.amenity === 'place_of_worship' && [undefined, 'yes', 'religious'].includes(p.tags.building)));
   const WHOLE = new Set(['w42645796', 'r17651166_0', 'w495968848', 'w495968849', 'r5742899_0', 'w96719280']);   // outlines that stay one mass even though parts fill much of them (Colombo, Terminal 1, Colombo's towers); CGD and El Corte Inglés lost their whole mass to one or two small mapped parts
   const parts = polysB.filter((p) => p.tags['building:part']), thinDrop = new Set();
+  // an outline handed over to its parts keeps whatever the parts leave uncovered, where the survey sees it standing
+  // (Mercado da Ribeira, Altice, InterContinental, Teatro Camões were half-drawn: a tower part mapped, the podium not)
+  const fills = [], SCF = 100, CF = (r) => r.map(([x, y]) => ({ X: Math.round(x * SCF), Y: Math.round(y * SCF) }));
+  const remainder = (o, inside) => {
+    const c = new ClipperLib.Clipper();
+    c.AddPaths([CF(o.outer), ...o.holes.map(CF)], ClipperLib.PolyType.ptSubject, true);
+    c.AddPaths(inside.flatMap((pt) => [CF(pt.outer), ...pt.holes.map(CF)]), ClipperLib.PolyType.ptClip, true);
+    const off = (paths, d) => { const co = new ClipperLib.ClipperOffset(2, 25); co.AddPaths(paths, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon); const q = new ClipperLib.Paths(); co.Execute(q, d * SCF); return q; };
+    let diff = new ClipperLib.Paths(); c.Execute(ClipperLib.ClipType.ctDifference, diff, ClipperLib.PolyFillType.pftEvenOdd, ClipperLib.PolyFillType.pftNonZero);
+    diff = off(off(diff, -1.2), 1.2);   // slivers along part edges (mapping slop) are not buildings
+    const c2 = new ClipperLib.Clipper(); c2.AddPaths(diff, ClipperLib.PolyType.ptSubject, true);
+    const tree = new ClipperLib.PolyTree(); c2.Execute(ClipperLib.ClipType.ctUnion, tree, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+    const out = [], ov = OVERRIDES[o.id];
+    for (const ch of tree.Childs()) {
+      const outer = ch.Contour().map((q) => [q.X / SCF, q.Y / SCF]), holes = ch.Childs().map((hh) => hh.Contour().map((q) => [q.X / SCF, q.Y / SCF]));
+      if (ringArea(outer) < 0) outer.reverse(); holes.forEach((r) => { if (ringArea(r) > 0) r.reverse(); });
+      const area = ringArea(outer) + holes.reduce((a, r) => a + ringArea(r), 0); if (area < 40) continue;
+      const q = { id: `${o.id}_rem${out.length}`, tags: o.tags, outer, holes, area, c: [outer.reduce((a, v) => a + v[0], 0) / outer.length, outer.reduce((a, v) => a + v[1], 0) / outer.length] };
+      if (ov) q.ovr = ov.h != null && (o.tags.building === 'roof' || ov.minH) ? ov : { ...ov, h: undefined, shape: ov.shape === 'dome' ? undefined : ov.shape };
+      const m = measured(q); if (!m || m.mid < 2.2) continue;   // open ground in the survey: a forecourt, a yard, a demolished wing
+      if (q.ovr && q.ovr.h === undefined) q.ovr = { ...q.ovr, h: m.mid };
+      out.push(q);
+    }
+    stats.remainders = (stats.remainders || 0) + out.length;
+    return out;
+  };
   const outlines = polysB.filter((p) => !p.tags['building:part']);
   for (const o of outlines) {
     // …but only when the parts actually fill it: a lone mapped sliver (a lift shaft, a roof stair) must not stand in for a whole tower
@@ -797,7 +861,9 @@ function addBuilding_(p) {
     const special = OVERRIDES[o.id] || DROP.has(o.id) || o.tags.historic || o.tags.amenity === 'place_of_worship' || ['church', 'cathedral', 'chapel', 'basilica', 'castle', 'palace'].includes(o.tags.building);
     // a few mapped parts (a chapel, a tower) do not make a palace: an unauthored landmark stays whole unless its parts fill a fifth
     // of it (Queluz Palace, Palácio Ribeira Grande, Edifício dos Leões, Forte do Conde de Lippe were vanishing)
-    const cover = inside.reduce((a, pt) => a + Math.abs(pt.area), 0) / Math.abs(o.area);
+    // parts held up in the air (a roof canopy, an upper storey bridging) do not stand in for the building under them (Mercado da Ribeira)
+    const grounded = inside.filter((pt) => pt.tags['building:part'] !== 'roof' && !(parseMeters(pt.tags.min_height) > 0) && !(parseFloat(pt.tags['building:min_level']) > 0));
+    const cover = grounded.reduce((a, pt) => a + Math.abs(pt.area), 0) / Math.abs(o.area);
     o.skip = !WHOLE.has(o.id) && inside.length > 0 && (OVERRIDES[o.id] || DROP.has(o.id) ? true : special ? cover >= 0.2 : cover >= 0.45);
     if (inside.length && !o.skip) {   // the outline stands for the building; parts that do not rise clear of it are redundant (and would z-fight its walls)
       stats.thinParts = (stats.thinParts || 0) + 1;
@@ -807,6 +873,7 @@ function addBuilding_(p) {
     }
     if (o.skip && churchy(o) && !['r19372558_0', 'w9253917'].includes(o.id)) { o.skip = false; o.ownParts = true; }   // churches: the outline is modelled whole
     if (o.skip) stats.skippedOutlines++;
+    if (o.skip && !o.ownParts && LIDAR && !DROP.has(o.id) && !inside.some((pt) => OVERRIDES[pt.id])) fills.push(...remainder(o, grounded));
   }
   const churchParts = new Set(parts.filter((pt) => outlines.some((o) => o.ownParts && Math.abs(pt.c[0] - o.c[0]) < 120 && pointInRing(pt.c[0], pt.c[1], o.outer))));
   stats.parts = parts.length;
@@ -830,8 +897,48 @@ function addBuilding_(p) {
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
   const terr = (p) => (OVERRIDES[p.id]?.terraces ? terraceSlabs(p) : [p]);   // stepped landmarks become their measured terraces
-  for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].flatMap(terr)) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
-  let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt))].flatMap(terr).filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt)), ...fills].flatMap(terr)) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
+  let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt)), ...fills].flatMap(terr).filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
+  if (process.env.SWEEP) {   // audit: survey mass vs what gets drawn (node pipeline/build.mjs <area> with SWEEP=<out.json>)
+    const drawn = [...todo, ...seSet, ...churchParts], G = 2;
+    const rr = new Raster(minX, minY, maxX, maxY, G), osmR = new Raster(minX, minY, maxX, maxY, G, 1, Int32Array);
+    for (const p of drawn) rr.fillRings([p.outer, ...p.holes], (i) => { rr.data[i] = 1; });
+    for (const p of polysB) if (DROP.has(p.id) || BLEACH.has(p.id) || dropped(p)) rr.fillRings([p.outer, ...p.holes], (i) => { rr.data[i] = 1; });   // authored by hand
+    polysB.forEach((p, k) => { if (!p.tags['building:part']) osmR.fillRings([p.outer, ...p.holes], (i) => { osmR.data[i] = k + 1; }); });
+    // 1) mapped buildings the survey sees standing but nothing draws
+    const lost = new Map();
+    for (let r = 0; r < rr.h; r++) for (let c = 0; c < rr.w; c++) {
+      const i = r * rr.w + c; if (rr.data[i] || !osmR.data[i]) continue;
+      const z = LIDAR(rr.minX + (c + 0.5) * G, rr.maxY - (r + 0.5) * G); if (!(z > 3)) continue;
+      const k = osmR.data[i] - 1; lost.set(k, (lost.get(k) || 0) + G * G);
+    }
+    const out = { area: AREA, lost: [], height: [] };
+    for (const [k, a] of lost) { const p = polysB[k]; if (a < 60) continue; const [la, lo] = proj.inv(...p.c);
+      out.lost.push({ id: p.id, m2: Math.round(a), fp: Math.round(Math.abs(p.area)), ov: !!OVERRIDES[p.id], skip: !!p.skip, name: p.tags.name || '', kind: p.tags.building, ll: [+la.toFixed(5), +lo.toFixed(5)] }); }
+    // 2) drawn height vs the survey, for footprints whose height does not come from it
+    for (const p of drawn) { if (Math.abs(p.area) < 150) continue; const s = buildingSpec(p); if (s.src === 'lidar') continue; const m = measured(p); if (!m || m.n < 8) continue;
+      const top = s.h + (s.shape !== 'flat' ? (s.roofH ?? 2) : 0), d = top - m.top;
+      if (Math.abs(d) > 6 && Math.abs(d) > 0.25 * m.top) { const [la, lo] = proj.inv(...p.c); out.height.push({ id: p.id, src: s.src, drawn: +top.toFixed(1), lidarTop: m.top, lidarMid: m.mid, fp: Math.round(Math.abs(p.area)), ov: !!OVERRIDES[p.id], name: p.tags.name || '', ll: [+la.toFixed(5), +lo.toFixed(5)] }); } }
+    // 3) standing masses with no footprint at all: flat-topped (not tree crowns), > 150 m²
+    { const seen = new Uint8Array(rr.w * rr.h), Z = (c, r) => LIDAR(rr.minX + (c + 0.5) * G, rr.maxY - (r + 0.5) * G);
+      out.unmapped = [];
+      for (let r0 = 0; r0 < rr.h; r0++) for (let c0 = 0; c0 < rr.w; c0++) {
+        const i0 = r0 * rr.w + c0; if (seen[i0] || osmR.data[i0] || rr.data[i0] || !(Z(c0, r0) > 4)) continue;
+        const st = [i0], cells = []; seen[i0] = 1;
+        while (st.length) { const i = st.pop(); cells.push(i); const c = i % rr.w, r = (i / rr.w) | 0;
+          for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const cc = c + a, rq = r + b; if (cc < 0 || rq < 0 || cc >= rr.w || rq >= rr.h) continue; const j = rq * rr.w + cc; if (seen[j] || osmR.data[j] || rr.data[j] || !(Z(cc, rq) > 4)) continue; seen[j] = 1; st.push(j); } }
+        if (cells.length * G * G < 150) continue;
+        let flat = 0, zs = [];   // roofness: share of cells whose 4 neighbours lie within 0.6 m (tree crowns are rough)
+        for (const i of cells) { const c = i % rr.w, r = (i / rr.w) | 0, z = Z(c, r); zs.push(z); let ok = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (Math.abs(Z(c + a, r + b) - z) < 0.6) ok++; if (ok >= 3) flat++; }
+        zs.sort((a, b) => a - b); const fr = flat / cells.length; if (fr < 0.45) continue;
+        let sx = 0, sy = 0; for (const i of cells) { sx += rr.minX + (i % rr.w + 0.5) * G; sy += rr.maxY - (((i / rr.w) | 0) + 0.5) * G; }
+        const [la, lo] = proj.inv(sx / cells.length, sy / cells.length);
+        out.unmapped.push({ m2: cells.length * G * G, flat: +fr.toFixed(2), zMid: zs[zs.length >> 1], ll: [+la.toFixed(5), +lo.toFixed(5)] });
+      }
+      out.unmapped.sort((a, b) => b.m2 - a.m2); }
+    out.lost.sort((a, b) => b.m2 - a.m2); out.height.sort((a, b) => Math.abs(b.drawn - b.lidarTop) - Math.abs(a.drawn - a.lidarTop));
+    fs.writeFileSync(process.env.SWEEP, JSON.stringify(out, null, 1)); log(`sweep: ${out.lost.length} lost, ${out.height.length} height, ${out.unmapped.length} unmapped`); process.exit(0);
+  }
   if (process.env.DBG_ID) { const q = polysB.find((p) => p.id === process.env.DBG_ID); console.log('TRACE', !!q, q && q.skip, q && dropped(q), q && todo.includes(q), q && q.c); }
   // Pombaline blocks of the pilot zone: built block by block
   const zones = BAIXA_ZONES.map((z) => z.map(([la, lo]) => proj.fwd(la, lo)));
@@ -1832,6 +1939,7 @@ const nTagged = trees.length / 4;
       if (!pointInRing(jx, jy, p.outer) || p.holes.some((h) => pointInRing(jx, jy, h))) continue;
       const c = Math.floor(bm.px(jx)), r = Math.floor(bm.py(jy));
       if (c < 0 || r < 0 || c >= bm.w || r >= bm.h || blocked[r * bm.w + c]) continue;
+      if (LIDAR) { const z = Math.max(LIDAR(jx, jy), LIDAR(jx + 1.5, jy), LIDAR(jx - 1.5, jy), LIDAR(jx, jy + 1.5), LIDAR(jx, jy - 1.5)); if (z < 2) continue; }   // a tree only where the survey sees a canopy (airfields, lawns and vacant lots stay open)
       if (estate && villaAt(jx, jy)) {   // villa gardens: dense trees, hedging pines, palms, cypresses, 3 m off the walls
         let ok = true; for (const [dx, dy] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) { const cc = Math.floor(bm.px(jx + dx)), rr = Math.floor(bm.py(jy + dy)); if (cc < 0 || rr < 0 || cc >= bm.w || rr >= bm.h || blocked[rr * bm.w + cc]) { ok = false; break; } }
         if (ok && hash(`${jx}v`) < 0.62) { const kk = hash(`${jy}vk`); addTree(jx, jy, 0.6 + hash(`${jx}`) * 0.5, kk < 0.12 ? 1 : kk < 0.27 ? 2 : kk < 0.37 ? 3 : 0); }

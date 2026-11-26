@@ -56,7 +56,7 @@ export function createPlanes(ctx) {
       else {
         // error between our dead-reckoned position and the report, faded out over the next 3 s
         const jump = Math.hypot(nx - p.x, ny - p.y);
-        if (jump > 3000) { p.x = nx; p.y = ny; p.z = nz ?? 0; p.ex = p.ey = p.ez = 0; }
+        if (jump > 3000) { p.x = nx; p.y = ny; p.z = nz ?? 0; p.ex = p.ey = p.ez = 0; p.trail.length = 0; }
         else { p.ex = nx - p.x; p.ey = ny - p.y; p.ez = nz == null ? 0 : nz - p.z; }
         const dTr = Math.atan2(Math.sin(tr - p.tr), Math.cos(tr - p.tr));
         p.roll = THREE.MathUtils.clamp((dTr / Math.max(1, now - p.t)) * 8, -0.45, 0.45);   // bank into the turn (rate-one turn ≈ 25°)
@@ -81,13 +81,23 @@ export function createPlanes(ctx) {
       const gz = ground.at(p.x, p.y);
       if (p.onGround) p.z = gz; else { p.z += p.vr * dt + p.ez * k; p.ez -= p.ez * k; p.z = Math.max(p.z, gz + 2); }
       p.roll *= 1 - Math.min(1, dt * 0.5);
+      // the drawn heading turns towards each new report's track instead of snapping to it (seen up close when following)
+      p.hd = p.hd == null ? p.tr : p.hd + Math.atan2(Math.sin(p.tr - p.hd), Math.cos(p.tr - p.hd)) * Math.min(1, dt * 1.5);
       const pitch = p.onGround ? 0 : Math.atan2(p.vr, Math.max(40, p.gs));
-      e.set(0, Math.PI / 2 - p.tr, pitch); q.setFromEuler(e);
+      p.pitch = pitch;
+      e.set(0, Math.PI / 2 - p.hd, pitch); q.setFromEuler(e);
       q.multiply(qr.setFromAxisAngle(X, p.roll));
       m.compose(v.set(p.x, p.z + 2.2, -p.y), q, one);
       if (i < MAX) { mesh.setMatrixAt(i, m); p.slot = i; i++; }
       beacons.push(p.x, p.z + 2.2, -p.y, p.onGround ? C_GROUND : C_AIR, p.onGround ? 0.7 : 1);
-      if (addTrail && !p.onGround) { p.trail.push([p.x, p.z + 2.2, -p.y]); if (p.trail.length > TRAIL) p.trail.shift(); }
+      // trails are for flight only: a plane on the ground drops its trail (its last airborne point would otherwise hang a
+      // vertical line over the apron), and a point that sits far above or below the plane's climb profile is a bad fix
+      if (p.onGround) p.trail.length = 0;
+      else if (addTrail) {
+        const lp = p.trail[p.trail.length - 1];
+        if (lp && Math.abs(lp[1] - p.z - 2.2) > 60 + Math.hypot(lp[0] - p.x, lp[2] + p.y) * 0.35) p.trail.length = 0;
+        p.trail.push([p.x, p.z + 2.2, -p.y]); if (p.trail.length > TRAIL) p.trail.shift();
+      }
       const tl = p.trail, nT = tl.length;
       for (let j = 0; j + 1 < nT && ti < MAX * TRAIL; j++, ti++) {
         tpos.set(tl[j], ti * 6); tpos.set(j + 2 === nT ? [p.x, p.z + 2.2, -p.y] : tl[j + 1], ti * 6 + 3);
@@ -114,7 +124,13 @@ export function createPlanes(ctx) {
       return `ao vivo · ${air} no ar${planes.size - air ? ` · ${planes.size - air} em terra` : ''}`;
     },
     // tap-to-inspect: candidates with a scene position
-    pickables() { return [...planes.values()].map((p) => ({ pos: [p.x, p.z + 2.2, -p.y], info: () => info(p) })); },
+    pickables() { return [...planes.values()].map((p) => ({ id: p.hex, pos: [p.x, p.z + 2.2, -p.y], info: () => info(p) })); },
+    // for the chase camera: the live state of one plane, null once it has gone
+    track(id) {
+      const p = planes.get(id);
+      if (!p || !on) return null;
+      return { x: p.x, y: p.y, z: p.z + 2.2, heading: Math.PI / 2 - (p.hd ?? p.tr), speed: p.gs, kind: 'plane', info: () => info(p), chase: { dist: 150, minDist: 45, pitch: 0.2, maxDist: 6000 } };
+    },
   };
   function info(p) {
     const ft = Math.round((p.z / 0.3048) / 100) * 100, kt = Math.round(p.gs / 0.5144);

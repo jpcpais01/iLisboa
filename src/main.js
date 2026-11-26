@@ -3,10 +3,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { initTouch } from './touch.js';
+import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { initLive } from './live/index.js';
+import { carGeometries, carPaint } from './cars.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -62,7 +64,10 @@ controls.maxDistance = 7000;
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
 // fingers get their own maps-style navigation (pan / pinch / twist / tilt, fling); MapControls keeps the mouse
-const touch = initTouch({ camera, controls, canvas, onStart: () => { introT = 1; } });
+// third-person chase camera (follow a plane / bus / tram; drive mode): one finger orbits instead of panning while it is on
+const chase = createChase({ camera, controls, ground: (x, y) => (live ? live.ground.at(x, y) : 0), roofs: (x, y) => (live ? live.ground.roofAt(x, y) : -Infinity) });
+const touch = initTouch({ camera, controls, canvas, onStart: () => { introT = 1; }, orbit: () => chase.active, exclude: (e) => chase.exclude(e) });
+window.__chase = chase;
 
 
 // ─── load: the city is several areas of 500 m tiles; tiles stream in and out around the view ───
@@ -238,7 +243,9 @@ const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.m
 const LOD_PIN = +new URLSearchParams(location.search).get('lod') || 0;   // ?lod=1 pins it, for checks on slow test machines
 let inflight = 0, lodK = LOD_PIN || 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 function stream(force) {
-  const x = controls.target.x, y = -controls.target.z, dist = camera.position.distanceTo(controls.target);
+  // following something: stream around where it will be in a few seconds, at a range that counts its height above the ground
+  const f = chase.focus();
+  const x = f ? f.x : controls.target.x, y = f ? f.y : -controls.target.z, dist = f ? f.d : camera.position.distanceTo(controls.target);
   const R = nearR(dist) * (0.75 + 0.25 * lodK), M = midR(dist) * (0.5 + 0.5 * lodK);
   DR = THREE.MathUtils.clamp(700 + camera.position.y * 0.9, 900, 2700) * lodK;   // relief and balconies reach further as the view rises
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
@@ -399,52 +406,11 @@ float ln3(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f)
 // cars: instanced and chunked; a modelled car (bevelled body, glasshouse, wheels, lights) within ~180 m, boxes beyond
 const carChunks = [];
 const carU = { uCamP: treeU.uCamP, uHiR: { value: 180 } };
-function carMaterial(sel) {
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.15 });
-  mat.onBeforeCompile = (s) => {
-    s.uniforms.uCamP = carU.uCamP; s.uniforms.uHiR = carU.uHiR;
-    s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uCamP;\nuniform float uHiR;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
-{ vec3 io = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; if (${sel.toFixed(1)} * (uHiR - distance(io, uCamP)) < 0.0) transformed = vec3(0.0); }`)
-      // lamps, tyres and glass keep their own colour; only the paint takes the instance colour
-      .replace('#include <color_vertex>', '#include <color_vertex>\nif (abs(color.r - color.g) > 0.04 || abs(color.b - color.g) > 0.04 || color.g < 0.2) vColor = color.rgb;');
-  };
-  mat.customProgramCacheKey = () => `car-v1-${sel}`;
-  return mat;
-}
 let CAR = null;
-function carGeometries() {
-  const tint = (g, r, gg = r, b = r) => { g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, () => [r, gg, b]).flat(), 3)); return g; };
-  const lo = mergeGeometries([
-    tint(new THREE.BoxGeometry(4.3, 0.78, 1.78).translate(0, 0.56, 0), 1),
-    tint(new THREE.BoxGeometry(2.25, 0.56, 1.6).translate(-0.25, 1.22, 0), 0.13),
-    tint(new THREE.BoxGeometry(1.95, 0.07, 1.52).translate(-0.3, 1.52, 0), 1),
-  ]);
-  const prof = (pts, depth, bevel) => { const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))); const g = new THREE.ExtrudeGeometry(sh, { depth: depth - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 2 }); g.translate(0, 0, -(depth - 2 * bevel) / 2); return g; };
-  // lower body to the belt line, with wheel arches suggested by the sill
-  const body = prof([[-2.08, 0.32], [2.06, 0.32], [2.12, 0.52], [2.06, 0.78], [1.25, 0.92], [-1.7, 0.98], [-2.06, 0.92], [-2.12, 0.62]], 1.78, 0.07);
-  const glass = prof([[-1.62, 0.96], [1.2, 0.94], [0.42, 1.38], [-1.38, 1.42], [-1.62, 1.16]], 1.6, 0.05);
-  const roof = prof([[-1.42, 1.38], [0.45, 1.36], [0.36, 1.46], [-1.3, 1.48]], 1.52, 0.03);
-  const parts = [tint(body, 1), tint(glass, 0.1, 0.12, 0.15), tint(roof, 1)];
-  for (const x of [-1.32, 1.3]) for (const z of [-0.8, 0.8]) {
-    parts.push(tint(new THREE.CylinderGeometry(0.33, 0.33, 0.22, 12).rotateX(Math.PI / 2).translate(x, 0.33, z), 0.06, 0.06, 0.065));
-    parts.push(tint(new THREE.CylinderGeometry(0.19, 0.19, 0.24, 8).rotateX(Math.PI / 2).translate(x, 0.33, z), 0.55, 0.55, 0.62));
-  }
-  for (const z of [-0.6, 0.6]) {
-    parts.push(tint(new THREE.BoxGeometry(0.06, 0.12, 0.32).translate(2.11, 0.68, z), 0.95, 0.95, 1.0));   // headlamps
-    parts.push(tint(new THREE.BoxGeometry(0.06, 0.14, 0.3).translate(-2.13, 0.76, z), 0.75, 0.06, 0.05));  // tail lamps
-  }
-  parts.push(tint(new THREE.BoxGeometry(0.05, 0.16, 0.5).translate(-2.14, 0.52, 0), 0.92, 0.9, 0.62));     // number plate
-  parts.push(tint(new THREE.BoxGeometry(0.05, 0.12, 0.5).translate(2.13, 0.42, 0), 0.92, 0.92, 1.0));
-  for (const z of [-0.92, 0.92]) parts.push(tint(new THREE.BoxGeometry(0.12, 0.08, 0.16).translate(0.55, 1.0, z), 0.12, 0.12, 0.13));   // mirrors
-  const hi = mergeGeometries(parts.map((g) => { if (!g.attributes.normal) g.computeVertexNormals(); return g; }));
-  return { lo, hi, mLo: carMaterial(-1), mHi: carMaterial(1) };
-}
 function addCars(buf) {
   const d = new Float32Array(buf), n = d.length / 6;
-  if (!CAR) CAR = carGeometries();
-  const PAL = [[0xf2f2ef, 30], [0xb9bcbf, 18], [0x7d8185, 12], [0x2a2c30, 15], [0x2b3e5c, 8], [0x8e2b2b, 7], [0xd8cdb4, 4], [0x3f5a46, 3], [0x5d6f86, 3]];
-  const tot = PAL.reduce((a, p) => a + p[1], 0), pick = (h) => { let x = h * tot; for (const [c, w] of PAL) { if ((x -= w) < 0) return c; } return PAL[0][0]; };
+  if (!CAR) CAR = carGeometries(carU);
+  const pick = carPaint;
   const CH = 400, cells = new Map();
   for (let i = 0; i < n; i++) { const k = Math.floor(d[i * 6] / CH) + ',' + Math.floor(d[i * 6 + 2] / CH); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(i); }
   const m = new THREE.Matrix4(), e = new THREE.Euler(0, 0, 0, 'YZX'), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color();
@@ -545,19 +511,19 @@ timeEl.addEventListener('input', () => { setTime(+timeEl.value); invalidate(true
 setTime(+timeEl.value);
 
 // Shadow frustum follows the view so close-ups get crisp shadows; snapped to texels to avoid shimmer.
-const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3();
+const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3();
 // The shadow map is the costliest pass, so it is cached: its frustum snaps to coarse steps (size in ×1.2 levels, position
 // in tenths of its width) and it is only re-rendered when that snapped frustum, the sun, or the scene's contents change.
 let shadowKey = '', shadowDirty = true;
 function fitShadow() {
-  const dist = camera.position.distanceTo(controls.target), lim = size * 0.6;
+  const f = chase.focus(), dist = f ? f.d : camera.position.distanceTo(controls.target), lim = size * 0.6;
   const R0 = THREE.MathUtils.clamp(dist * 0.85, 140, lim);
   const R = Math.min(lim, 140 * 1.2 ** Math.ceil(Math.log(R0 / 140) / Math.log(1.2))) * 1.15;
   const sc = sun.shadow.camera;
   lightRight.crossVectors(sunDir, THREE.Object3D.DEFAULT_UP).normalize();
   lightUp.crossVectors(lightRight, sunDir).normalize();
   const texel = (2 * R) / sun.shadow.mapSize.x, step = texel * Math.round(sun.shadow.mapSize.x / 10);
-  const t = controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
+  const t = f ? _sf.set(f.x, f.gy, -f.y) : controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
   const key = `${R.toFixed(2)}|${ka}|${kb}|${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)}`;
   if (key === shadowKey && !shadowDirty) return;
   shadowKey = key; shadowDirty = false; renderer.shadowMap.needsUpdate = true;
@@ -604,7 +570,7 @@ controls.addEventListener('end', () => {
   history.replaceState(null, '', '#' + v.join(','));
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
-const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY } }); window.__live = live;
+const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase }); window.__live = live;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -621,6 +587,7 @@ renderer.setAnimationLoop((now) => {
   }
   const touching = touch.update(dt);
   const moved = controls.update(dt) || touching;
+  if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
   const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
@@ -631,11 +598,11 @@ renderer.setAnimationLoop((now) => {
   let resized = false;   // a resized canvas is blank until drawn, so it is drawn this frame
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
   if (!active && !resized && curRatio === pixelRatio && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
-  // keep the target over the diorama
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
+  // keep the target over the diorama (a followed plane may fly beyond it)
+  if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
+  if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
-  if (++nf % 12 === 0 || !ready) stream(!ready);
+  if (++nf % (chase.active ? 4 : 12) === 0 || !ready) stream(!ready);   // a followed plane crosses a tile in seconds
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
