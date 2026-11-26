@@ -301,7 +301,7 @@ export function profileRoof(S, sk, ctx, prof) {
         const flat = [], holes = [], pts = [];
         rings.forEach((r, i) => { if (i) holes.push(pts.length); for (const v of r) { pts.push(v); flat.push(v[0], v[1]); } });
         const idx = earcut(flat, holes);
-        const col = kind === KIND.FLAT ? base.map((c) => c * 0.82) : base;
+        const col = kind === KIND.FLAT ? (ctx.colTerrace || base.map((c) => c * 0.82)) : base;   // a terrace inside a tiled rim is its own deck colour
         for (let k = 0; k < idx.length; k += 3) {
           const W = [pts[idx[k]], pts[idx[k + 1]], pts[idx[k + 2]]];
           triUp(S, ...W.map((v) => [v[0], wallTop + prof.z(v[2]), -v[1]]), col, ...W.map(sf), info, style);

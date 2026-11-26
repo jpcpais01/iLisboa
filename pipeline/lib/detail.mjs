@@ -48,6 +48,26 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
     for (const F of fines) { const c = Math.floor((lo - F.ox) / F.rx), k = Math.floor((la - F.oy) / F.ry); if (c >= 0 && k >= 0 && c < F.w && k < F.h) return F.r[k * F.w + c] / 10; }
     return lidar ? lidar(x, y) : NaN;
   };
+  const fineCovers = (x, y) => { const [la, lo] = proj.inv(x, y); return fines.some((F) => { const c = Math.floor((lo - F.ox) / F.rx), k = Math.floor((la - F.oy) / F.ry); return c >= 0 && k >= 0 && c < F.w && k < F.h; }); };
+  // how far the primary photo leans a point of height h: measured building by building (read), interpolated in between
+  const leans = [];
+  let leanG = null;
+  const leanAt = (x, y) => {
+    if (!leanG) {
+      const LG = 25, lw = Math.ceil((maxX - minX) / LG) + 1, lh = Math.ceil((maxY - minY) / LG) + 1, g = new Float32Array(lw * lh * 2);
+      const fb = P.lean || [0, 0];
+      for (let r = 0; r < lh; r++) for (let c = 0; c < lw; c++) {
+        const gx = minX + c * LG, gy = minY + r * LG; let sx = 0, sy = 0, sw_ = 0;
+        for (const [bx, by, lx, ly] of leans) { const d2 = (bx - gx) ** 2 + (by - gy) ** 2; if (d2 > 250 * 250) continue; const w = 1 / (d2 + 900); sx += lx * w; sy += ly * w; sw_ += w; }
+        const k = clamp(sw_ * 900 * 2, 0, 1);   // far from any measured building: the photo's mean lean
+        g[(r * lw + c) * 2] = sw_ ? (sx / sw_) * k + fb[0] * (1 - k) : fb[0]; g[(r * lw + c) * 2 + 1] = sw_ ? (sy / sw_) * k + fb[1] * (1 - k) : fb[1];
+      }
+      leanG = { LG, lw, lh, g };
+    }
+    const { LG, lw, lh, g } = leanG, fx = clamp((x - minX) / LG, 0, lw - 1.001), fy = clamp((y - minY) / LG, 0, lh - 1.001), c = Math.floor(fx), r = Math.floor(fy), u = fx - c, v = fy - r;
+    const at = (k) => (g[(r * lw + c) * 2 + k] * (1 - u) + g[(r * lw + c + 1) * 2 + k] * u) * (1 - v) + (g[((r + 1) * lw + c) * 2 + k] * (1 - u) + g[((r + 1) * lw + c + 1) * 2 + k] * u) * v;
+    return [at(0), at(1)];
+  };
   // photos are ranked in their JSON: the best one (newest, sharpest) gives roofs and ground; every photo is asked for façades
   photos.sort((a, b) => (b.rank || 0) - (a.rank || 0));
   const P = photos[0];
@@ -120,24 +140,49 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
   // façade band in one photo: the gap between the footprint and its leaned roof is the wall that faces the camera
   const facadeIn = (p, h, ph, [dx, dy]) => {
     if (Math.hypot(dx, dy) < 1.2) return null;   // seen from straight above: no wall in view
-    const [x0, y0, x1, y1] = bbox(p.outer), fac = [];
+    const [x0, y0, x1, y1] = bbox(p.outer); let fac = [];
     const X0 = Math.min(x0, x0 + dx), X1 = Math.max(x1, x1 + dx), Y0 = Math.min(y0, y0 + dy), Y1 = Math.max(y1, y1 + dy);
     for (let y = Y0; y < Y1; y += 0.5) for (let x = X0; x < X1; x += 0.5) {
       if (inside(p, x - dx, y - dy)) continue;                       // roof
-      let wall = false; for (let t = 0.15; t < 0.85; t += 0.1) if (inside(p, x - dx * t, y - dy * t)) { wall = true; break; }
+      let wall = false; for (let t = 0.2; t < 0.72; t += 0.08) if (inside(p, x - dx * t, y - dy * t)) { wall = true; break; }
       if (!wall) continue;
       const c = rgb(x, y, ph); if (c) fac.push(c);
     }
     if (fac.length < 24) return null;
+    // clay-coloured pixels in the band are the tiled eaves and rims leaning into it, unless the wall itself is brick or salmon
+    const nt = fac.filter((c) => !isTile(c)); if (nt.length >= Math.max(24, fac.length * 0.35)) fac = nt;
     // the brighter half: windows, balcony shade and the odd tree are darker than the render
     fac.sort((a, b) => L3(b) - L3(a)); const top = fac.slice(0, Math.max(12, fac.length >> 1));
     return { c: median3(top), n: fac.length };
   };
 
+  // white balance of the façade reads: every photo is brought to the consensus of all of them (the geometric mean of their
+  // casts on the same sunlit grey paving), so a yellow wall is yellow whichever photo saw it lit, and no one survey's cast
+  // (the 2025 flight is cool, the 2018 one warm) decides the colour of the city
+  let WB = null;
+  const wb = (ph) => {
+    if (!WB) {
+      const S = photos.map(() => [[], [], []]);
+      for (let y = minY + 5; y < maxY; y += 9) for (let x = minX + 5; x < maxX; x += 9) {
+        if (!(fine(x, y) < 0.4) || photos.some((q) => shadowAt(x, y, q))) continue;
+        const qs = photos.map((q) => rgb(x, y, q)); if (qs.some((q) => !q)) continue;
+        const p = qs[0]; if (Math.max(...p) - Math.min(...p) > 22 || L3(p) < 90 || qs.some((q) => L3(q) > 235)) continue;
+        qs.forEach((q, i) => { for (let k = 0; k < 3; k++) S[i][k].push(q[k]); });
+      }
+      const med = (v) => { v.sort((x, y) => x - y); return v[v.length >> 1] || 1; };
+      const M = S.map((A) => A.map(med)), n = S[0][0].length;
+      const G = [0, 1, 2].map((k) => Math.exp(M.reduce((a, m) => a + Math.log(m[k]), 0) / M.length));
+      WB = n > 200 ? M.map((m) => { const w = [0, 1, 2].map((k) => clamp(G[k] / m[k], 0.6, 1.7)), l = L3(w); return w.map((v) => v / l); }) : photos.map(() => [1, 1, 1]);   // hue only: each photo keeps its own exposure
+      photos.forEach((q, i) => log(`detail ${q.name}: façade white balance ${WB[i].map((v) => v.toFixed(2)).join('/')} (${n} paving samples)`));
+    }
+    return WB[photos.indexOf(ph)];
+  };
   // one building: roof colours and how much of the roof is tiled (best photo), and the façade from the photo that sees it lit
   const read = (p, h) => {
     if (!covers(p.c[0], p.c[1]) || !(h > 2)) return null;
-    const sh0 = roofShift(p, h, P), [dx, dy] = sh0, [x0, y0, x1, y1] = bbox(p.outer), st = Math.max(0.5, Math.sqrt(Math.abs(p.area) / 4000));
+    const sh0 = roofShift(p, h, P), [dx, dy] = sh0;
+    if (h > 8 && Math.abs(p.area) > 80 && Math.hypot(dx, dy) < 0.37 * h) leans.push([p.c[0], p.c[1], dx / h, dy / h]);
+    const [x0, y0, x1, y1] = bbox(p.outer), st = Math.max(0.5, Math.sqrt(Math.abs(p.area) / 4000));
     const tile = [], flat = [], all = [];
     for (let y = y0 + st / 2; y < y1; y += st) for (let x = x0 + st / 2; x < x1; x += st) {
       if (!inside(p, x, y) || segDist(x, y, p.outer) < 0.9) continue;
@@ -155,60 +200,89 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
         // lit when the wall is about as bright as the roof beside it in the same photo; else lift it out of the shade
         const rl = ph === P ? roofL : (() => { const v = []; for (let y = y0 + st / 2; y < y1; y += st * 2) for (let x = x0 + st / 2; x < x1; x += st * 2) if (inside(p, x, y) && segDist(x, y, p.outer) > 0.9) { const q = rgb(x + s[0], y + s[1], ph); if (q) v.push(L3(q)); } v.sort((a, b) => a - b); return v[Math.floor(v.length * 0.7)] || 1; })();
         const lit = L3(f.c) / rl;
-        cand.push({ ph, lit, f, s });
+        // which wall is in view: the one facing back from the lean (the camera's side). Is it facing the sun of that photo?
+        const L = Math.hypot(s[0], s[1]) || 1, az = ((ph.sun?.az ?? 180) * Math.PI) / 180, facing = (-s[0] / L) * Math.sin(az) + (-s[1] / L) * Math.cos(az);
+        cand.push({ ph, lit, f, s, facing, sunny: facing > 0.12 && lit > 0.5 });
       }
-      cand.sort((a, b) => b.lit - a.lit);
-      // the most brightly lit view wins; a wall that still comes out dark is a wall in deep shade or behind trees, not a dark
-      // render (Lisbon has very few): try the next view, and with none left keep the district palette
+      // a wall turned to the sun beats one in shade (most turned first; the newest photo on a near tie); in shade, the
+      // brightest view, lifted by that photo's sun/shade ratio. Every photo is white-balanced to the newest.
+      cand.sort((a, b) => (b.sunny - a.sunny) || (a.sunny ? b.facing + (b.ph === P ? 0.15 : 0) - a.facing - (a.ph === P ? 0.15 : 0) : b.lit - a.lit));
       for (const b of cand) {
-        const w = b.lit > 0.62 ? tone(b.f.c, 1.08) : tone(b.f.c.map((v, k) => v * ratio(b.ph)[k]), 1.0);
+        if (!b.sunny && (b.lit > 0.85 || isTile(b.f.c))) continue;   // a wall turned from the sun yet as bright as the roof, or clay-red: the band caught the roof, not the wall
+        const c = b.f.c.map((v, k) => v * wb(b.ph)[k]);
+        const c2 = b.sunny ? c : c.map((v, k) => v * ratio(b.ph)[k]), mx = Math.max(...c2), c3 = mx > 242 ? c2.map((v) => (v * 242) / mx) : c2;   // never burn a wall to paper: scale back, keep the hue
+        const w = tone(c3, b.sunny ? 1.08 : 1.0);
         if (L3(w) < 110) continue;
-        wall = w; wallSrc = { photo: b.ph.name, lit: +b.lit.toFixed(2), n: b.f.n }; break;
+        wall = w; wallSrc = { photo: b.ph.name, lit: +b.lit.toFixed(2), facing: +b.facing.toFixed(2), n: b.f.n }; break;
       }
+      var cands = cand.map((b) => [b.ph.name.slice(10, 22), +b.lit.toFixed(2), +b.facing.toFixed(2), b.f.c.map(Math.round)]);
     }
-    return { shift: sh0, n, tileFrac: n ? tile.length / n : 0, tile: tile.length > 8 ? tone(median3(tile), 1.08) : null, flat: flat.length > 8 ? tone(median3(flat), 1.05) : null, wall, wallSrc };
+    return { shift: sh0, n, tileFrac: n ? tile.length / n : 0, tile: tile.length > 8 ? tone(median3(tile), 1.08) : null, flat: flat.length > 8 ? tone(median3(flat), 1.05) : null, wall, wallSrc, cands };
   };
 
-  // trees: canopy cells of the survey away from every building, thinned to one tree per crown
-  const trees = ({ blockedAt }) => {
-    const G = fines.length ? 1 : 1.5, cand = [], lidar_ = fine;
+  // trees: canopy peaks of the survey, one per crown, kept only where the survey sees a full crown around the peak and the
+  // photo sees leaves there (leaned like everything else in it). Not on buildings, roads or bridges: an overpass deck, a lamp
+  // post, a parapet or a crane is tall and solid, but grey.
+  const trees = ({ blockedAt, roadAt = () => false }) => {
+    const G = fines.length ? 1 : 1.5, cand = [];
     for (let y = minY + G / 2; y < maxY; y += G) for (let x = minX + G / 2; x < maxX; x += G) {
       if (!covers(x, y)) continue;
-      const z = lidar_(x, y); if (!(z > 2.6 && z < 26) || blockedAt(x, y)) continue;
-      const c = rgb(x, y); if (!c) continue;
-      const exg = 2 * c[1] - c[0] - c[2]; if (exg < -6 && (c[0] + c[1] + c[2] > 330 || z > 14)) continue;   // tall and not green: a mast, a lamp, a building edge   // bright, not green: a lamp post, a mast, a canopy
-      // local maximum in a 3 m window
-      let top = true; for (const [a, b] of [[G, 0], [-G, 0], [0, G], [0, -G], [G, G], [-G, G], [G, -G], [-G, -G]]) if (lidar_(x + a, y + b) > z) { top = false; break; }
-      if (top) cand.push([x, y, z, c]);
+      const z = fine(x, y); if (!(z > 3.2 && z < 26) || blockedAt(x, y) || roadAt(x, y)) continue;
+      let top = true; for (const [a, b] of [[G, 0], [-G, 0], [0, G], [0, -G], [G, G], [-G, G], [G, -G], [-G, -G]]) if (fine(x + a, y + b) > z) { top = false; break; }
+      if (top) cand.push([x, y, z]);
     }
     cand.sort((a, b) => b[2] - a[2]);
     const out = [], cell = new Map(), key = (x, y) => `${Math.floor(x / 8)},${Math.floor(y / 8)}`;
-    for (const [x, y, z, c] of cand) {
-      const r = clamp(z * 0.3, 2.2, 6);   // crowns of Lisbon's broadleaves and pines are about a third as wide as tall
+    let noCrown = 0, grey = 0;
+    for (const [x, y, z] of cand) {
+      const r = clamp(z * 0.35, 2.5, 7);   // crowns of Lisbon's broadleaves and pines are about a third as wide as tall
       let ok = true;
       for (let a = -1; a <= 1 && ok; a++) for (let b = -1; b <= 1 && ok; b++) for (const q of cell.get(`${Math.floor(x / 8) + a},${Math.floor(y / 8) + b}`) || []) if (Math.hypot(q[0] - x, q[1] - y) < Math.max(r, q[3]) * 0.9) { ok = false; break; }
       if (!ok) continue;
-      const t = [x, y, z, r, c]; out.push(t); const k = key(x, y); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(t);
+      // a crown: most of a disc around the peak stands at least half as tall
+      let full = 0, nf = 0; const cr = Math.min(r * 0.55, 3);
+      for (let k = 0; k < 12; k++) { const t = (k * Math.PI) / 6, rr = k % 2 ? cr : cr * 0.5, v = fine(x + Math.cos(t) * rr, y + Math.sin(t) * rr); nf++; if (v > Math.max(2, z * 0.45)) full++; }
+      if (full / nf < 0.6) { noCrown++; continue; }
+      // leaves: the photo where this crown appears (leaned by its height), centre and a ring
+      const [lx, ly] = leanAt(x, y), ox = lx * z * 0.85, oy = ly * z * 0.85;
+      let eg = 0, sm = 0, ne = 0;
+      for (let k = 0; k < 9; k++) { const t = (k * Math.PI) / 4, rr = k ? cr * 0.7 : 0, c = rgb(x + ox + Math.cos(t) * rr, y + oy + Math.sin(t) * rr); if (!c) continue; eg += 2 * c[1] - c[0] - c[2]; sm += c[0] + c[1] + c[2]; ne++; }
+      if (!ne) continue; eg /= ne; sm /= ne;
+      if (!(eg > 6 || (sm < 190 && eg > 1.5))) { grey++; continue; }
+      const t = [x, y, z, r]; out.push(t); const k = key(x, y); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(t);
     }
+    log(`detail trees: ${out.length} kept of ${cand.length} peaks (${noCrown} without a crown, ${grey} not green)`);
     return out;
   };
 
-  // ground: the photo itself, with every building lifted out (filled from the ground around it) and cast shadows lightened
-  const ground = ({ ground1, GW, GH, buildings, Raster }) => {
+  // ground: the photo itself, with everything that stands up lifted out and cast shadows lightened. What stands up is taken
+  // from the survey, not from the map: every cell over 2.2 m that is not leaves, swept along the photo's lean from its foot to
+  // where its top appears, so roofs, walls and unmapped sheds all leave the ground (a squashed roof on the pavement otherwise).
+  // The hole is filled with the photo's colour from around it over the painted ground's own texture (kerbs, paving, grass).
+  const ground = ({ ground1, GW, GH, buildings, Raster, roadAt = () => false }) => {
     const mpp = (maxX - minX) / GW, N = GW * GH;
     const cov = new Uint8Array(N), out = new Float32Array(N * 3), mask = new Uint8Array(N);
-    // buildings, their leaned roofs and the façades between: one swept polygon per building, 1 m wider
+    const mark = (x, y) => { const c = Math.floor((x - minX) / mpp), r = Math.floor((maxY - y) / mpp); if (c >= 0 && r >= 0 && c < GW && r < GH) mask[r * GW + c] = 1; };
     const R = new Raster(minX, minY, maxX, maxY, mpp);
-    for (const b of buildings) {
-      const [dx, dy] = b.shift || roofShift({ outer: b.outer }, b.h, P);
+    for (const b of buildings) {   // mapped buildings, their leaned roofs and the façades between
+      const [dx, dy] = b.shift || [leanAt(b.outer[0][0], b.outer[0][1])[0] * b.h, leanAt(b.outer[0][0], b.outer[0][1])[1] * b.h];
       for (let t = 0; t <= 1.0001; t += 0.125) R.fillRings([b.outer.map(([x, y]) => [x + dx * t, y + dy * t])], (i) => { mask[i] = 1; });
     }
-    { // dilate by 1 m (2 px): roof edges and eaves bleed in the photo
-      const m2 = mask.slice(); for (let r = 2; r < GH - 2; r++) for (let c = 2; c < GW - 2; c++) { const i = r * GW + c; if (mask[i]) continue; for (const o of [-2, 2, -2 * GW, 2 * GW, -1 - GW, 1 + GW]) if (mask[i + o]) { m2[i] = 1; break; } } mask.set(m2);
+    let nSurv = 0;
+    if (fines.length) for (let y = minY + mpp / 2; y < maxY; y += mpp) for (let x = minX + mpp / 2; x < maxX; x += mpp) {
+      const z = fine(x, y); if (!(z > 2.2) || !covers(x, y) || roadAt(x, y)) continue;   // bridges and overpasses keep their road
+      const [lx, ly] = leanAt(x, y), c = rgb(x + lx * z, y + ly * z);
+      if (c && 2 * c[1] - c[0] - c[2] > 8) continue;   // leaves: a tree stays in the photo, under its own 3D tree
+      const L = Math.hypot(lx, ly) * z, n = Math.ceil(L / (mpp * 0.7)) + 1;
+      for (let k = 0; k <= n; k++) mark(x + (lx * z * k) / n, y + (ly * z * k) / n);
+      nSurv++;
+    }
+    { // dilate by 1 m: roof edges and eaves bleed in the photo
+      const d = Math.round(1 / mpp);
+      for (let pass = 0; pass < d; pass++) { const m2 = mask.slice(); for (let r = 1; r < GH - 1; r++) for (let c = 1; c < GW - 1; c++) { const i = r * GW + c; if (mask[i]) continue; if (mask[i - 1] || mask[i + 1] || mask[i - GW] || mask[i + GW]) m2[i] = 1; } mask.set(m2); }
     }
     const sh = new Float32Array(N);
     for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) sh[r * GW + c] = shadowAt(minX + (c + 0.5) * mpp, maxY - (r + 0.5) * mpp);
-    // photo into the grid
     for (let r = 0; r < GH; r++) for (let c = 0; c < GW; c++) {
       const i = r * GW + c, x = minX + (c + 0.5) * mpp, y = maxY - (r + 0.5) * mpp, q = rgb(x, y);
       if (!q) continue; cov[i] = 1; out[i * 3] = q[0]; out[i * 3 + 1] = q[1]; out[i * 3 + 2] = q[2];
@@ -218,26 +292,33 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
       // the 2 m shadow grid only says where to look: widen it 2 m, then the photo's own darkness decides, pixel by pixel
       const soft = boxBlur1(sh, GW, GH, Math.round(2 / mpp));
       for (let i = 0; i < N; i++) if (cov[i] && soft[i] > 0.01) {
-        const l = out[i * 3] * 0.3 + out[i * 3 + 1] * 0.55 + out[i * 3 + 2] * 0.15, w = Math.min(1, soft[i] * 3) * clamp((100 - l) / 40, 0, 1);
-        for (let k = 0; k < 3; k++) out[i * 3 + k] *= 1 + (ratio_[k] - 1) * w * 0.92;
+        const l = out[i * 3] * 0.3 + out[i * 3 + 1] * 0.55 + out[i * 3 + 2] * 0.15, w = Math.min(1, soft[i] * 3) * clamp((105 - l) / 40, 0, 1);
+        for (let k = 0; k < 3; k++) out[i * 3 + k] *= 1 + (ratio_[k] - 1) * w * 0.95;
       }
     }
-    // fill under buildings: push-pull (average of the valid ground at coarser and coarser levels, pulled back down)
+    // the photo's tone in the toned space, the painted ground's texture at the same scale, both pushed into the hole
+    const g0 = new Float32Array(N * 3); for (let i = 0; i < N * 3; i++) g0[i] = ground1[i];
+    const gp = g0.slice();
+    for (let i = 0; i < N; i++) if (cov[i]) { const t = tone([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]], 1.12); out[i * 3] = t[0]; out[i * 3 + 1] = t[1]; out[i * 3 + 2] = t[2]; }
     pushPull(out, cov, mask, GW, GH);
-    // into the painted ground, feathered 25 m at the edge of the photo
+    pushPull(gp, cov, mask, GW, GH);
     const edgeD = distToZero(cov, GW, GH, Math.ceil(25 / mpp));
-    let n = 0;
+    let n = 0, nm = 0;
     for (let i = 0; i < N; i++) {
       if (!cov[i]) continue;
-      const f = clamp(edgeD[i] / (25 / mpp), 0, 1), t = tone([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]], 1.12);
-      for (let k = 0; k < 3; k++) ground1[i * 3 + k] = ground1[i * 3 + k] * (1 - f) + t[k] * f;
-      n++;
+      const f = clamp(edgeD[i] / (25 / mpp), 0, 1);
+      for (let k = 0; k < 3; k++) {
+        let v = out[i * 3 + k];
+        if (mask[i]) v *= clamp(g0[i * 3 + k] / Math.max(4, gp[i * 3 + k]), 0.72, 1.3);   // filled: the painted ground's own detail
+        ground1[i * 3 + k] = g0[i * 3 + k] * (1 - f) + v * f;
+      }
+      n++; if (mask[i]) nm++;
     }
-    log(`detail ground: ${(n * mpp * mpp / 1e6).toFixed(2)} km² from the photo`);
+    log(`detail ground: ${(n * mpp * mpp / 1e6).toFixed(2)} km² from the photo, ${(nm * mpp * mpp / 1e4).toFixed(1)} ha lifted out (${nSurv} survey cells standing)`);
     return { cov, edgeD, mpp };
   };
 
-  return { photos, covers, read, trees, ground, tone, rgb, shadowAt, fine };
+  return { photos, covers, fineCovers, leanAt, read, trees, ground, tone, rgb, shadowAt, fine, isTile, L3 };
 }
 
 function boxBlur1(a, w, h, r) {
