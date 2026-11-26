@@ -5,7 +5,7 @@ Source: Centro de Dados DGT (https://cdd.dgterritorio.gov.pt), STAC collections 
 and MDT-2m (bare terrain), both EPSG:3763. Downloads need a free CDD account, given as DGT_USER / DGT_PASSWORD
 (GitHub secrets, never in the repo). Without them the script only probes the catalogue and reports what it sees.
 
-Output, per area of pipeline/areas.txt, in EPSG:4326 over the area plus a 0.004° margin:
+Output (2026-11-26 first full run), per area of pipeline/areas.txt, in EPSG:4326 over the area plus a 0.004° margin:
   data/lidar/<area>_ndsm.tif   height above ground (MDS − MDT), int16 decimetres, ~2 m cells, 0 below 1 m
   data/lidar/<area>_dtm.tif    terrain height, uint16 decimetres, ~4 m cells, 65535 where there is no ground (water)
 """
