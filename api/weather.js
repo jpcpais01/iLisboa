@@ -41,8 +41,9 @@ export default async function handler(req, res) {
     const f = (k) => pts.map((p) => r1(p.current?.[k] ?? NaN));
     out.grid = {
       nx: NX, ny: NY,
-      x: pts.slice(0, NX).map((p) => Math.round(fwd(p.latitude, p.longitude)[0])),   // lattice in local metres
-      y: pts.filter((_, k) => k % NX === 0).map((p) => Math.round(fwd(p.latitude, p.longitude)[1])),
+      // the lattice as asked (Open-Meteo answers with its model cell's centre, which repeats across neighbours)
+      x: lons.slice(0, NX).map((lon) => Math.round(fwd(+lats[0], +lon)[0])),
+      y: lats.filter((_, k) => k % NX === 0).map((lat) => Math.round(fwd(+lat, +lons[0])[1])),
       elev: pts.map((p) => Math.round(p.elevation ?? 0)),
       T: f('temperature_2m'), ws: f('wind_speed_10m'), wd: f('wind_direction_10m'), gust: f('wind_gusts_10m'),
       P: f('precipitation'), cc: f('cloud_cover'), code: f('weather_code'),
