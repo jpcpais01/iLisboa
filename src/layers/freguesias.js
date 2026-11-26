@@ -98,7 +98,7 @@ export function createRegions({ ground, camera, controls, canvas, labelsF, label
   function buildCurtains() {
     const pos = [], top = [], kk = [], col = [];
     const add = (r, lvl) => {
-      const c = lvl === 7 ? [0.11, 0.3, 0.61] : [0.2, 0.45, 0.85], hk = lvl === 7 ? 1.8 : 1;   // azulejo cobalt; concelhos darker and taller
+      const c = lvl === 7 ? [0.16, 0.36, 0.78] : [0.3, 0.56, 1], hk = lvl === 7 ? 1.8 : 1;   // azulejo cobalt; concelhos darker and taller
       for (const { p } of r.rings) {
         for (let i = 0; i + 3 < p.length; i += 2) {
           const ax = p[i], ay = p[i + 1], bx = p[i + 2], by = p[i + 3], L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L / 40));

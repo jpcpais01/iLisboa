@@ -691,7 +691,7 @@ controls.addEventListener('end', () => {
 // live layers (traffic, transport, planes): separate module, off until toggled
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // map layers (weather: temperature, wind, rain; city: freguesias, density): src/layers, off until toggled
-const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, invalidate }); window.__layers = layers;
+const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)

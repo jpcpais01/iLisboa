@@ -10,7 +10,7 @@ import { overlayUniforms as U } from '../materials.js';
 
 THREE.ShaderChunk.fog_pars_fragment += /* glsl */`
 #ifdef USE_FOG
-uniform sampler2D uOv; uniform vec4 uOvBox; uniform float uOvK, uOvLev, uOvMode;
+uniform sampler2D uOv; uniform vec4 uOvBox; uniform float uOvK, uOvLev, uOvMode, uOvLift;
 #endif`;
 THREE.ShaderChunk.tonemapping_fragment = /* glsl */`
 #ifdef USE_FOG
@@ -22,8 +22,8 @@ if (uOvK > 0.) {
   float w = (uOvMode > .5 ? o.a : 1.) * inside * uOvK;
   float L = dot(gl_FragColor.rgb, vec3(.2126, .7152, .0722));
   // colourise: the overlay's hue and saturation at the city's own brightness, so light and shade survive
-  // (a lit wall stays brighter than a shaded one); a little floor keeps it readable at night
-  vec3 tint = o.rgb / max(dot(o.rgb, vec3(.2126, .7152, .0722)), .04) * (L * .92 + .012);
+  // (a lit wall stays brighter than a shaded one); a floor that rises after dusk keeps the map readable at night
+  vec3 tint = o.rgb / max(dot(o.rgb, vec3(.2126, .7152, .0722)), .04) * (L * .92 + .012 + uOvLift);
   gl_FragColor.rgb = mix(gl_FragColor.rgb, tint, w);
   if (uOvLev > 0. && uOvMode < .5) {   // contour lines (isotherms)
     float s = o.a * uOvLev, f = abs(fract(s + .5) - .5) / max(fwidth(s), 1e-4);
