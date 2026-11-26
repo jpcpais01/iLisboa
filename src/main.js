@@ -11,6 +11,8 @@ import { createSky } from './sky.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
+import { initHud } from './ui/hud.js';
+import { initDock } from './ui/dock.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -568,18 +570,16 @@ function lampPost() {
 // ─── sun / time of day ──────────────────────────────────────────────────
 // haze: extinction at sea level per metre (height fog, thinning with a ~1 km scale height; colour from the sky, see sky.js)
 const haze = new THREE.FogExp2(0xc8d2dc, 0.00009); scene.fog = haze;
-const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
 const sunDir = new THREE.Vector3(), lightDir = new THREE.Vector3();
 const MOON = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();   // a high moon over the south-west at night
 let skyT = 0, skyPend = null, sunLit = true;
+let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today in Lisbon)
 function setTime(h, now = false) {
-  sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir);
+  sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir, sunDay, sunUtc);
   const elev = Math.asin(sunDir.y);
   const night = 1 - THREE.MathUtils.smoothstep(elev, -0.1, 0.02);   // civil dusk (−6°) is night for the city lights
   cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.07, 0.04);
   document.body.classList.toggle('night', cityUniforms.uNight.value > 0.5);
-  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
-  clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
   // the sky (and with it the environment) is re-solved at most ~8 times a second while the slider is dragged
   const solve = () => {
     skyPend = null; skyT = performance.now();
@@ -600,9 +600,6 @@ function setTime(h, now = false) {
 }
 const EXPOSURE = +Q.get('exp') || 1.0;
 
-timeEl.addEventListener('input', () => setTime(+timeEl.value));
-timeEl.addEventListener('change', () => setTime(+timeEl.value, true));
-{ const t0 = +Q.get('t'); if (t0) timeEl.value = t0; }   // ?t=hour, for checks
 // Shadow cascades follow the view, snapped to coarse steps so they neither shimmer nor re-render every frame.
 // The near map is centred a little ahead of the view (half its radius at a grazing view, none looking straight down) and is
 // re-drawn when its snapped frame, the light, or the scene's contents change. The far map covers ~5 km ahead and is re-drawn
@@ -643,7 +640,9 @@ function fitShadow(now) {
 }
 let needRender = 3;
 const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = true; };
-setTime(+timeEl.value, true);
+// the clock: Lisbon's real time and date by default (the HUD keeps it ticking); the slider picks any hour of today. ?t=hour pins it.
+const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); } }); window.__hud = hud;
+initDock();
 { const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
 // ─── camera: shareable view in the URL hash, else a postcard intro from the river ───
@@ -768,5 +767,4 @@ try {
   console.error(err);
   document.querySelector('#loading span').textContent = 'Lisboa não carregou. Recarregue a página.';
 }
-document.getElementById('subtitle').textContent = `Lisboa · ${AREAS.reduce((n, a) => n + a.stats.buildings, 0).toLocaleString('pt-PT')} edifícios`;
 window.__ready = true;

@@ -8,6 +8,7 @@ import { createTraffic } from './traffic.js';
 import { createTransit } from './transit.js';
 import { createPlanes } from './planes.js';
 import { createCars } from './cars.js';
+import { registerLayer } from '../layers/registry.js';
 
 const LAYERS = [
   { key: 'traffic', label: 'Trânsito', icon: '<rect x="7.5" y="2.5" width="9" height="19" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>' },
@@ -22,30 +23,18 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
   // ambient cars: always on, no toggle; their numbers and speeds follow the live traffic
   const cars = createCars({ scene, ground, ll, camera, canvas, night, mobile, lod });
 
-  // ─── UI: a stack of toggles, a status line under each, a traffic legend ───
-  const panel = document.createElement('nav');
-  panel.className = 'live'; panel.setAttribute('aria-label', 'Camadas ao vivo');
-  panel.innerHTML = LAYERS.map((l) => `<button type="button" data-k="${l.key}" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true">${l.icon}</svg><span class="t">${l.label}</span><span class="s"></span></button>`).join('')
-    + '<div class="legend" hidden><span>rápido</span><i></i><span>lento</span></div>';
-  document.body.appendChild(panel);
+  // ─── UI: each live layer registers with the layer dock (src/layers/registry.js); the dock draws the toggles ───
   const card = document.createElement('div'); card.className = 'live-card'; card.hidden = true; document.body.appendChild(card);
-  const btn = (k) => panel.querySelector(`[data-k="${k}"]`);
-  function renderStatus() {
-    for (const { key } of LAYERS) btn(key).querySelector('.s').textContent = layers[key].status();
-    panel.querySelector('.legend').hidden = !layers.traffic.on;
+  const legend = document.createElement('div'); legend.className = 'legend-traffic'; legend.innerHTML = '<span>rápido</span><i></i><span>lento</span>';
+  const handles = {};
+  function renderStatus() { for (const { key } of LAYERS) handles[key]?.refresh(); }
+  for (const l of LAYERS) {
+    handles[l.key] = registerLayer({
+      id: l.key, label: l.label, group: 'live', icon: l.icon, status: () => layers[l.key].status(),
+      legend: l.key === 'traffic' ? legend : undefined,
+      set: (v) => { layers[l.key].set(v); if (!v && card.dataset.k === l.key) { if (followed) stopFollow(); card.hidden = true; } },
+    });
   }
-  let saved = [];
-  try { saved = JSON.parse(localStorage.getItem('ilisboa.live') || '[]'); } catch { /* private mode */ }
-  const fromUrl = new URLSearchParams(location.search).get('live');
-  const initial = fromUrl != null ? fromUrl.split(',') : saved;
-  function toggle(k, v = !layers[k].on) {
-    layers[k].set(v); btn(k).setAttribute('aria-pressed', String(v));
-    try { localStorage.setItem('ilisboa.live', JSON.stringify(LAYERS.map((l) => l.key).filter((x) => layers[x].on))); } catch { /* ignore */ }
-    if (!v && card.dataset.k === k) { if (followed) stopFollow(); card.hidden = true; }
-    renderStatus();
-  }
-  panel.addEventListener('click', (e) => { const b = e.target.closest('button[data-k]'); if (b) toggle(b.dataset.k); });
-  for (const k of initial) if (layers[k]) toggle(k, true);
 
   // ─── tap a vehicle, plane or train: the camera follows it in third person, a chip says what it is ───
   let down = null, followed = null, chipT = 0;
