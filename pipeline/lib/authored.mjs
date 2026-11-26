@@ -105,6 +105,8 @@ export const OVERRIDES = {
   w675059024: { shape: 'flat', h: 12, wall: '#aaa59b', flatCol: [126, 140, 98], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.6, stone: false },
   w188143626: { shape: 'flat', h: 19, wall: '#a9a397', flatCol: [170, 108, 90], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.5, stone: false },
   w188143627: { shape: 'flat', h: 11, wall: '#d8d6d0', flatCol: [212, 211, 206], variant: 3, msBand: [0.3, 0.68], floorH: 4.2, groundH: 4.6, parapet: 0.4, stone: false },
+  ...Object.fromEntries(['w241540590', 'w241540591'].map((id) => [id, { shape: 'flat', wall: '#efede7', flatCol: [226, 224, 218], variant: 3, stone: false }])),   // Espelho d'Água pavilions (1940): white, flat-roofed
+  w33527519: { shape: 'hipped', roofCol: '#b0644c', wall: '#ece3cf', h: 16, variant: 4, stone: false, balconyFloors: [] },   // Pavilhão Carlos Lopes: tiled hip roofs over the azulejo pavilion (checked against Earth)
   w92354265: { wall: '#e8e6e0' },   // IST Pavilhão de Civil: white render (OSM's green is the glazing)
   w1272872175: { shape: 'hipped', h: 13, wall: '#eeeae0', roofCol: '#b5694f', variant: 4, stone: false },   // Casa Pia (Belém): tiled hip roofs round its courts, not a flat hall
   w96390844: { h: 17, shape: 'flat', variant: 4, wall: '#eadcbc' },
@@ -1621,7 +1623,7 @@ export function saoBentoFront(S, { a, b, zTop, zSq, lin, srgb }) {
 }
 
 // Small sailing yacht on the Tagus: white hull, cabin, mast, mainsail and jib (both faces), heeled a touch.
-export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9 }) {
+export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9, furled = false }) {
   const white = lin(srgb('#f4f2ec')), hullC = lin(srgb(seed < 0.3 ? '#1f3550' : '#f1efe8')), deck = lin(srgb('#b9a587')), sail = lin(srgb('#f7f5ee')), mastC = lin(srgb('#c9ccd0'));
   const PL = [KIND.PLAIN / 8, 5 / 8, seed, 1], I0 = [0, 0, 0, 0];
   const L = len / 2, B = len * 0.17;
@@ -1638,6 +1640,7 @@ export function sailboat(S, { x, y, dx, dy, lin, srgb, seed = 0, len = 9 }) {
   const foot = [m[0], 1.5, -m[1]], clew = [tack[0], clewZ, -tack[1]], head = [top[0], H - 0.4, top[2]];
   const bow = P(L * 0.95, 0), jibFoot = [bow[0], 1.0, -bow[1]], jibClew = P(-L * 0.05, (seed - 0.5) * 1.6);
   const n = [-dy, 0, -dx];
+  if (furled) { limb(S, foot, [P(-L * 0.55, 0)[0], 1.5, -P(-L * 0.55, 0)[1]], 0.16, 0.16, 4, lin(srgb(seed < 0.5 ? '#2c4a6e' : '#e9e6df')), PL, false); return; }   // moored: sail furled on the boom under its cover
   for (const s of [1, -1]) {
     tri(S, foot, clew, head, n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
     tri(S, jibFoot, [jibClew[0], 1.2, -jibClew[1]], [top[0], H * 0.85, top[2]], n.map((v) => v * s), sail, [0, 0], [1, 0], [0, 1], I0, PL);
@@ -1665,7 +1668,7 @@ export function metalDome(S, { cx, cy, r, z0, rise, lin, srgb, seg = 28, cols = 
 // Basílica da Estrela: twin-towered baroque front (parishChurch) crowned by a tall drum and dome over the crossing.
 export function estrelaBasilica(S, o) {
   const { cx, cy, ux, uy, hl, hw, ground, lin, srgb } = o;
-  parishChurch(S, { ...o, towers: 2, cap: 'cupola', wall: '#f2efe8', roofHex: '#9fa3a6' });
+  parishChurch(S, { ...o, towers: 2, cap: 'cupola', wall: '#f2efe8', roofHex: '#b0644c' });   // the nave is tiled, not leaded (checked against Earth)
   const H = o.H, uc = hl * 0.22, x = cx + ux * uc, y = cy + uy * uc, r = Math.min(hw * 0.62, 9.5);
   const white = lin(srgb('#f1eee6')), stone = lin(srgb('#d9d4c8')), dark = lin(srgb('#34373b'));
   const ST = [KIND.STONE / 8, 5 / 8, 0.4, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1];
@@ -2958,7 +2961,9 @@ export function sailCrown(S, { ring, z0, rise, toward = 1, col, lin, srgb }) {
 // Ponte Vasco da Gama (1998), the stretch inside the diorama: the north viaduct from Sacavém, the cable-stayed main
 // bridge (420 m span between two H pylons 148 m tall, 203 m side spans, deck ~50 m over the channel) and the long
 // low viaduct heading for Montijo. Centreline averaged from both mapped carriageways; pylons where they are mapped.
-export const VG_LINE = [[38.786526, -9.099728], [38.786635, -9.098699], [38.786688, -9.097675], [38.786703, -9.096621], [38.786665, -9.095593], [38.786592, -9.094564], [38.786471, -9.093533], [38.786357, -9.092505], [38.786233, -9.091469], [38.786119, -9.090408], [38.786, -9.089392], [38.785878, -9.08836], [38.78576, -9.087324], [38.785646, -9.086283], [38.78553, -9.085248], [38.785408, -9.084218], [38.785296, -9.083186], [38.785164, -9.082138], [38.785045, -9.081115], [38.784905, -9.080093], [38.784732, -9.079056], [38.784523, -9.078013], [38.78427, -9.076963], [38.784006, -9.075945], [38.783703, -9.074898], [38.783353, -9.073862], [38.782977, -9.072839], [38.782551, -9.071793], [38.782085, -9.070759], [38.78178, -9.070123]];
+export const VG_LINE = [[38.786526, -9.099728], [38.786635, -9.098699], [38.786688, -9.097675], [38.786703, -9.096621], [38.786665, -9.095593], [38.786592, -9.094564], [38.786471, -9.093533], [38.786357, -9.092505], [38.786233, -9.091469], [38.786119, -9.090408], [38.786, -9.089392], [38.785878, -9.08836], [38.78576, -9.087324], [38.785646, -9.086283], [38.78553, -9.085248], [38.785408, -9.084218], [38.785296, -9.083186], [38.785164, -9.082138], [38.785045, -9.081115], [38.784905, -9.080093], [38.784732, -9.079056], [38.784523, -9.078013], [38.78427, -9.076963], [38.784006, -9.075945], [38.783703, -9.074898], [38.783353, -9.073862], [38.782977, -9.072839], [38.782551, -9.071793], [38.782085, -9.070759], [38.78178, -9.070123],
+  // on across the estuary (the 2026-11 east column): midline of the two OSM carriageways w29104538 / w344085225
+  [38.781642, -9.069848], [38.780914, -9.068509], [38.780311, -9.067532], [38.779689, -9.066584], [38.778839, -9.065402], [38.778411, -9.06482], [38.7778, -9.064002], [38.773815, -9.058647], [38.769913, -9.053401], [38.762101, -9.042902], [38.759906, -9.039952], [38.750124, -9.026812], [38.749081, -9.02543], [38.748619, -9.024814], [38.748065, -9.024066], [38.747398, -9.023156], [38.746937, -9.02254], [38.746335, -9.021731], [38.7458, -9.021012], [38.745012, -9.019951], [38.744474, -9.019233], [38.743877, -9.018428], [38.742884, -9.017094], [38.742449, -9.016514], [38.741928, -9.015816], [38.74138, -9.01508], [38.740513, -9.013915], [38.740092, -9.013353], [38.739564, -9.012645], [38.739042, -9.011942], [38.738667, -9.011435], [38.738246, -9.01087], [38.737814, -9.010286], [38.737293, -9.009571], [38.736862, -9.008965], [38.736278, -9.008118]];
 const VG_PYLONS = [[38.78583, -9.09057], [38.78529, -9.08578]];
 export function ponteVascoGama(S, { fwd, ground, lin, srgb }) {
   const conc = lin(srgb('#d2cec6')), concD = lin(srgb('#aaa59c')), asphalt = lin(srgb('#5a5853')), cable = lin(srgb('#e6e6e2'));

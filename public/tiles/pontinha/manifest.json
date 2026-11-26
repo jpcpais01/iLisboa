@@ -695,6 +695,7 @@
  "stats": {
   "authored": 7,
   "buildings": 7665,
+  "lidar": 0,
   "height": 0,
   "levels": 123,
   "estimated": 7535,
@@ -718,6 +719,7 @@
   "tramPoles": 0,
   "trains": 0,
   "masts": 0,
+  "moored": 0,
   "ferries": 0,
   "sailboats": 0,
   "miradouros": 0,
@@ -725,17 +727,17 @@
   "fountains": 1,
   "hedgeM": 83.47028975075706,
   "waterSource": "dem",
-  "trees": 40523,
+  "trees": 40519,
   "treesMapped": 290,
   "lamps": 6762,
   "cars": 15027,
   "water": 0,
-  "bytes": 24893479,
+  "bytes": 24888235,
   "detailTris": 886785,
   "triangles": 1593321
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-25T23:04:47.906Z",
+ "built": "2026-11-25T23:38:40.492Z",
  "far": {
   "bytes": 1061332,
   "tris": 120259

@@ -135,6 +135,22 @@ async function loadDEM() {
 }
 const dem = await loadDEM();
 log('DEM ready');
+// LiDAR terrain (DGT 2024 MDT, ~4 m; see pipeline/fetch_lidar.py) wherever it has ground: the true street levels under the
+// 30 m Copernicus estimate. Water and gaps keep Copernicus.
+await (async () => {
+  const f = path.join(ROOT, 'data/lidar', `${AREA}_dtm.tif`); if (!fs.existsSync(f) || process.env.NO_LIDAR_DTM) return;
+  const img = await (await fromFile(f)).getImage(), [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution();
+  const [r] = await img.readRasters(), w = img.getWidth(), h = img.getHeight(), cop = dem.ground;
+  const at = (la, lo) => {
+    const fx = (lo - ox) / rx - 0.5, fy = (la - oy) / ry - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    if (x0 < 0 || y0 < 0 || x0 + 1 >= w || y0 + 1 >= h) return NaN;
+    const a = r[y0 * w + x0], b = r[y0 * w + x0 + 1], c = r[(y0 + 1) * w + x0], d = r[(y0 + 1) * w + x0 + 1];
+    if (a === 65535 || b === 65535 || c === 65535 || d === 65535) return NaN;
+    return (a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty) / 10;
+  };
+  dem.ground = (x, y) => { const [la, lo] = proj.inv(x, y), v = at(la, lo); return isFinite(v) ? v : cop(x, y); };
+  log(`LiDAR terrain ${w}×${h}`);
+})();
 
 // ─── OSM ────────────────────────────────────────────────────────────────
 const els = loadOverpass(path.join(ROOT, 'data/raw', `${AREA}.osm.json.gz`));
@@ -309,7 +325,7 @@ const getTile = (i, j) => {
   if (!tiles.has(k)) tiles.set(k, { i, j, b: makeSink(), d: makeSink(), balconies: [] });
   return tiles.get(k);
 };
-const stats = { authored: 0, buildings: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
+const stats = { authored: 0, buildings: 0, lidar: 0, height: 0, levels: 0, estimated: 0, planar: 0, skeleton: 0, flat: 0, skeletonFail: 0, parts: 0, skippedOutlines: 0, partyEdges: 0, balconies: 0, statues: 0, wallsM: 0, pillars: 0, chimneys: 0 };
 
 const LEVEL_H = 3.2;
 const DEFAULT_H = { church: 20, cathedral: 26, chapel: 10, house: 8, detached: 8, garage: 3, garages: 3, shed: 3, kiosk: 3.2, hut: 3, roof: 3.5, school: 13, hospital: 18, train_station: 12, ruins: 5, castle: 14, tower: 25, bunker: 3, carport: 3, pillar: 5, service: 3.5, construction: 6 };
@@ -372,7 +388,33 @@ const KNOWN_H = (() => {
 const BELEM_C = proj.fwd(38.6975, -9.2045);
 const MODERN_ZONES = [[[38.7480, -9.1000], [38.7480, -9.0880], [38.8000, -9.0880], [38.8000, -9.0985], [38.7700, -9.0975], [38.7600, -9.0990]]].map((r) => r.map(([la, lo]) => proj.fwd(la, lo)));
 const inModernZone = (c) => MODERN_ZONES.some((z) => pointInRing(c[0], c[1], z));
-let heightSrc = { neighbours: 0, guess: 0 };
+let heightSrc = { neighbours: 0, guess: 0, lidar: 0, lidarSkip: 0 };
+// Measured heights: the DGT 2024 LiDAR survey (surface − terrain at 2 m, data/lidar, see pipeline/fetch_lidar.py). Each
+// footprint is sampled on a 1.5 m grid kept clear of its outline (the resampled cells blur across the eaves); the low quartile
+// is the eave, the 95th percentile the ridge, the 60th the deck of a flat roof.
+const LIDAR = await (async () => {
+  const f = path.join(ROOT, 'data/lidar', `${AREA}_ndsm.tif`); if (!fs.existsSync(f)) return null;
+  const img = await (await fromFile(f)).getImage(), [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution();
+  const [r] = await img.readRasters(), w = img.getWidth(), hh = img.getHeight();
+  log(`LiDAR heights ${w}×${hh}`);
+  return (x, y) => { const [la, lo] = proj.inv(x, y), c = Math.floor((lo - ox) / rx), k = Math.floor((la - oy) / ry); return c < 0 || k < 0 || c >= w || k >= hh ? NaN : r[k * w + c] / 10; };
+})();
+const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 1; i < R.length; j = i++) { const [ax, ay] = R[j], [bx, by] = R[i], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)); m = Math.min(m, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } return m; };
+const measured = (p) => {
+  if (!LIDAR || p.area < 12) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of p.outer) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  const st = Math.max(1.5, Math.sqrt(p.area / 1500));
+  for (const margin of [1.2, 0.5]) {
+    const v = [];
+    for (let y = y0 + st / 2; y < y1; y += st) for (let x = x0 + st / 2; x < x1; x += st) {
+      if (!pointInRing(x, y, p.outer) || p.holes.some((h) => pointInRing(x, y, h))) continue;
+      if (segDist(x, y, p.outer) < margin || p.holes.some((h) => segDist(x, y, h) < margin)) continue;
+      const z = LIDAR(x, y); if (isFinite(z)) v.push(z);
+    }
+    if (v.length >= 4) { v.sort((a, b) => a - b); const q = (f) => v[Math.min(v.length - 1, Math.floor(f * v.length))]; return { lo: q(0.25), mid: q(0.6), top: q(0.95), n: v.length }; }
+  }
+  return null;
+};
 // complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
 // detached houses outside the old core (Restelo, Belém, Lumiar, the suburbs): villas and moradias in their gardens
 const VILLA_KINDS = new Set(['house', 'detached', 'villa', 'bungalow', 'semidetached_house']);
@@ -383,7 +425,13 @@ function buildingSpec(p) {
   const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] && t['building:part'] !== 'yes' ? t['building:part'] : t.building || 'yes';
   const u = (k) => hash(p.id + k);
   let h = parseMeters(t.height) ?? parseMeters(t['building:height']);
-  const levels = parseFloat(t['building:levels']);
+  let levels = parseFloat(t['building:levels']);
+  // a measured height beats a mapped one and any estimate; a footprint the survey sees as open ground (demolished, or
+  // built after 2024) keeps the old way. A storey count that cannot fit the measured height is dropped.
+  const lid = OVERRIDES[p.id] || p.tags.man_made === 'tower' || ['roof', 'carport'].includes(t.building) ? null : measured(p);
+  const lidOk = lid && lid.mid >= 2.2 && lid.mid < 200;
+  if (lid && !lidOk) heightSrc.lidarSkip++;
+  if (lidOk) { h = Math.max(lid.mid, (parseMeters(t.min_height) ?? 0) + 2); if (isFinite(levels) && Math.abs(levels * LEVEL_H + 1.2 - h) > 4.5) levels = NaN; }
   const roofLevels = parseFloat(t['roof:levels']) || 0;
   let minH = parseMeters(t.min_height) ?? (isFinite(parseFloat(t['building:min_level'])) ? parseFloat(t['building:min_level']) * LEVEL_H : 0);
   const pillar = kind === 'pillar' || t.man_made === 'pillar';
@@ -394,6 +442,7 @@ function buildingSpec(p) {
   const monument = t.historic === 'monument' || t.historic === 'memorial' || t.man_made === 'tower';
   const modern = !palace && !church && (MODERN.has(kind) && (p.area > 700 || levels >= 7)) || levels >= 9 || (t['building:material'] || '').match(/glass|concrete/);
   let src = 'height', estLevels = NaN;
+  if (lidOk) { src = 'lidar'; heightSrc.lidar++; if (!isFinite(levels)) estLevels = Math.max(1, Math.round((h - minH - 1.2) / LEVEL_H)); }
   if (h == null && isFinite(levels)) { h = levels * LEVEL_H + 1.2 + (roofLevels ? 2.8 : 0); src = 'levels'; }
   if (h == null) {
     src = 'estimated';
@@ -467,6 +516,11 @@ function buildingSpec(p) {
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
     roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
+  if (lidOk && shape !== 'flat') {   // pitched: the walls stop at the eave, the roof rises to the measured ridge
+    const eave = Math.max(minH + 2.2, Math.min(lid.lo, h)), f = (eave - minH) / Math.max(1, h - minH);
+    spec.h = eave; spec.roofH = spec.roofH ?? Math.max(1, Math.min(6, lid.top - eave));
+    if (spec.floorH) { spec.floorH = Math.max(2.6, spec.floorH * f); spec.groundH = Math.max(spec.floorH, spec.groundH * f); }
+  }
   if (variant === 3 && ['office', 'commercial', 'bank'].includes(kind) && h >= 15 && u('cw') < 0.45) spec.msBand = [0.02, 0.26];   // offices: nearly half in curtain-wall glass (Avenidas Novas, Marquês, Parque das Nações)
   if (variant === 8) {   // era of the block, by district: 0 punched + shutters, 1 balcony bands (60s–70s), 2 Português Suave (40s–50s), 3 aluminium + marquises (80s–90s)
     const [x, y] = p.c, w = instOut ? [0.6, 0.4, 0, 0]
@@ -1050,6 +1104,30 @@ function addBuilding_(p) {
     sailboat(tileB0(x, y), { x, y, dx: Math.cos(a), dy: Math.sin(a), lin, srgb, seed: rnd(5), len: 8 + rnd(6) * 5 }); sb++;
     if (sb === 1) log('first sailboat at', proj.inv(x, y).map((v) => v.toFixed(5)).join(','));
   }
+  // marinas (Doca de Belém, Bom Sucesso, Santo Amaro, Alcântara, Parque das Nações): the mapped pontoons as low floating
+  // decks, yachts berthed stern-to along both sides, masts bare and sails furled (checked against Earth)
+  { const deckC = lin(srgb('#c9c5bb')), I0 = [0, 0, 0, 0], PLs = [KIND.PLAIN / 8, 5 / 8, 0.5, 1];
+    const marinas = polysArea.filter((m) => m.tags.leisure === 'marina');
+    const inMarina = (x, y) => marinas.some((m) => pointInRing(x, y, m.outer));
+    let moorN = 0;
+    for (const w of extractLines(els, proj, (t) => t.man_made === 'pier' || t.man_made === 'pontoon')) {
+      const mid = w.pts[Math.floor(w.pts.length / 2)]; if (!inMarina(mid[0], mid[1])) continue;
+      const hw = Math.min(2, (parseMeters(w.tags.width) ?? 2.4) / 2);
+      for (let i = 0; i + 1 < w.pts.length; i++) {
+        const a = w.pts[i], b = w.pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+        const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        if (mx < minX || mx > maxX || my < minY || my > maxY || !isWaterAt(mx, my)) continue;
+        box(tileB0(mx, my), mx, my, ux, uy, L / 2 + hw, hw, -0.3, 0.55, deckC, I0, PLs);
+        for (let s2 = 3; s2 < L - 2; s2 += 4.4) for (const sg of [1, -1]) {
+          const k = hash(`${w.id}${i}${s2}${sg}`); if (k > 0.8) continue;
+          const len = 8 + k * 7, off = hw + 1.2 + len / 2, x = a[0] + ux * s2 - uy * sg * off, y = a[1] + uy * s2 + ux * sg * off;
+          if (![0, 0.45, -0.45].every((f) => isWaterAt(x - uy * sg * len * f, y + ux * sg * len * f)) || !inMarina(x, y)) continue;
+          sailboat(tileB0(x, y), { x, y, dx: -uy * sg, dy: ux * sg, lin, srgb, seed: hash(`${w.id}${s2}b`), len, furled: true }); moorN++;
+        }
+      }
+    }
+    stats.moored = moorN;
+  }
   stats.ferries = n; stats.sailboats = sb; log(`ferries ${n} (${moored} moored), sailboats ${sb}`);
 }
 
@@ -1526,7 +1604,7 @@ const treeScale = (t, h) => {
   if (/Platanus|Ulmus|Populus/i.test(g)) return 2.2 + h * 0.5;   // the Avenida's planes are 20–25 m with crowns that close over the side lanes (checked against Earth)
   if (/Tipuana|Ficus/i.test(g)) return 1.7 + h * 0.45;
   if (/Celtis|Tilia|Jacaranda|Melia/i.test(g)) return 1.05 + h * 0.35;
-  return 0.8 + h * 0.6;
+  return 0.95 + h * 0.65;   // untagged street trees: Lisbon's are mostly mature (Avenidas Novas, checked against Earth)
 };
 // cemeteries (Prazeres, Alto de São João, Ajuda, Benfica, Lumiar): streets of jazigos along the mapped paths, lined with cypresses
 {
@@ -1579,6 +1657,7 @@ const nTagged = trees.length / 4;
   const blocked = new Uint8Array(bm.w * bm.h);
   for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });
   for (const p of polysB) if (/^(monastery|convent|church|cathedral|palace|castle)$/.test(p.tags.building) && p.holes.length) bm.fillRings([p.outer], (i) => { blocked[i] = 1; });
+  for (const w of extractLines(els, proj, (t) => t.barrier === 'hedge')) bm.strokeLine(w.pts, 10, (i) => { blocked[i] = 1; });   // box parterres (Parque Eduardo VII, Praça do Império) are clipped lawns, no trees among the hedges
   for (const p of polysArea) if (/^(claustro|cloister|pátio|patio)\b/i.test(p.tags.name || '')) bm.fillRings([p.outer, ...p.holes], (i) => { blocked[i] = 1; });   // cloisters and palace courts: clipped box and gravel, not a grove (Jerónimos, checked against Earth)
   for (const r of roads) if (ROAD_W[roadKind(r.tags)]) bm.strokeLine(r.pts, ROAD_W[roadKind(r.tags)] + 2, (i) => { blocked[i] = 1; });
   for (let i = 0; i < trees.length; i += 4) bm.disc(trees[i], -trees[i + 2], 5, (k) => { blocked[k] = 1; });
