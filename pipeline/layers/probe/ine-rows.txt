@@ -1,0 +1,52 @@
+[
+ {
+  "geocod": "040722",
+  "geodsg": "Múrias",
+  "dim_3": "T",
+  "dim_3_t": "HM",
+  "dim_4": "T",
+  "dim_4_t": "Total",
+  "ind_string": "244",
+  "valor": "244"
+ },
+ {
+  "geocod": "041232",
+  "geodsg": "Vilar de Ossos",
+  "dim_3": "T",
+  "dim_3_t": "HM",
+  "dim_4": "T",
+  "dim_4_t": "Total",
+  "ind_string": "222",
+  "valor": "222"
+ },
+ {
+  "geocod": "151002",
+  "geodsg": "Amora",
+  "dim_3": "T",
+  "dim_3_t": "HM",
+  "dim_4": "T",
+  "dim_4_t": "Total",
+  "ind_string": "49 345",
+  "valor": "49345"
+ },
+ {
+  "geocod": "141904",
+  "geodsg": "Chancelaria",
+  "dim_3": "T",
+  "dim_3_t": "HM",
+  "dim_4": "T",
+  "dim_4_t": "Total",
+  "ind_string": "1 428",
+  "valor": "1428"
+ },
+ {
+  "geocod": "011107",
+  "geodsg": "Vacariça",
+  "dim_3": "T",
+  "dim_3_t": "HM",
+  "dim_4": "T",
+  "dim_4_t": "Total",
+  "ind_string": "1 678",
+  "valor": "1678"
+ }
+]
