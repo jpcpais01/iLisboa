@@ -1,0 +1,237 @@
+200 application/json;charset=UTF-8 11626359 bytes
+https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0011609&Dim1=S7A2021&lang=PT
+
+[ {
+  "IndicadorCod" : "0011609",
+  "IndicadorDsg" : "População residente (N.º) por Local de residência à data dos Censos [2021] (NUTS - 2013), Sexo e Grupo etário (Por ciclos de vida); Decenal - INE, Recenseamento da população e habitação - Censos 2021",
+  "MetaInfUrl" : "https://www.ine.pt/bddXplorer/htdocs/minfo.jsp?var_cd=0011609&lingua=PT",
+  "DataExtracao" : "2026-11-26T19:55:58.971Z",
+  "DataUltimoAtualizacao" : "2022-11-23",
+  "UltimoPref" : "2021",
+  "Dados" : {
+    "2021" : [ {
+      "geocod" : "040722",
+      "geodsg" : "Múrias",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "47",
+      "valor" : "47"
+    }, {
+      "geocod" : "041232",
+      "geodsg" : "Vilar de Ossos",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "53",
+      "valor" : "53"
+    }, {
+      "geocod" : "151002",
+      "geodsg" : "Amora",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "13 671",
+      "valor" : "13671"
+    }, {
+      "geocod" : "141904",
+      "geodsg" : "Chancelaria",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "339",
+      "valor" : "339"
+    }, {
+      "geocod" : "011107",
+      "geodsg" : "Vacariça",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "436",
+      "valor" : "436"
+    }, {
+      "geocod" : "180906",
+      "geodsg" : "Vilar Seco",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "158",
+      "valor" : "158"
+    }, {
+      "geocod" : "0505",
+      "geodsg" : "Idanha-a-Nova",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "1 680",
+      "valor" : "1680"
+    }, {
+      "geocod" : "171434",
+      "geodsg" : "União das freguesias de Mouçós e Lamares",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "854",
+      "valor" : "854"
+    }, {
+      "geocod" : "031404",
+      "geodsg" : "Infias",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "532",
+      "valor" : "532"
+    }, {
+      "geocod" : "0806",
+      "geodsg" : "Lagoa",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "6 405",
+      "valor" : "6405"
+    }, {
+      "geocod" : "130307",
+      "geodsg" : "Jugueiros",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "349",
+      "valor" : "349"
+    }, {
+      "geocod" : "070416",
+      "geodsg" : "União das freguesias de São Lourenço de Mamporcão e São Bento de Ana Loura",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "109",
+      "valor" : "109"
+    }, {
+      "geocod" : "030228",
+      "geodsg" : "Cristelo",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "461",
+      "valor" : "461"
+    }, {
+      "geocod" : "180114",
+      "geodsg" : "São Cosmado",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "107",
+      "valor" : "107"
+    }, {
+      "geocod" : "031337",
+      "geodsg" : "Ponte",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "107",
+      "valor" : "107"
+    }, {
+      "geocod" : "150901",
+      "geodsg" : "Abela",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "166",
+      "valor" : "166"
+    }, {
+      "geocod" : "181008",
+      "geodsg" : "São João da Serra",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "98",
+      "valor" : "98"
+    }, {
+      "geocod" : "450202",
+      "geodsg" : "Norte Grande (Neves)",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "123",
+      "valor" : "123"
+    }, {
+      "geocod" : "111610",
+      "geodsg" : "União das freguesias de Ramada e Caneças",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "9 816",
+      "valor" : "9816"
+    }, {
+      "geocod" : "021203",
+      "geodsg" : "Ourique",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "708",
+      "valor" : "708"
+    }, {
+      "geocod" : "181908",
+      "geodsg" : "Longa",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "51",
+      "valor" : "51"
+    }, {
+      "geocod" : "010313",
+      "geodsg" : "Vilarinho do Bairro",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "587",
+      "valor" : "587"
+    }, {
+      "geocod" : "011405",
+      "geodsg" : "Palhaça",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "720",
+      "valor" : "720"
+    }, {
+      "geocod" : "091010",
+      "geodsg" : "Freixedas",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "155",
+      "valor" : "155"
+    }, {
+      "geocod" : "1210",
+      "geodsg" : "Marvão",
+      "dim_3" : "2",
+      "dim_3_t" : "M",
+      "dim_4" : "3",
+      "dim_4_t" : "25 - 64 anos",
+      "ind_string" : "723",
+      "valor" : "723"
+    },

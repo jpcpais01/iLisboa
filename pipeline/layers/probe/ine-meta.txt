@@ -1,0 +1,217 @@
+200 application/json;charset=UTF-8 805645 bytes
+https://www.ine.pt/ine/json_indicador/pindicaMeta.jsp?varcd=0011609&lang=PT
+
+[ {
+  "IndicadorCod" : "0011609",
+  "IndicadorNome" : "População residente (N.º) por Local de residência à data dos Censos [2021] (NUTS - 2013), Sexo e Grupo etário (Por ciclos de vida); Decenal - INE, Recenseamento da população e habitação - Censos 2021",
+  "Periodic" : "Decenal",
+  "PrimeiroPeriodo" : "2011",
+  "UltimoPeriodo" : "2021",
+  "UnidadeMedida" : "Número (N.º)",
+  "Potencia10" : "0",
+  "PrecisaoDecimal" : "0",
+  "Lingua" : "PT",
+  "DataUltimaAtualizacao" : "2022-11-23",
+  "DataExtracao" : "2026-11-26T19:56:01.579Z",
+  "Dimensoes" : {
+    "Descricao_Dim" : [ {
+      "dim_num" : "1",
+      "abrv" : "Período de referência dos dados",
+      "versao" : "XXXXX"
+    }, {
+      "dim_num" : "2",
+      "abrv" : "Local de residência à data dos Censos [2021] (NUTS - 2013)",
+      "versao" : "04479"
+    }, {
+      "dim_num" : "3",
+      "abrv" : "Sexo",
+      "versao" : "00305"
+    }, {
+      "dim_num" : "4",
+      "abrv" : "Grupo etário (Por ciclos de vida)",
+      "versao" : "00315"
+    } ],
+    "Categoria_Dim" : [ {
+      "Dim_Num1_S7A2011" : [ {
+        "dim_num" : "1",
+        "cat_id" : "S7A2011",
+        "categ_cod" : "S7A2011",
+        "categ_dsg" : "2011",
+        "categ_ord" : "20110101",
+        "categ_nivel" : "1"
+      } ],
+      "Dim_Num1_S7A2021" : [ {
+        "dim_num" : "1",
+        "cat_id" : "S7A2021",
+        "categ_cod" : "S7A2021",
+        "categ_dsg" : "2021",
+        "categ_ord" : "20210101",
+        "categ_nivel" : "1"
+      } ],
+      "Dim_Num2_PT" : [ {
+        "dim_num" : "2",
+        "cat_id" : "PT",
+        "categ_cod" : "PT",
+        "categ_dsg" : "Portugal",
+        "categ_ord" : "1",
+        "categ_nivel" : "1"
+      } ],
+      "Dim_Num2_1" : [ {
+        "dim_num" : "2",
+        "cat_id" : "1",
+        "categ_cod" : "1",
+        "categ_dsg" : "Continente",
+        "categ_ord" : "200",
+        "categ_nivel" : "2"
+      } ],
+      "Dim_Num2_11" : [ {
+        "dim_num" : "2",
+        "cat_id" : "11",
+        "categ_cod" : "11",
+        "categ_dsg" : "Norte",
+        "categ_ord" : "300",
+        "categ_nivel" : "3"
+      } ],
+      "Dim_Num2_111" : [ {
+        "dim_num" : "2",
+        "cat_id" : "111",
+        "categ_cod" : "111",
+        "categ_dsg" : "Alto Minho",
+        "categ_ord" : "400",
+        "categ_nivel" : "4"
+      } ],
+      "Dim_Num2_1601" : [ {
+        "dim_num" : "2",
+        "cat_id" : "1601",
+        "categ_cod" : "1601",
+        "categ_dsg" : "Arcos de Valdevez",
+        "categ_ord" : "500",
+        "categ_nivel" : "5"
+      } ],
+      "Dim_Num2_160101" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160101",
+        "categ_cod" : "160101",
+        "categ_dsg" : "Aboim das Choças",
+        "categ_ord" : "600",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160102" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160102",
+        "categ_cod" : "160102",
+        "categ_dsg" : "Aguiã",
+        "categ_ord" : "900",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160104" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160104",
+        "categ_cod" : "160104",
+        "categ_dsg" : "Ázere",
+        "categ_ord" : "1200",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160105" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160105",
+        "categ_cod" : "160105",
+        "categ_dsg" : "Cabana Maior",
+        "categ_ord" : "1500",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160106" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160106",
+        "categ_cod" : "160106",
+        "categ_dsg" : "Cabreiro",
+        "categ_ord" : "1800",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160108" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160108",
+        "categ_cod" : "160108",
+        "categ_dsg" : "Cendufe",
+        "categ_ord" : "2100",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160109" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160109",
+        "categ_cod" : "160109",
+        "categ_dsg" : "Couto",
+        "categ_ord" : "2400",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160113" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160113",
+        "categ_cod" : "160113",
+        "categ_dsg" : "Gavieira",
+        "categ_ord" : "2700",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160115" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160115",
+        "categ_cod" : "160115",
+        "categ_dsg" : "Gondoriz",
+        "categ_ord" : "3000",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160142" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160142",
+        "categ_cod" : "160142",
+        "categ_dsg" : "Jolda (São Paio)",
+        "categ_ord" : "3300",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160121" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160121",
+        "categ_cod" : "160121",
+        "categ_dsg" : "Miranda",
+        "categ_ord" : "3600",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160122" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160122",
+        "categ_cod" : "160122",
+        "categ_dsg" : "Monte Redondo",
+        "categ_ord" : "3900",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160123" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160123",
+        "categ_cod" : "160123",
+        "categ_dsg" : "Oliveira",
+        "categ_ord" : "4200",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160124" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160124",
+        "categ_cod" : "160124",
+        "categ_dsg" : "Paçô",
+        "categ_ord" : "4500",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160125" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160125",
+        "categ_cod" : "160125",
+        "categ_dsg" : "Padroso",
+        "categ_ord" : "4800",
+        "categ_nivel" : "6"
+      } ],
+      "Dim_Num2_160128" : [ {
+        "dim_num" : "2",
+        "cat_id" : "160128",
+        "categ_cod" : "160128",
+        "categ_dsg" : "Prozelo",
+        "categ_ord" : "5100",
+       
