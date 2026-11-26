@@ -1834,11 +1834,12 @@ const VR = new Raster(minX - 40, minY - 40, maxX + 40, maxY + 40, 4), villaF = n
 }
 const villaAt = (x, y) => { const c = Math.floor(VR.px(x)), r = Math.floor(VR.py(y)); return c >= 0 && r >= 0 && c < VR.w && r < VR.h && villaF[r * VR.w + c] === 1; };
 // Albedos as the DGT 25 cm photo actually sees them (median of clean, unshadowed open ground per class over Telheiras,
-// CALIB=1 logs them; ~30–60 % darker than the old pastel palette, which is what made every floor look milky)
+// CALIB=1 logs them; ~30–60 % darker than the old pastel palette, which is what made every floor look milky). Paving takes
+// its upper half (p60–p75): the median of a kerb halo is pulled down by parked cars and kerb shade
 const C = {
-  ground: srgb('#96918b'), calcada: srgb('#a0998f'), asphalt: srgb('#68696a'), road_edge: srgb('#a0998f'),
+  ground: srgb('#a29d96'), calcada: srgb('#b0a99d'), asphalt: srgb('#68696a'), road_edge: srgb('#b0a99d'),
   park: srgb('#647054'), grass: srgb('#686e56'), wood: srgb('#54624e'), pitch: srgb('#5c7c50'), turf: srgb('#4e7646'), tartan: srgb('#a05846'), court: srgb('#4c7086'), hardcourt: srgb('#80807e'), clay: srgb('#aa6c4c'), sand: srgb('#beb08c'),
-  parking: srgb('#8c8985'), rail: srgb('#4f4b47'), ballast: srgb('#7c776e'), setts: srgb('#767471'), tramRail: srgb('#969490'), yard: srgb('#8a8378'), platform: srgb('#9e9891'), water: srgb('#4c8296'), cemetery: srgb('#8c8780'), rough: srgb('#767562'), pond: srgb('#5d93a3'), pier: srgb('#807a70'), plaza: srgb('#a29c93'),
+  parking: srgb('#8c8985'), rail: srgb('#4f4b47'), ballast: srgb('#7c776e'), setts: srgb('#767471'), tramRail: srgb('#969490'), yard: srgb('#8a8378'), platform: srgb('#aaa49b'), water: srgb('#4c8296'), cemetery: srgb('#8c8780'), rough: srgb('#767562'), pond: srgb('#5d93a3'), pier: srgb('#807a70'), plaza: srgb('#b2aca1'),
 };
 // surface class beside the colour (the ground texture's alpha): tells the terrain shader which close-up surface to draw —
 // limestone calçada, granite setts, asphalt, grass, or plain ground — whatever colour the map or the photo gives it. Codes
@@ -1955,6 +1956,47 @@ for (const r of sorted) {
 }
 // the open ramps of tunnels (found by the cuts): painted like the road they are
 if (CUTS) for (const r of CUTS.runs) if (r.tunnel) { gm.strokeLine(r.pts, r.w + 2.2, paint(r.rail ? C.ballast : C.calcada)); gm.strokeLine(r.pts, r.w, paint(r.rail ? C.ballast : C.asphalt)); }
+// road markings: worn white paint, as Lisbon's streets have it. Lane lines from lanes= (or the road's width), a dashed
+// centre on two-way roads (solid on primaries and up), edge lines on fast roads, and zebras at the mapped crossings across
+// the carriageway they sit on. Painted at the 0.32 m supersample, so lines read as soft paint at 0.5 m and crisp in photos.
+{
+  const PAINT = srgb('#c9c7c1'); surfOf.set(PAINT, SURF.asphalt);
+  const offset = (pts, d) => pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [p[0] - ((b[1] - a[1]) / L) * d, p[1] + ((b[0] - a[0]) / L) * d]; });
+  const dashed = (pts, w, dash, gap) => { let acc = 0; for (let i = 0; i + 1 < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
+    for (let s = 0; s < L; ) { const ph = acc % (dash + gap), on = ph < dash, step = Math.min(L - s, on ? dash - ph : dash + gap - ph); if (on && step > 0.05) gm.strokeLine([[x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L], [x1 + ((x2 - x1) * (s + step)) / L, y1 + ((y2 - y1) * (s + step)) / L]], w, paint(PAINT)); s += step; acc += step; } } };
+  const FAST = new Set(['motorway', 'trunk', 'primary']);
+  let nM = 0;
+  for (const r of sorted) {
+    const k = roadKind(r.tags); if (pedestrianish(k) || k === 'service' || r.pts.length < 2) continue;
+    const w = parseMeters(r.tags.width) ?? ROAD_W[k]; if (w < 5.5) continue;
+    const oneway = r.tags.oneway === 'yes' || r.tags.oneway === '1' || r.tags.junction === 'roundabout' || k === 'motorway';
+    const lanes = Math.max(1, Math.min(8, parseInt(r.tags.lanes) || Math.max(oneway ? 1 : 2, Math.round(w / 3.4))));
+    const lw = 0.3;
+    for (let q = 1; q < lanes; q++) {
+      const off = -w / 2 + (q * w) / lanes, centre = !oneway && q * 2 === lanes;
+      if (centre && FAST.has(k)) gm.strokeLine(offset(r.pts, off), lw, paint(PAINT)); else dashed(offset(r.pts, off), lw, centre ? 3 : 4, centre ? 5 : 8);
+    }
+    if (FAST.has(k)) for (const d of [-1, 1]) gm.strokeLine(offset(r.pts, d * (w / 2 - 0.5)), lw, paint(PAINT));
+    nM++;
+  }
+  // zebras: bars along the road, 0.6 m wide with 0.6 m gaps, 4 m deep, across the carriageway's width
+  const xs = extractNodes(els, proj, (t) => (t.highway === 'crossing' || t.crossing) && !/^(no|unmarked|informal)$/.test(t.crossing || '') && t['crossing:markings'] !== 'no');
+  const veh = sorted.filter((r) => { const k = roadKind(r.tags); return !pedestrianish(k); });
+  const grid = new Map(), gk = (x, y) => `${Math.floor(x / 50)},${Math.floor(y / 50)}`;
+  for (const r of veh) for (let i = 0; i + 1 < r.pts.length; i++) { const k = gk(...r.pts[i]); if (!grid.has(k)) grid.set(k, []); grid.get(k).push([r, i]); }
+  let nZ = 0;
+  for (const n of xs) {
+    const [x, y] = n.p; if (x < minX || x > maxX || y < minY || y > maxY) continue;
+    let best = null, bd = 3;
+    for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) for (const [r, i] of grid.get(`${Math.floor(x / 50) + dx},${Math.floor(y / 50) + dy}`) || []) { const [p0, p1] = [r.pts[i], r.pts[i + 1]], ddx = p1[0] - p0[0], ddy = p1[1] - p0[1], t = Math.max(0, Math.min(1, ((x - p0[0]) * ddx + (y - p0[1]) * ddy) / (ddx * ddx + ddy * ddy || 1))), d = Math.hypot(x - p0[0] - t * ddx, y - p0[1] - t * ddy); if (d < bd) { bd = d; best = [r, i]; } }
+    if (!best) continue;
+    const [r, i] = best, [a, b] = [r.pts[i], r.pts[i + 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+    const w = parseMeters(r.tags.width) ?? ROAD_W[roadKind(r.tags)];
+    for (let v = -w / 2 + 0.6; v <= w / 2 - 0.5; v += 1.2) gm.strokeLine([[x - ux * 2 - uy * v, y - uy * 2 + ux * v], [x + ux * 2 - uy * v, y + uy * 2 + ux * v]], 0.6, paint(PAINT));
+    nZ++;
+  }
+  log(`road markings: ${nM} roads, ${nZ} zebras`);
+}
 // sports pitches: football lines; tennis, padel and basketball as coloured hard courts with their lines
 {
   const LINE = srgb('#f1efe8'), TURF = srgb('#6e9f58'), HARD = srgb('#5b87a0'), BASKET = srgb('#c27352'), RED = srgb('#b9765a');
