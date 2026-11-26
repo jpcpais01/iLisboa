@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "iLisboa",
+  "short_name": "iLisboa",
+  "description": "Lisboa inteira em 3D, à escala real, com trânsito, transportes e aviões ao vivo.",
+  "lang": "pt-PT",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#efe7da",
+  "theme_color": "#efe7da",
+  "categories": ["travel", "navigation", "entertainment"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Baixa e Castelo", "url": "/?cam=38.7098,-9.1350,1500,20,62", "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Belém", "url": "/?cam=38.6955,-9.2060,1500,20,62", "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Parque das Nações", "url": "/?cam=38.7640,-9.0960,1800,200,62", "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }] }
+  ]
+}
