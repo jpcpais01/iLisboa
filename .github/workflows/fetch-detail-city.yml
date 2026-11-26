@@ -1,0 +1,55 @@
+name: fetch-detail-city
+# Per-building detail sources (DGT 25 cm aerials 2025 + 2018, OrtoSat 2023, 50 cm LiDAR surface) for every area listed in
+# pipeline/detail_areas.txt, one job per area. The rasters are too big for git: they go up as assets of the `detail-city`
+# release (pipeline/get_detail.mjs fetches them for a build). Areas whose assets are already there are skipped.
+# Runs when pipeline/detail_areas.txt, pipeline/fetch_detail_city.py or this file changes on main.
+on:
+  workflow_dispatch:
+  push:
+    paths: [pipeline/detail_areas.txt, pipeline/fetch_detail_city.py, .github/workflows/fetch-detail-city.yml]
+concurrency: fetch-detail-city
+permissions:
+  contents: write
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: detail-city
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      areas: ${{ steps.p.outputs.areas }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Detail sources (DGT, CC BY 4.0)" --notes "Per-area DGT orthophotos and 50 cm LiDAR heights for the per-building detail pass. Source: Direção-Geral do Território, CC BY 4.0."
+          have=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | tr '\n' ' ')
+          todo=$(grep -v '^#' pipeline/detail_areas.txt | awk 'NF{print $1}' | while read a; do
+            n=0; for f in ndsm50.tif ortho2025.tif ortho2018.tif; do case " $have " in *" ${a}_$f "*) n=$((n+1));; esac; done
+            if [ $n -lt 3 ]; then echo "$a"; fi; done | jq -R . | jq -cs .)
+          echo "areas=$todo" >> "$GITHUB_OUTPUT"; echo "to fetch: $todo"
+  fetch:
+    needs: plan
+    if: needs.plan.outputs.areas != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        area: ${{ fromJSON(needs.plan.outputs.areas) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h / | tail -1
+      - name: Install GDAL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gdal-bin python3-gdal python3-numpy python3-requests > /dev/null
+      - name: Fetch
+        env:
+          DGT_USER: ${{ secrets.DGT_USER }}
+          DGT_PASSWORD: ${{ secrets.DGT_PASSWORD }}
+          AREA: ${{ matrix.area }}
+          DETAIL_OUT: /tmp/out
+        run: /usr/bin/python3 pipeline/fetch_detail_city.py
+      - name: Upload
+        run: ls -la /tmp/out && gh release upload "$TAG" /tmp/out/* --clobber -R "$GITHUB_REPOSITORY"

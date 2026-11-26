@@ -1,0 +1,32 @@
+# Areas whose per-building detail sources (DGT photos + 50 cm LiDAR) the fetch-detail-city workflow fetches, in this order.
+# Editing this file on main starts the workflow; areas already in the detail-city release are skipped.
+lumiar
+benfica
+norte
+baixa-alfama
+oeste
+noroeste
+nordeste
+olivais
+restelo
+belem
+monsanto
+odivelas
+pontinha
+charneca
+amadora
+sacavem
+queluz
+carnaxide
+alfragide
+belas
+sudoeste
+sul
+leste
+cruz-quebrada
+pragal
+almada
+trafaria
+seixal
+barreiro
+lavradio
