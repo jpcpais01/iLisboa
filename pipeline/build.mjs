@@ -498,7 +498,16 @@ const segDist = (x, y, R) => { let m = Infinity; for (let i = 0, j = R.length - 
 // not from palettes and scatter rules. NO_DETAIL=1 builds without it.
 const DETAIL = LIDAR ? await loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, pointInRing, segDist, lidar: LIDAR }) : null;
 const DET = new Map();   // per building: what the photo says, and the height and lean it was read at
-const detailOf = (p, h) => { if (!DETAIL) return null; if (!DET.has(p.id)) DET.set(p.id, DETAIL.read(p, h)); const d = DET.get(p.id); if (d) d.h = h; return d; };
+const detailOf = (p, h) => { if (!DETAIL) return null; if (!DET.has(p.id)) DET.set(p.id, DETAIL.read(p, h)); const d = DET.get(p.id); if (d) { d.h = h; d.c = p.c; } return d; };
+// a wall no photo saw well (in shade from every side, or behind trees): the walls read around it, weighted by distance and by
+// how alike the heights are (an estate is built in one render; a villa beside a tower is not)
+const nearWall = (p, h) => {
+  const v = [];
+  for (const d of DET.values()) { if (!d || !d.wall || !d.c || d.c === p.c) continue; const r = Math.hypot(d.c[0] - p.c[0], d.c[1] - p.c[1]); if (r > 90) continue; v.push([d.wall, 1 / (r + 10) / (1 + Math.abs((d.h || h) - h) / 8)]); }
+  if (v.length < 2) return null;
+  v.sort((a, b) => b[1] - a[1]); const top = v.slice(0, 4), W = top.reduce((a, q) => a + q[1], 0);
+  return [0, 1, 2].map((k) => top.reduce((a, q) => a + q[0][k] * q[1], 0) / W);
+};
 const measured = (p) => {
   if (!LIDAR || p.area < 12) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of p.outer) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -570,6 +579,175 @@ const terraceSlabs = (p) => {
   }
   return out.length ? out : [p];
 };
+// Survey massing (where the 50 cm survey covers): every building is cut into the volumes the survey measured instead of one
+// block at one height. The roof heights over the plan are clustered into levels (a podium, the main deck, a raised wing, a
+// penthouse); each level becomes a slab over the part of the plan that reaches it, stacked on the one below. What stands on a
+// deck but is too small to be a level (lift and stair housings, tanks, plant rooms) becomes a box at its measured size and
+// height, sitting on that deck. Parts of the mapped plan the survey sees as open sky (an unmapped courtyard, a demolished
+// wing) are cut away. Each top slab gets its roof from the photo: tiled all over (hipped, following the outline), a tiled rim
+// round a flat terrace (Telheiras), a grey mansard, or flat.
+const MASS = new Map();
+const massSkip = (p) => { const t = p.tags, k = t.building || ''; return !!(p.ovr || OVERRIDES[p.id] || t['building:part'] || p.mass || /^(church|cathedral|chapel|basilica|castle|palace|roof|carport|ruins|construction|pillar|bunker|grandstand)$/.test(k) || t.amenity === 'place_of_worship' || /^(monument|memorial|castle)$/.test(t.historic || '') || /^(tower|pillar|silo|storage_tank)$/.test(t.man_made || '') || t['roof:shape'] && !['flat', 'hipped'].includes(t['roof:shape'])); };
+const surveyMass = (p) => {
+  if (MASS.has(p.id)) return MASS.get(p.id);
+  const res = surveyMass_(p); MASS.set(p.id, res); return res;
+};
+const rdp = (ring, eps) => {   // Douglas–Peucker on a closed Clipper ring: the 1 m survey grid's stair-steps become straight walls
+  if (ring.length < 5) return ring;
+  const keep = new Uint8Array(ring.length); keep[0] = 1;
+  let far = 0, fd = -1; for (let i = 1; i < ring.length; i++) { const d = Math.hypot(ring[i].X - ring[0].X, ring[i].Y - ring[0].Y); if (d > fd) { fd = d; far = i; } } keep[far] = 1;
+  const rec = (a, b) => { const A = ring[a], B = ring[b % ring.length], L = Math.hypot(B.X - A.X, B.Y - A.Y) || 1; let m = -1, mi = -1;
+    for (let i = a + 1; i < b; i++) { const P = ring[i % ring.length], d = Math.abs((B.X - A.X) * (A.Y - P.Y) - (A.X - P.X) * (B.Y - A.Y)) / L; if (d > m) { m = d; mi = i; } }
+    if (m > eps) { keep[mi % ring.length] = 1; rec(a, mi); rec(mi, b); } };
+  rec(0, far); rec(far, ring.length);
+  return ring.filter((_, i) => keep[i]);
+};
+const surveyMass_ = (p) => {
+  if (!DETAIL || massSkip(p) || Math.abs(p.area) < 30 || !DETAIL.fineCovers(p.c[0], p.c[1])) return [p];
+  const lid = measured(p); if (!lid || lid.mid < 2.2 || lid.mid > 120) return [p];
+  const det = detailOf(p, lid.top); if (!det) return [p];
+  const ob = obb(p.outer); if (!ob) return [p];
+  const G = 1, SC = 100, nu = Math.ceil((2 * ob.hl) / G) + 2, nv = Math.ceil((2 * ob.hw) / G) + 2, N = nu * nv;
+  const W = (i, j) => { const u = -ob.hl + (i - 1 + 0.5) * G, v = -ob.hw + (j - 1 + 0.5) * G; return [ob.cx + ob.ux * u + ob.vx * v, ob.cy + ob.uy * u + ob.vy * v]; };
+  const ins = new Uint8Array(N), raw = new Float32Array(N).fill(NaN);
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    const [x, y] = W(i, j); if (!pointInRing(x, y, p.outer) || p.holes.some((h) => pointInRing(x, y, h))) continue;
+    ins[j * nu + i] = 1; const v = [];
+    for (const [a, b] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) { const z = DETAIL.fine(x + a, y + b); if (isFinite(z)) v.push(z); }
+    if (v.length) { v.sort((a, b) => a - b); raw[j * nu + i] = (v[(v.length - 1) >> 1] + v[v.length >> 1]) / 2; }
+  }
+  const hz = new Float32Array(N).fill(NaN), cells = [];
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    const k = j * nu + i; if (!ins[k]) continue;
+    const v = []; for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < nu && jj < nv && ins[jj * nu + ii] && isFinite(raw[jj * nu + ii])) v.push(raw[jj * nu + ii]); }
+    if (!v.length) continue; v.sort((a, b) => a - b); hz[k] = v[v.length >> 1]; cells.push(k);
+  }
+  if (cells.length < 25) return [p];
+  const C = (r) => r.map(([x, y]) => ({ X: Math.round(x * SC), Y: Math.round(y * SC) }));
+  const run = (op, subj, clip) => { const c = new ClipperLib.Clipper(); c.AddPaths(subj, ClipperLib.PolyType.ptSubject, true); if (clip) c.AddPaths(clip, ClipperLib.PolyType.ptClip, true); const o = new ClipperLib.Paths(); c.Execute(op, o, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero); return o; };
+  const off = (paths, d) => { const co = new ClipperLib.ClipperOffset(2, 25); co.AddPaths(paths, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon); const o = new ClipperLib.Paths(); co.Execute(o, d * SC); return o; };
+  const UV = (u, v) => [ob.cx + ob.ux * u + ob.vx * v, ob.cy + ob.uy * u + ob.vy * v];
+  const cellPath = (i, i2, j) => { const u0 = -ob.hl + (i - 1) * G, u1 = -ob.hl + i2 * G, v0 = -ob.hw + (j - 1) * G, v1 = v0 + G; return C([UV(u0, v0), UV(u1, v0), UV(u1, v1), UV(u0, v1)]); };
+  const region = (test) => { const out = []; for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) if (test(j * nu + i)) { let i2 = i; while (i2 + 1 < nu && test(j * nu + i2 + 1)) i2++; out.push(cellPath(i, i2, j)); i = i2; } return out.length ? run(ClipperLib.ClipType.ctUnion, out) : []; };
+  const areaOf = (paths) => paths.reduce((a, q) => a + ClipperLib.Clipper.Area(q), 0) / (SC * SC);
+  let plan = run(ClipperLib.ClipType.ctUnion, [C(p.outer), ...p.holes.map((h) => C(h).reverse())]);
+  const planA = areaOf(plan);
+  // open sky inside the plan: cut it away when it is a real gap (3 m across, 30 m² or more), not a light well or a blur
+  let cut = false;
+  { let sky = region((k) => ins[k] && hz[k] < 1.6); sky = off(off(sky, -1.5), 1.5);
+    const sa = areaOf(sky);
+    if (sa >= 30 && sa < planA * 0.45) { plan = run(ClipperLib.ClipType.ctDifference, plan, sky).map((q) => rdp(q, 0.6 * SC)).filter((q) => q.length >= 3); cut = true; } }
+  const live = cells.filter((k) => hz[k] >= 1.6);
+  if (live.length < 20) return [p];
+  const tiled = det.tileFrac >= 0.5;
+  // levels: peaks of the height histogram (0.5 m bins), at least 2.6 m apart (4 m under a tiled roof: its slopes spread)
+  const top = Math.max(...live.map((k) => hz[k])), NB = Math.ceil(top / 0.5) + 2, hist = new Float32Array(NB);
+  for (const k of live) hist[Math.min(NB - 1, Math.floor(hz[k] / 0.5))]++;
+  const sm = hist.map((v, i) => (hist[i - 1] || 0) * 0.25 + v * 0.5 + (hist[i + 1] || 0) * 0.25);
+  const SEP = tiled ? 4 : 2.6, minC = Math.max(18, live.length * 0.06), peaks = [];
+  for (let i = 0; i < NB; i++) { if (sm[i] < minC) continue; let mx = true; for (let d = -3; d <= 3; d++) if (d && sm[i + d] > sm[i]) mx = false; if (mx) peaks.push(i); }
+  peaks.sort((a, b) => sm[b] - sm[a]);
+  const acc = []; for (const i of peaks) if (acc.every((q) => Math.abs(q - i) * 0.5 >= SEP)) acc.push(i);
+  if (!acc.length) return [p];
+  acc.sort((a, b) => a - b);
+  let L = acc.map((i) => { const v = live.map((k) => hz[k]).filter((z) => Math.abs(z - (i + 0.5) * 0.5) <= 0.8).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : (i + 0.5) * 0.5; });
+  // a level is the deck height; the slab under it reaches it from wherever the cells stand within tolerance
+  const tol = (k) => (k === 0 ? 1e9 : Math.min(tiled ? 2.2 : 1.3, (L[k] - L[k - 1]) * 0.45));
+  const lev = new Int8Array(N).fill(-1);
+  for (const k of cells) { let l = 0; for (let q = L.length - 1; q > 0; q--) if (hz[k] >= L[q] - tol(q)) { l = q; break; } lev[k] = l; }
+  // slab regions, nested: level 0 is the (cut) plan, each higher one is smoothed and kept inside the one below
+  const regs = [plan];
+  for (let q = 1; q < L.length; q++) {
+    let r = region((k) => lev[k] >= q);
+    r = off(off(r, 1), -1); r = off(off(r, -1.2), 1.2);   // close cracks, then drop spurs under 2.4 m wide
+    r = run(ClipperLib.ClipType.ctIntersection, r, regs[q - 1]);
+    // a ledge under 2.5 m wide between this slab and the one below is the survey's blur at the eaves, not a terrace
+    let gap = run(ClipperLib.ClipType.ctDifference, regs[q - 1], r); gap = off(off(gap, -1.25), 1.25);
+    r = run(ClipperLib.ClipType.ctDifference, regs[q - 1], gap);
+    r = ClipperLib.Clipper.CleanPolygons(ClipperLib.Clipper.SimplifyPolygons(r, ClipperLib.PolyFillType.pftNonZero), 0.6 * SC).map((q) => rdp(q, 0.75 * SC)).filter((q) => q.length >= 3);
+    if (areaOf(r) < 25) { L = L.slice(0, q); break; }
+    regs.push(r);
+  }
+  // which slab is on top at each cell (its deck is what the cell's boxes stand on)
+  const inR = (paths, x, y) => { let w = 0; for (const q of paths) w += ClipperLib.Clipper.PointInPolygon({ X: Math.round(x * SC), Y: Math.round(y * SC) }, q) !== 0 ? (ClipperLib.Clipper.Orientation(q) ? 1 : -1) : 0; return w > 0; };
+  const topOf = new Int8Array(N).fill(-1);
+  for (const k of cells) { const [x, y] = W(k % nu, (k / nu) | 0); for (let q = regs.length - 1; q >= 0; q--) if (inR(regs[q], x, y)) { topOf[k] = q; break; } }
+  // per slab: its measured eave and ridge, its roof from the photo, its boxes
+  const [sx, sy] = det.shift, hTop = lid.top, ratio = (z) => Math.max(0, z) / Math.max(1, hTop);
+  const slabs = regs.map((r, q) => ({ q, r, deck: L[q], minH: q ? L[q - 1] : 0, hs: [], boxes: [], roof: 'flat' }));
+  for (const k of cells) if (topOf[k] >= 0 && hz[k] >= 1.6) slabs[topOf[k]].hs.push(hz[k]);
+  // distance (cells) to the edge of each cell's top slab: edge band vs interior for the roof reading
+  const dist = new Int16Array(N).fill(0);
+  { const q = []; for (const k of cells) if (topOf[k] >= 0) { const i = k % nu, j = (k / nu) | 0; let edge = false; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= nu || jj >= nv || topOf[jj * nu + ii] !== topOf[k]) edge = true; } if (edge) { dist[k] = 1; q.push(k); } }
+    for (let h = 0; h < q.length; h++) { const k = q[h], i = k % nu, j = (k / nu) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b, n = jj * nu + ii; if (ii >= 0 && jj >= 0 && ii < nu && jj < nv && topOf[n] === topOf[k] && !dist[n]) { dist[n] = dist[k] + 1; q.push(n); } } } }
+  for (const s of slabs) {
+    const mine = cells.filter((k) => topOf[k] === s.q);
+    const E = [], I = [], A = [], allL = [];
+    for (const k of mine) { const d = dist[k], [x, y] = W(k % nu, (k / nu) | 0), f = ratio(s.deck), c = DETAIL.rgb(x + sx * f, y + sy * f); if (!c) continue; allL.push(DETAIL.L3(c)); A.push([c, hz[k], d]); if (d > 3 && d < 5) continue; (d <= 3 ? E : I).push([c, hz[k], d]); }
+    allL.sort((a, b) => a - b); const dark = (allL[allL.length >> 1] || 0) * 0.62;
+    const frac = (A) => { const v = A.filter(([c]) => DETAIL.L3(c) >= dark); return v.length ? v.filter(([c]) => DETAIL.isTile(c)).length / v.length : 0; };
+    const tE = frac(E), tI = frac(I), tA = frac(A), nI = I.length;
+    s.tE = +tE.toFixed(2); s.tI = +tI.toFixed(2); s.tA = +tA.toFixed(2);
+    // half-width of the slab (area over perimeter): how deep a tiled rim of this tile fraction reaches in from the eaves
+    let per = 0; for (const q of s.r) for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; per += Math.hypot(b.X - a.X, b.Y - a.Y) / SC; }
+    const hwid = areaOf(s.r) / Math.max(1, per);
+    const hs = s.hs.sort((a, b) => a - b), qv = (f) => hs[Math.min(hs.length - 1, Math.floor(f * hs.length))] ?? s.deck;
+    s.lo = qv(0.2); s.top = qv(0.95);
+    // tiled nearly all over: a hipped roof; tiled in part: tiled slopes from the eaves round a flat terrace (with its boxes)
+    if (tA >= 0.72 || (nI < 12 && tA >= 0.5)) s.roof = 'hip';
+    else if (tA >= 0.25 && tE >= 0.25) { s.roof = 'rim'; s.rimD = Math.max(1.6, Math.min(5.5, tA * hwid * 1.1)); }
+    else {
+      // a grey mansard: an edge band darker than the deck and dropping away from it (the pink tower's slate crown)
+      const eL = E.filter(([, , d]) => d <= 2), iL = I; const mL = (A) => { const v = A.map(([c]) => DETAIL.L3(c)).sort((a, b) => a - b); return v[v.length >> 1] || 0; };
+      const eZ = eL.map(([, z]) => z).sort((a, b) => a - b), iZ = iL.map(([, z]) => z).sort((a, b) => a - b);
+      if (nI >= 20 && eL.length >= 20 && mL(eL) < mL(iL) * 0.8 && (eZ[eZ.length >> 1] ?? 0) < (iZ[iZ.length >> 1] ?? 0) - 1.0 && s.deck > 12) {
+        s.roof = 'mansard'; const g = eL.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark * 0.8); s.edgeCol = g.length ? DETAIL.tone([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1]), 1.0) : null;
+      }
+      // a ridged roof the photo does not see as clay: slate, zinc or fibre-cement hips, in their own grey
+      else if (nI >= 6 && (iZ[iZ.length >> 1] ?? 0) - (eZ[eZ.length >> 1] ?? 0) >= 1.5 && s.top - s.lo >= 2) {
+        s.roof = 'hip'; const g = A.map(([c]) => c).filter((c) => DETAIL.L3(c) >= dark); s.edgeCol = g.length ? DETAIL.tone([0, 1, 2].map((ch) => g.map((c) => c[ch]).sort((a, b) => a - b)[g.length >> 1]), 1.0) : null;
+      }
+    }
+    // rooftop boxes: blobs standing 1.6–7 m over this deck, too small to be a level (no boxes on tiled slopes)
+    if (s.roof === 'flat' || s.roof === 'rim') {
+      const seen = new Uint8Array(N), over = (k) => topOf[k] === s.q && hz[k] > s.deck + 1.6 && hz[k] < s.deck + 7 && dist[k] >= 1;
+      for (const k0 of mine) {
+        if (seen[k0] || !over(k0)) continue;
+        const qq = [k0], comp = []; seen[k0] = 1;
+        while (qq.length) { const c = qq.pop(); comp.push(c); const i = c % nu, j = (c / nu) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b, n = jj * nu + ii; if (ii >= 0 && jj >= 0 && ii < nu && jj < nv && !seen[n] && over(n)) { seen[n] = 1; qq.push(n); } } }
+        if (comp.length < 5 || comp.length > 140) continue;
+        let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1; const zs = [];
+        for (const c of comp) { const i = c % nu, j = (c / nu) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); zs.push(hz[c]); }
+        if (comp.length < (i1 - i0 + 1) * (j1 - j0 + 1) * 0.35) continue;   // a ragged scatter is plant and railings, not a housing
+        zs.sort((a, b) => a - b);
+        const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2);
+        s.boxes.push({ cx, cy, hu: Math.max(0.7, ((i1 - i0 + 1) * G) / 2 - 0.15), hv: Math.max(0.7, ((j1 - j0 + 1) * G) / 2 - 0.15), h: Math.min(5, zs[Math.floor(zs.length * 0.7)] - s.deck) });
+      }
+    }
+    delete s.hs;
+  }
+  // into parts: one per polygon of each slab. Level 0 keeps the mapped outline (party walls) unless the cut changed it.
+  let ground = 0, gn = 0; for (const [x, y] of p.outer) { ground += groundAt(x, y); gn++; } ground /= gn;
+  const out = [];
+  const exposed = (q) => q === slabs.length - 1 ? 1 : 1 - areaOf(regs[q + 1]) / Math.max(1, areaOf(regs[q]));
+  for (const s of slabs) {
+    const mass = { parent: p, ux: ob.ux, uy: ob.uy, deck: s.deck, minH: s.minH, lo: s.lo, top: s.top, roof: exposed(s.q) > 0.45 ? s.roof : 'flat', rimD: s.rimD, edgeCol: s.edgeCol, boxes: s.boxes, level: s.q, levels: slabs.length, tE: s.tE, tI: s.tI, tA: s.tA };
+    if (s.q === 0 && !cut) { out.push({ ...p, ground, mass }); continue; }
+    const c = new ClipperLib.Clipper(); c.AddPaths(s.r, ClipperLib.PolyType.ptSubject, true);
+    const tree = new ClipperLib.PolyTree(); c.Execute(ClipperLib.ClipType.ctUnion, tree, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+    for (const ch of tree.Childs()) {
+      const outer = ch.Contour().map((q) => [q.X / SC, q.Y / SC]), holes = ch.Childs().map((hh) => hh.Contour().map((q) => [q.X / SC, q.Y / SC])).filter((r) => Math.abs(ringArea(r)) > 8);
+      if (ringArea(outer) < 0) outer.reverse(); holes.forEach((r) => { if (ringArea(r) > 0) r.reverse(); });
+      const area = ringArea(outer) + holes.reduce((a, r) => a + ringArea(r), 0);
+      if (area < (s.q ? 12 : 20) || outer.length < 3) continue;
+      const c0 = [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length];
+      out.push({ id: `${p.id}_m${s.q}_${out.length}`, tags: p.tags, outer, holes, area, c: c0, ground, mass: { ...mass, boxes: s.boxes.filter((b) => pointInRing(b.cx, b.cy, outer)) } });
+    }
+  }
+  if (process.env.DBG_ID === p.id) console.log('MASS', p.id, JSON.stringify({ L, tiled, cut, slabs: slabs.map((s) => ({ q: s.q, deck: s.deck, roof: s.roof, tE: s.tE, tI: s.tI, boxes: s.boxes.length, area: areaOf(s.r) })) }));
+  stats.massed = (stats.massed || 0) + 1; if (slabs.length > 1) stats.massSplit = (stats.massSplit || 0) + 1; if (cut) stats.massCut = (stats.massCut || 0) + 1;
+  return out.length ? out : [p];
+};
 // complexes clad in one stone: buildings inside these mapped sites take its colour (CCB: pinkish lioz limestone)
 // detached houses outside the old core (Restelo, Belém, Lumiar, the suburbs): villas and moradias in their gardens
 const VILLA_KINDS = new Set(['house', 'detached', 'villa', 'bungalow', 'semidetached_house']);
@@ -583,7 +761,7 @@ function buildingSpec(p) {
   let levels = parseFloat(t['building:levels']);
   // a measured height beats a mapped one and any estimate; a footprint the survey sees as open ground (demolished, or
   // built after 2024) keeps the old way. A storey count that cannot fit the measured height is dropped.
-  let lid = p.ovr || OVERRIDES[p.id] || p.tags.man_made === 'tower' || t.building === 'carport' ? null : measured(p);
+  let lid = p.mass ? { lo: p.mass.lo, mid: p.mass.deck, top: p.mass.top, n: 99 } : p.ovr || OVERRIDES[p.id] || p.tags.man_made === 'tower' || t.building === 'carport' ? null : measured(p);
   // canopies (building=roof) sit at their measured height, not a default 3.5 m (FIL's halls, Estufa Fria, market roofs); a reading
   // above 30 m under a canopy is the bridge or a tower over it, not the canopy
   if (lid && kind === 'roof' && lid.mid > 30) lid = null;
@@ -593,6 +771,7 @@ function buildingSpec(p) {
   if (lidOk) { h = Math.max(lid.mid, (parseMeters(t.min_height) ?? 0) + 2); if (isFinite(levels) && Math.abs(levels * LEVEL_H + 1.2 - h) > 4.5) levels = NaN; }
   const roofLevels = parseFloat(t['roof:levels']) || 0;
   let minH = parseMeters(t.min_height) ?? (isFinite(parseFloat(t['building:min_level'])) ? parseFloat(t['building:min_level']) * LEVEL_H : 0);
+  if (p.mass) minH = p.mass.minH;   // a slab of the survey massing stands on the one below
   const pillar = kind === 'pillar' || t.man_made === 'pillar';
   const castleType = t.castle_type || '';
   const palace = kind === 'palace' || ['palace', 'stately', 'manor'].includes(castleType);
@@ -700,8 +879,20 @@ function buildingSpec(p) {
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
   if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
   // the photo and the survey, building by building: roof type from the tiles the photo sees, roof and wall colours as they are
-  const det = lidOk && !p.ovr && !OVERRIDES[p.id] && !t['building:part'] && !church && !castle && !palace && !monument && !pillar ? detailOf(p, lid.top) : null;
-  if (det && det.n >= 12) {
+  const det = p.mass ? DET.get(p.mass.parent.id) : lidOk && !p.ovr && !OVERRIDES[p.id] && !t['building:part'] && !church && !castle && !palace && !monument && !pillar ? detailOf(p, lid.top) : null;
+  if (det && p.mass) {   // a slab of the survey massing: its roof as the photo and survey read it, slab by slab
+    spec.detail = true; spec.mass = p.mass;
+    const m = p.mass, rescale = (eave) => { if (!spec.floorH) return; const f = (eave - minH) / Math.max(1, spec.h - minH); spec.floorH = Math.max(2.6, spec.floorH * f); spec.groundH = Math.max(spec.floorH, spec.groundH * f); };
+    if (hall && m.roof !== 'flat') m.roof = 'flat';
+    if (m.roof === 'hip') { const eave = Math.max(minH + 2.2, Math.min(m.lo, m.deck)); rescale(eave); spec.shape = 'hipped'; spec.pitch = 22; spec.h = eave; spec.roofH = Math.max(1, Math.min(6, m.top - eave)); }
+    else if (m.roof === 'rim') { const rise = Math.min(2.4, (m.rimD || 2.4) * 0.45); spec.shape = 'rim'; spec.rimD = m.rimD || 2.4; spec.h = m.deck + 0.3; spec.roofH = rise; spec.parapet = 0; }
+    else if (m.roof === 'mansard') { spec.shape = 'mansard'; spec.h = Math.max(m.deck, minH + 6); spec.roofH = 4.2; if (m.edgeCol) spec.roofCol = m.edgeCol; }
+    else { spec.shape = 'flat'; spec.h = Math.max(m.deck, minH + 2); spec.roofH = undefined; spec.parapet = m.level < m.levels - 1 ? 1.0 : Math.max(spec.parapet, 0.9); }
+    if (m.edgeCol && !t['roof:colour']) spec.roofCol = m.edgeCol; else if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
+    if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
+    if (!t['building:colour'] && !site) { const w = det.wall || nearWall(p.mass.parent, lid.top); if (w) spec.wall = w; }
+  }
+  else if (det && det.n >= 12) {
     spec.detail = true;
     if (!t['roof:shape'] && !hall) {
       const tiled = det.tileFrac >= 0.5 && lid.top - lid.lo > 0.8;   // tiles seen from above and a ridge in the survey
@@ -710,7 +901,7 @@ function buildingSpec(p) {
     }
     if (det.tile && !t['roof:colour']) spec.roofCol = det.tile;
     if (det.flat && !t['roof:colour']) spec.flatCol = det.flat;
-    if (det.wall && !t['building:colour'] && !site) spec.wall = det.wall;
+    if (!t['building:colour'] && !site) { const w = det.wall || nearWall(p, lid.top); if (w) spec.wall = w; }
   }
   const o = p.ovr || OVERRIDES[p.id]; // hand-authored
   if (o) { Object.assign(spec, o, { src: 'authored' }); if (o.wall) spec.wall = srgb(o.wall); if (o.roofCol) spec.roofCol = srgb(o.roofCol); }
@@ -749,6 +940,7 @@ function measuredRoofBoxes(p, ctx, wallTop) {
   return k;
 }
 
+process.on('exit', () => { if (!process.env.DUMP_DET) return; const o = []; for (const [id, d] of DET) { if (!d) continue; const p = polysB.find((q) => q.id === id); if (!p) continue; const [la, lo] = proj.inv(p.c[0], p.c[1]); const m = (MASS.get(id) || []).map((q) => q.mass && { r: q.mass.roof, deck: +q.mass.deck.toFixed(1), tE: q.mass.tE, tI: q.mass.tI, b: q.mass.boxes.length, tA: q.mass.tA, rimD: q.mass.rimD }); o.push({ id, la: +la.toFixed(5), lo: +lo.toFixed(5), h: d.h, wall: d.wall, src: d.wallSrc, cands: d.cands, tf: +d.tileFrac.toFixed(2), tile: d.tile, flat: d.flat, m }); } fs.writeFileSync(process.env.DUMP_DET, JSON.stringify(o)); });
 const FAR = [];   // footprints for the far level of detail (one block per building)
 const BAD = []; // guard: any building vertex far outside the diorama fails the build
 const tileB0 = (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; };
@@ -811,7 +1003,7 @@ function addBuilding_(p) {
   const ob = obb(p.outer);
   const fill = ob ? Math.abs(p.area) / (4 * ob.hl * ob.hw) : 0;
   const pitched = s.shape !== 'flat' && s.shape !== 'skillion' || (s.shape === 'skillion');
-  const planarOK = ob && !p.holes.length && fill > 0.72 && p.outer.length <= 40 && !['dome', 'onion', 'cone'].includes(s.shape);
+  const planarOK = ob && !p.holes.length && fill > (s.mass ? 0.94 : 0.72) && p.outer.length <= 40 && !['dome', 'onion', 'cone'].includes(s.shape) && !(s.mass && s.shape !== 'hipped');   // a measured slab's roof follows its own outline, not its bounding box
   let wallTop = top, sk = null, mode = 'flat';
   const sl = Math.tan((s.pitch * Math.PI) / 180);
   let barrel = null, domeR = null;
@@ -849,9 +1041,16 @@ function addBuilding_(p) {
     const k = sym ? sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb, sym: true, w: sw, pitch: sw, rise: sw * 0.24, metal: tile ? '#b27460' : '#9fa3a4' })
       : sawtoothRoof(S, { outer: p.outer, holes: p.holes, z0: wallTop, lin, srgb }); if (k) stats.sawtooth = (stats.sawtooth || 0) + 1;
   }
-  if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
+  if (mode === 'skeleton' && s.shape === 'rim') { const rise = top - wallTop; profileRoof(S, sk, { ...ctx, noDormers: true, noPaintedDormers: true, colTerrace: colFlat }, mansardProfile(s.rimD, rise / s.rimD, 0.001, rise)); stats.rims = (stats.rims || 0) + 1; }
+  else if (mode === 'skeleton' && s.shape === 'mansard') profileRoof(S, sk, { ...ctx, bayW: s.bayW, variant: s.variant }, mansardProfile(1.3, 2.6, 0.5, top - wallTop));
   else if (mode === 'skeleton') skeletonRoof(S, sk, ctx, sl, 5.5, ['dome', 'onion', 'cone'].includes(s.shape));
-  if (s.detail && mode === 'flat' && LIDAR) { const k = measuredRoofBoxes(p, ctx, wallTop); stats.roofBoxes = (stats.roofBoxes || 0) + k; }   // what stands on the roof, as the survey saw it
+  if (s.mass) {   // the housings, tanks and plant rooms the survey measured on this slab's deck
+    if (mode === 'flat' || s.shape === 'rim') {
+      const D = ctx.D || S, house = colWall.map((c) => c * 0.93), info = [0, 0, 0, 0], st = [KIND.PLAIN / 8, s.variant / 8, seed, 0.5], base = mode === 'flat' ? wallTop : top;
+      for (const b of s.mass.boxes) if (b.h > 0.8) { box(D, b.cx, b.cy, s.mass.ux, s.mass.uy, b.hu, b.hv, base - 0.1, base + b.h, house, info, st); stats.roofBoxes = (stats.roofBoxes || 0) + 1; }
+    }
+  }
+  else if (s.detail && mode === 'flat' && LIDAR) { const k = measuredRoofBoxes(p, ctx, wallTop); stats.roofBoxes = (stats.roofBoxes || 0) + k; }   // what stands on the roof, as the survey saw it
   else if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
   // solar panels on about a third of the flat-roofed villas (Restelo, Belém from above)
   if (mode === 'flat' && isVilla(p) && hash(p.id + 'pv') < 0.35) {
@@ -977,7 +1176,7 @@ function addBuilding_(p) {
   const ptOutline = polysB.find((p) => p.id === 'w9253917');
   const ptParts = ptOutline ? parts.filter((p) => pointInRing(p.c[0], p.c[1], ptOutline.outer)) : [];
   const seSet = new Set([seOutline, ...seParts, ptOutline, ...ptParts].filter(Boolean));
-  const terr = (p) => (OVERRIDES[p.id]?.terraces ? terraceSlabs(p) : [p]);   // stepped landmarks become their measured terraces
+  const terr = (p) => (OVERRIDES[p.id]?.terraces ? terraceSlabs(p) : surveyMass(p));   // stepped landmarks become their measured terraces
   for (const p of [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt)), ...fills].flatMap(terr)) if (p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 12 && !dropped(p)) FAR.push(p);
   let todo = [...outlines.filter((o) => !o.skip), ...parts.filter((pt) => !thinDrop.has(pt)), ...fills].flatMap(terr).filter((p) => !seSet.has(p) && !churchParts.has(p)).filter((p) => p.c[0] >= minX && p.c[0] <= maxX && p.c[1] >= minY && p.c[1] <= maxY && Math.abs(p.area) >= 2 && !dropped(p));
   if (process.env.SWEEP) {   // audit: survey mass vs what gets drawn (node pipeline/build.mjs <area> with SWEEP=<out.json>)
@@ -1893,9 +2092,16 @@ log('AO baked');
   }
 }
 
+// carriageways and bridge decks, for the detail module: no trees on them, and a deck in the survey is not a building to lift out
+let detailRoadR = null;
+function detailRoadAt() {
+  if (!detailRoadR) { const rm = new Raster(minX, minY, maxX, maxY, 1), d = new Uint8Array(rm.w * rm.h); for (const r of roads) { const k = roadKind(r.tags), w = /^(footway|path|steps|cycleway|track|pedestrian|service)$/.test(k) ? 0 : ROAD_W[k]; if (w) rm.strokeLine(r.pts, w + (r.tags.bridge && r.tags.bridge !== 'no' ? 3 : 0), (i) => { d[i] = 1; }); } detailRoadR = { rm, d }; }
+  const { rm, d } = detailRoadR;
+  return (x, y) => { const c = Math.floor(rm.px(x)), r = Math.floor(rm.py(y)); return c >= 0 && r >= 0 && c < rm.w && r < rm.h && d[r * rm.w + c] === 1; };
+}
 if (DETAIL) {   // the ground as photographed: dry grass, paving, car parks, paths; buildings lifted out, shadows lightened
   const buildings = polysB.filter((p) => !p.skip && DETAIL.covers(p.c[0], p.c[1])).map((p) => { const d = DET.get(p.id); const z = LIDAR ? measured(p) : null; return { outer: p.outer, h: d?.h ?? z?.top ?? 0, shift: d?.shift }; }).filter((b) => b.h > 1.5);
-  DETAIL.ground({ ground1, GW, GH, buildings, Raster });
+  DETAIL.ground({ ground1, GW, GH, buildings, Raster, roadAt: detailRoadAt() });
 }
 // ─── trees ──────────────────────────────────────────────────────────────
 const trees = [];
@@ -2049,7 +2255,7 @@ if (DETAIL) {   // every tree the survey and the photo see: canopy peaks away fr
   const bm = new Raster(minX, minY, maxX, maxY, 1), bl = new Uint8Array(bm.w * bm.h);
   for (const p of polysB) bm.fillRings([p.outer, ...p.holes], (i) => { bl[i] = 1; });
   const blockedAt = (x, y) => { for (const [a, b] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) { const c = Math.floor(bm.px(x + a)), r = Math.floor(bm.py(y + b)); if (c >= 0 && r >= 0 && c < bm.w && r < bm.h && bl[r * bm.w + c]) return true; } return false; };
-  const lt = DETAIL.trees({ blockedAt });
+  const lt = DETAIL.trees({ blockedAt, roadAt: detailRoadAt() });
   for (const [x, y, z, r] of lt) addTree(x, y, Math.max(0.45, Math.min(2.6, z / 7.5)), 0, true);
   log(`trees from the survey: ${lt.length}`);
 }

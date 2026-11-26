@@ -422,7 +422,7 @@ function carMaterial(night) {
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>
 attribute vec4 aPose; attribute vec4 aExt; attribute float aTint; attribute vec3 aGlow;
-uniform vec3 uPal[${pal.length}]; varying vec3 vGlow;
+uniform vec3 uPal[${pal.length}]; varying vec3 vGlow; varying vec2 vLamp;
 vec3 carXf(vec3 p) {
   float cp = cos(aExt.x), sp = sin(aExt.x), a = 1.5707963 - aPose.w, ca = cos(a), sa = sin(a);
   p = vec3(p.x * cp - p.y * sp, p.x * sp + p.y * cp, p.z);
@@ -434,11 +434,11 @@ vec3 carXf(vec3 p) {
   transformed = carXf(transformed * k * aExt.y) + aPose.xyz; }`)
       .replace('#include <color_vertex>', `#include <color_vertex>
 vColor.rgb = mix(color.rgb, color.rgb * uPal[int(aExt.w + 0.5)], aTint);
-vGlow = aGlow;`);
+vGlow = aGlow; vLamp = vec2(abs(position.z), position.y);`);
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight; varying vec3 vGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vGlow * (0.15 + 3.2 * uNight);');
+      .replace('#include <common>', '#include <common>\nuniform float uNight; varying vec3 vGlow; varying vec2 vLamp;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float lamp = step(.5, vLamp.x) * step(vLamp.x, .82) * step(.62, vLamp.y) * step(vLamp.y, .86); lamp = mix(lamp, .3, smoothstep(.04, .2, fwidth(vLamp.x) + fwidth(vLamp.y)));   // far away: the face average, so traffic still reads as streams of light; two lamps a side, not the whole face\ntotalEmissiveRadiance += vGlow * lamp * (0.3 + 4. * uNight); }');
   };
-  mat.customProgramCacheKey = () => 'ambient-car-v1';
+  mat.customProgramCacheKey = () => 'ambient-car-v2';
   return mat;
 }

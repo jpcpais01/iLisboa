@@ -7,6 +7,7 @@ import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
+import { createSky } from './sky.js';
 import { initLive } from './live/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
@@ -30,31 +31,30 @@ renderer.setClearColor(0x000000, 0);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 30000);
 
-// Soft sky environment for reflections & ambient (generated once, no HDR download).
-{
-  const pm = new THREE.PMREMGenerator(renderer);
-  const skyScene = new THREE.Scene();
-  skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    vertexShader: 'varying vec3 v; void main(){ v = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `varying vec3 v; void main(){ float h = normalize(v).y;
-      vec3 sky = mix(vec3(.96,.90,.80), vec3(.50,.70,.90), smoothstep(0.,.6,h));
-      vec3 c = h > 0. ? sky : mix(vec3(.78,.70,.60), vec3(.45,.40,.35), smoothstep(0.,-.4,h));
-      gl_FragColor = vec4(c,1.); }`,
-  })));
-  scene.environment = pm.fromScene(skyScene, 0.04).texture;
-  scene.environmentIntensity = 0.55;
-}
+// Sky, sun, ambient light and haze all come from one physical atmosphere (src/sky.js), re-solved when the clock moves.
+const Q = new URLSearchParams(location.search);
+const sky = createSky(renderer, scene, { mobile: isMobile });
+if (Q.has('clouds')) sky.clouds = +Q.get('clouds');
 
-const hemi = new THREE.HemisphereLight(0xdfeaff, 0xb59a7c, 0.6);
-scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff0dc, 3.0);
+// The sun casts two shadow cascades: a sharp map around the view (follows it closely) and a wide, coarse one out to the
+// horizon (re-drawn only every few hundred metres of travel or when the sun moves), so the far city keeps its form at a
+// low sun instead of going flat. The twin light lends its map only; it adds no light (see sky.js).
+const sun = new THREE.DirectionalLight(0xffffff, 3.0);
 sun.castShadow = true;
-sun.shadow.mapSize.setScalar(+new URLSearchParams(location.search).get('shadow') || (isMobile ? 2048 : 4096));
-sun.shadow.bias = -0.0006;
-sun.shadow.normalBias = 1.2;
+sun.shadow.mapSize.setScalar(+Q.get('shadow') || (isMobile ? 2048 : 4096));
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 1.0;
 sun.shadow.radius = 2;
-scene.add(sun, sun.target);
+const sunFar = new THREE.DirectionalLight(0x000000, 0);
+sunFar.castShadow = true;
+sunFar.shadow.mapSize.setScalar(isMobile ? 1024 : 2048);
+sunFar.shadow.bias = -0.0004;
+sunFar.shadow.normalBias = 2.5;
+sunFar.shadow.camera.layers.set(1);   // only buildings and ground cast into it (trees, cars, lamps are below its texel)
+for (const l of [sun, sunFar]) l.shadow.autoUpdate = false;
+scene.add(sun, sun.target, sunFar, sunFar.target);
+const BIG = 1;   // layer for far-cascade casters
+const bigCaster = (o) => { o.layers.enable(BIG); return o; };
 
 const controls = new MapControls(camera, canvas);
 controls.enableDamping = true;
@@ -169,7 +169,9 @@ function mergeFar(a, root) {
     return g;
   };
   const free = (list) => { for (const { o } of list) { o.geometry.dispose(); const map = o.material.map; if (map) { map.image?.close?.(); map.dispose(); } o.material.dispose(); } };
-  const add = (geo, mat, name) => { const mesh = new THREE.Mesh(geo, mat); mesh.name = name; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.userData.farMerged = true; scene.add(mesh); return mesh; };
+  const add = (geo, mat, name, U) => { const mesh = new THREE.Mesh(geo, mat);
+    mesh.customDepthMaterial = hideable(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), U);   // hidden tiles cast no shadow either
+    mesh.name = name; mesh.receiveShadow = true; mesh.castShadow = true; bigCaster(mesh); mesh.matrixAutoUpdate = false; mesh.userData.farMerged = true; scene.add(mesh); return mesh; };
   // ground: lay the tile images out edge to edge (each keeps its own size, so the atlas is simply the area's ground image)
   if (parts.t.length) {
     const colW = new Map(), rowH = new Map();
@@ -190,11 +192,11 @@ function mergeFar(a, root) {
     const tex = new THREE.CanvasTexture(cv);
     tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.userData.px = W * Hh; tex.onUpdate = () => { cv.width = cv.height = 1; };   // uploaded: let the canvas go
-    add(mergeGeometries(geos), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t), `ft_${a.area}`);
+    add(mergeGeometries(geos), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t), `ft_${a.area}`, H.t);
     free(parts.t);
   }
-  if (parts.b.length) { add(mergeGeometries(parts.b.map((p) => bake(p, ['position', 'color']))), hideable(farBuildingMaterial(), H.b), `fb_${a.area}`); free(parts.b); }
-  if (parts.x.length) { add(mergeGeometries(parts.x.map((p) => bake(p, ['position', 'color']))), hideable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), H.b), `fx_${a.area}`); free(parts.x); }
+  if (parts.b.length) { add(mergeGeometries(parts.b.map((p) => bake(p, ['position', 'color']))), hideable(farBuildingMaterial(), H.b), `fb_${a.area}`, H.b); free(parts.b); }
+  if (parts.x.length) { add(mergeGeometries(parts.x.map((p) => bake(p, ['position', 'color']))), hideable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), H.b), `fx_${a.area}`, H.b); free(parts.x); }
   a.farHide = H;   // from here on tiles flag themselves
   for (const t of tiles) if (t.a === a) showFar(t);
 }
@@ -246,12 +248,12 @@ function adopt(tile, gltf, mode) {
       g.setAttribute('aInfo', g.attributes._info); g.deleteAttribute('_info');
       g.setAttribute('aStyle', g.attributes._style); g.deleteAttribute('_style');
       o.material = matBuildings;
-      o.castShadow = o.receiveShadow = true;
+      o.castShadow = o.receiveShadow = true; bigCaster(o);
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
       map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
       o.material = terrainMaterial(map, a.mask, a.bounds);
-      o.receiveShadow = true;
+      o.receiveShadow = true; o.castShadow = true; bigCaster(o);   // hills shade the valleys at a low sun (back faces only: no acne)
     }
   });
   // a mid-distance tile keeps only its buildings: the ground there is the far level's (its 0.5 m texture would cost ~4 MB of
@@ -564,62 +566,84 @@ function lampPost() {
 
 
 // ─── sun / time of day ──────────────────────────────────────────────────
-const haze = new THREE.FogExp2(0xdde3e6, 0.00011); scene.fog = haze;
+// haze: extinction at sea level per metre (height fog, thinning with a ~1 km scale height; colour from the sky, see sky.js)
+const haze = new THREE.FogExp2(0xc8d2dc, 0.00009); scene.fog = haze;
 const timeEl = document.getElementById('time'), clockEl = document.getElementById('clock');
-const sunDir = new THREE.Vector3();
-const warm = new THREE.Color(0xffb36b), noon = new THREE.Color(0xfff4e4), moonSky = new THREE.Color(0x5a6d9c), moonGround = new THREE.Color(0x24222c);
-function setTime(h) {
+const sunDir = new THREE.Vector3(), lightDir = new THREE.Vector3();
+const MOON = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();   // a high moon over the south-west at night
+let skyT = 0, skyPend = null, sunLit = true;
+function setTime(h, now = false) {
   sunDirection(h, manifest.origin.lat, manifest.origin.lon, sunDir);
   const elev = Math.asin(sunDir.y);
-  cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.04, 0.1);
-  const golden = 1 - THREE.MathUtils.smoothstep(elev, 0.05, 0.5);
-  sun.color.copy(noon).lerp(warm, golden);
-  sun.intensity = 3.5 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);   // a Lisbon sun: hard light, shade about a third of it
-  const night = cityUniforms.uNight.value;
-  document.body.classList.toggle('night', night > 0.5);
-  // night: cool moonlit sky light, no warm ground bounce; the warmth comes from the windows
-  hemi.color.set(0xdfeaff).lerp(moonSky, night); hemi.groundColor.set(0xb59a7c).lerp(moonGround, night);
-  hemi.intensity = (0.24 + 0.27 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6)) * (1 - 0.5 * night);
-  scene.environmentIntensity = (0.22 + 0.22 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5)) * (1 - 0.85 * night);
-  renderer.toneMappingExposure = 0.88 + 0.22 * golden;
+  const night = 1 - THREE.MathUtils.smoothstep(elev, -0.1, 0.02);   // civil dusk (−6°) is night for the city lights
+  cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.07, 0.04);
+  document.body.classList.toggle('night', cityUniforms.uNight.value > 0.5);
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
   clockEl.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
-  const sky = (day, dusk, nite, g) => new THREE.Color(day).lerp(new THREE.Color(dusk), golden * g).lerp(new THREE.Color(nite), night).getStyle();
-  document.body.style.background = `radial-gradient(120% 90% at 50% 0%, ${sky(0xf7f1e6, 0xf6c99a, 0x2a3350, 0.8)} 0%, ${sky(0xe9dfcf, 0xc9a58c, 0x1b2238, 0.7)} 60%, ${sky(0xd9cbb6, 0x8f7d8c, 0x10141f, 0.6)} 100%)`;
-  // aerial perspective: a light haze in the horizon's colour, so distance reads as distance (≈1 % at 1 km, 10 % at 3 km, 35 % at 6 km)
-  haze.color.set(0xdde3e6).lerp(new THREE.Color(0xe8c2a0), golden * 0.7).lerp(new THREE.Color(0x1a2133), night);
+  // the sky (and with it the environment) is re-solved at most ~8 times a second while the slider is dragged
+  const solve = () => {
+    skyPend = null; skyT = performance.now();
+    const st = sky.update(sunDir, { night });
+    // the sun is the air's transmittance of sunlight; once it has set, a dim cool moon takes over the same light (and its shadows)
+    const moon = THREE.MathUtils.smoothstep(elev, -0.06, -0.14) * 0.75;
+    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = 1; }
+    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon; }
+    sunLit = sun.intensity * Math.max(sun.color.r, sun.color.g, sun.color.b) > 1e-3;   // (never toggle .visible: a light count change recompiles every shader)
+    // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
+    const E = Math.max(0, Math.max(sunDir.y, 0) * (st.sunColor.r + st.sunColor.g * 2 + st.sunColor.b) / 4 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.16, 0.45) + 0.02);
+    renderer.toneMappingExposure = EXPOSURE * THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night));
+    scene.environmentIntensity = 1;
+    haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
+    invalidate(true);
+  };
+  if (now || performance.now() - skyT > 120) solve(); else if (!skyPend) skyPend = setTimeout(solve, 120);
 }
+const EXPOSURE = +Q.get('exp') || 1.0;
 
-timeEl.addEventListener('input', () => { setTime(+timeEl.value); invalidate(true); });
-{ const t0 = +new URLSearchParams(location.search).get('t'); if (t0) timeEl.value = t0; }   // ?t=hour, for checks
-setTime(+timeEl.value);
-
-// Shadow frustum follows the view so close-ups get crisp shadows; snapped to texels to avoid shimmer.
-const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3();
-// The shadow map is the costliest pass, so it is cached: its frustum snaps to coarse steps (size in ×1.2 levels, position
-// in tenths of its width) and it is only re-rendered when that snapped frustum, the sun, or the scene's contents change.
-let shadowKey = '', shadowDirty = true;
-function fitShadow() {
+timeEl.addEventListener('input', () => setTime(+timeEl.value));
+timeEl.addEventListener('change', () => setTime(+timeEl.value, true));
+{ const t0 = +Q.get('t'); if (t0) timeEl.value = t0; }   // ?t=hour, for checks
+// Shadow cascades follow the view, snapped to coarse steps so they neither shimmer nor re-render every frame.
+// The near map is centred a little ahead of the view (half its radius at a grazing view, none looking straight down) and is
+// re-drawn when its snapped frame, the light, or the scene's contents change. The far map covers ~5 km ahead and is re-drawn
+// only when its frame moves a quarter of its width, when the light moves, or (at most every 2 s) when tiles come in.
+const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3(), _fw = new THREE.Vector3(), _lc = new THREE.Vector3();
+let shadowKey = '', farKey = '', shadowDirty = true, farDirty = true, farT = 0;
+function frame(light, R, t, step, depth) {
+  const ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
+  return { ka, kb, apply() {
+    const c = _lc.copy(lightRight).multiplyScalar(ka * step).addScaledVector(lightUp, kb * step).addScaledVector(lightDir, t.dot(lightDir));
+    light.target.position.copy(c); light.target.updateMatrixWorld();
+    light.position.copy(c).addScaledVector(lightDir, depth);
+    const sc = light.shadow.camera;
+    if (sc.right !== R || sc.far !== depth * 2) { sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = depth * 2; sc.updateProjectionMatrix(); }
+    light.shadow.needsUpdate = true; renderer.shadowMap.needsUpdate = true;
+  } };
+}
+function fitShadow(now) {
+  if (!sunLit) return;
   const f = chase.focus(), dist = f ? f.d : camera.position.distanceTo(controls.target), lim = size * 0.6;
+  lightRight.crossVectors(lightDir, THREE.Object3D.DEFAULT_UP).normalize();
+  lightUp.crossVectors(lightRight, lightDir).normalize();
+  camera.getWorldDirection(_fw); const grazing = 1 - Math.abs(_fw.y); _fw.y = 0; _fw.normalize();
+  const dirKey = `${lightDir.x.toFixed(4)},${lightDir.y.toFixed(4)},${lightDir.z.toFixed(4)}`;
+  // near
   const R0 = THREE.MathUtils.clamp(dist * 0.85, 140, lim);
   const R = Math.min(lim, 140 * 1.2 ** Math.ceil(Math.log(R0 / 140) / Math.log(1.2))) * 1.15;
-  const sc = sun.shadow.camera;
-  lightRight.crossVectors(sunDir, THREE.Object3D.DEFAULT_UP).normalize();
-  lightUp.crossVectors(lightRight, sunDir).normalize();
-  const texel = (2 * R) / sun.shadow.mapSize.x, step = texel * Math.round(sun.shadow.mapSize.x / 10);
-  const t = f ? _sf.set(f.x, f.gy, -f.y) : controls.target, ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
-  const key = `${R.toFixed(2)}|${ka}|${kb}|${sunDir.x.toFixed(4)},${sunDir.y.toFixed(4)},${sunDir.z.toFixed(4)}`;
-  if (key === shadowKey && !shadowDirty) return;
-  shadowKey = key; shadowDirty = false; renderer.shadowMap.needsUpdate = true;
-  const c = lightRight.clone().multiplyScalar(ka * step).addScaledVector(lightUp, kb * step);
-  const along = t.dot(sunDir); c.addScaledVector(sunDir, along);
-  sun.target.position.copy(c); sun.target.updateMatrixWorld();
-  sun.position.copy(c).addScaledVector(sunDir, 3000);
-  if (sc.right !== R) { sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 100; sc.far = 6000; sc.updateProjectionMatrix(); }
+  const t = (f ? _sf.set(f.x, f.gy, -f.y) : _sf.copy(controls.target)).addScaledVector(_fw, R * 0.5 * grazing);
+  const nf = frame(sun, R, t, (2 * R) / 10, R + 2500);
+  const key = `${R.toFixed(2)}|${nf.ka}|${nf.kb}|${dirKey}`;
+  if (key !== shadowKey || shadowDirty) { shadowKey = key; shadowDirty = false; nf.apply(); return; }   // one cascade per frame at most
+  // far: from just behind the camera out towards the horizon
+  const RF = Math.min(lim, Math.max(isMobile ? 2600 : 3600, R * 2.5));
+  const tf = _sf.copy(camera.position).setY(controls.target.y).addScaledVector(_fw, RF * 0.75 * grazing);
+  const ff = frame(sunFar, RF, tf, RF / 2, RF + 2500);
+  const fk = `${RF.toFixed(0)}|${ff.ka}|${ff.kb}|${dirKey}`;
+  if (fk !== farKey || (farDirty && now - farT > 2000)) { farKey = fk; farDirty = false; farT = now; ff.apply(); }
 }
-
 let needRender = 3;
-const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = true; };
+const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = true; };
+setTime(+timeEl.value, true);
 { const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
 // ─── camera: shareable view in the URL hash, else a postcard intro from the river ───
@@ -657,7 +681,7 @@ controls.addEventListener('end', () => {
 const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
-window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
+window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
@@ -690,7 +714,7 @@ renderer.setAnimationLoop((now) => {
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
-  fitShadow();
+  fitShadow(now); sky.tick(now / 1000);
   if (++nf % (chase.active ? 4 : 12) === 0 || !ready) stream(!ready);   // a followed plane crosses a tile in seconds
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;
@@ -699,7 +723,6 @@ renderer.setAnimationLoop((now) => {
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
   for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
   waterUniformTime.value = now / 1000;
-  haze.density = 0.00011 * THREE.MathUtils.clamp(2200 / Math.max(1, camera.position.y), 0.3, 1);   // a high view looks down through less of the hazy low air
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }

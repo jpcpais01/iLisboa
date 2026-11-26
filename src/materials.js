@@ -385,11 +385,9 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
     float bank = 1. - smoothstep(.35, 1., s3 * .5 + s2 * .5);
     totalEmissiveRadiance += vec3(1., .62, .3) * streak * bank * uNight * .35;
   }
-}`)
-      // the scene's environment intensity is tuned for matte stone; water mirrors the sky at full strength
-      .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\nradiance *= 2.1;');
+}`);   // (the environment is the real sky now, at full strength: the water mirrors it as it is)
   };
-  m.customProgramCacheKey = () => 'ilisboa-water-v3';
+  m.customProgramCacheKey = () => 'ilisboa-water-v4';
   return m;
 }
 
