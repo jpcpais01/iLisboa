@@ -1792,6 +1792,18 @@ export function ponte25Abril(S, { fwd, ground, lin, srgb }) {
     // parapet rails
     for (const v of [-HW, HW]) limb(S, P3(s, v, z0 + 1.1), P3(s1, v, z1 + 1.1), 0.12, 0.12, 3, orange, PL, false);
   }
+  // the road: three lanes each way — solid edge lines, dashed lane lines, a concrete central barrier
+  { const white = lin(srgb('#e6e3dc')), barrier = lin(srgb('#c9c3b8')), barrierTop = lin(srgb('#b3ada2')), lw = 0.075;
+    const strip = (s0, s1, v, col) => quad(P3(s0, v - lw, deckZ(s0) + 0.03), P3(s0, v + lw, deckZ(s0) + 0.03), P3(s1, v + lw, deckZ(s1) + 0.03), P3(s1, v - lw, deckZ(s1) + 0.03), col, [0, 1, 0]);
+    for (let s = 0; s < L - 0.1; s += STEP) { const s1 = Math.min(L, s + STEP); for (const v of [-(HW - 0.7), HW - 0.7, -0.75, 0.75]) strip(s, s1, v, white); }
+    for (let s = 2; s < L - 4; s += 12) for (const v of [-4.3, -7.8, 4.3, 7.8]) strip(s, s + 4, v, white);
+    for (let s = 0; s < L - 0.1; s += STEP) {
+      const s1 = Math.min(L, s + STEP), z0 = deckZ(s), z1 = deckZ(s1), hb = 0.3, ht = 0.12, H = 0.85;
+      quad(P3(s, -hb, z0), P3(s1, -hb, z1), P3(s1, -ht, z1 + H), P3(s, -ht, z0 + H), barrier, lat(s, -1));
+      quad(P3(s, hb, z0), P3(s, ht, z0 + H), P3(s1, ht, z1 + H), P3(s1, hb, z1), barrier, lat(s, 1));
+      quad(P3(s, -ht, z0 + H), P3(s1, -ht, z1 + H), P3(s1, ht, z1 + H), P3(s, ht, z0 + H), barrierTop, [0, 1, 0]);
+    }
+  }
   // stiffening truss: Warren panels down both sides, a lower chord and the rail deck inside, full length
   for (let s = 0; s < L - 0.1; s += STEP) {
     const s1 = Math.min(L, s + STEP), z0 = deckZ(s), z1 = deckZ(s1), depth = s > sNA - 30 && s < sSA + 30 ? TRUSS : 7;

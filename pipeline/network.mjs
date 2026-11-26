@@ -49,7 +49,7 @@ for (const f of fs.readdirSync(path.join(ROOT, 'data/raw')).filter((f) => f.ends
     const nodes = ow < 0 ? e.nodes.slice().reverse() : e.nodes, geo = ow < 0 ? e.geometry.slice().reverse() : e.geometry;
     const lanes = Math.min(15, Math.max(0, parseInt(t.lanes, 10) || 0));
     const bridge = !!t.bridge && t.bridge !== 'no', tunnel = t.tunnel === 'yes' || t.tunnel === 'building_passage' || t.covered === 'yes' || t.location === 'underground' || (t.layer && +t.layer < 0 && !bridge);
-    ways.set(e.id, { k, nodes, geo, cls: clsOf(t), oneway: ow !== 0, lanes, bridge, tunnel, name: nameId(t.name || t.ref || '') });
+    ways.set(e.id, { id: e.id, k, nodes, geo, cls: clsOf(t), oneway: ow !== 0, lanes, bridge, tunnel, name: nameId(t.name || t.ref || '') });
   }
 }
 // junctions: nodes used by two or more ways, plus every way end
@@ -77,7 +77,7 @@ for (const w of ways.values()) {
     if (i < w.nodes.length - 1 && (uses.get(w.nodes[i]) || 0) < 2) continue;
     const a = vertex(w.nodes[start], w.geo[start]), b = vertex(w.nodes[i], w.geo[i]);
     const pts = simplify(w.geo.slice(start, i + 1).map((p) => proj.fwd(p.lat, p.lon)), 1);
-    if (a !== b || pts.length > 2) E.push({ a, b, k: w.k, cls: w.cls, lanes: w.lanes, name: w.name, flags: (w.oneway ? 1 : 0) | (w.bridge ? 2 : 0) | (w.tunnel ? 4 : 0), pts, inner: pts.slice(1, -1) });
+    if (a !== b || pts.length > 2) E.push({ wid: w.id, a, b, k: w.k, cls: w.cls, lanes: w.lanes, name: w.name, flags: (w.oneway ? 1 : 0) | (w.bridge ? 2 : 0) | (w.tunnel ? 4 : 0), pts, inner: pts.slice(1, -1) });
     start = i;
   }
 }
@@ -108,6 +108,29 @@ for (const e of E) {
     if (z.filter(Number.isFinite).length * 2 >= z.length) { e.z = z; e.flags |= 8 | vg; decks++; break; }
   }
 }
+// every other bridge deck and walled ramp: the levels measured by pipeline/decks.mjs (data/decks.json)
+let measured = 0;
+{
+  const f = path.join(ROOT, 'data/decks.json'), byWay = new Map();
+  if (fs.existsSync(f)) for (const d of JSON.parse(fs.readFileSync(f, 'utf8')).decks) { const id = +d.id.slice(1); (byWay.get(id) || byWay.set(id, []).get(id)).push(d); }
+  const zOn = (list, x, y) => {   // deck level at the closest point of any deck or ramp of this way within 2.5 m
+    let best = Infinity, z = NaN;
+    for (const d of list) for (let i = 0; i + 1 < d.pts.length; i++) {
+      const [ax, ay] = d.pts[i], [bx, by] = d.pts[i + 1], dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+      const dd = Math.hypot(ax + dx * t - x, ay + dy * t - y); if (dd < best && dd < 2.5) { best = dd; z = d.z[i] + (d.z[i + 1] - d.z[i]) * t; }
+    }
+    return z;
+  };
+  for (const e of E) {
+    if (e.z) continue;
+    const list = byWay.get(e.wid); if (!list) continue;
+    // densify so a long edge that only partly runs up a ramp still carries the ramp's profile
+    const pts = [e.pts[0]];
+    for (let i = 1; i < e.pts.length; i++) { const [ax, ay] = e.pts[i - 1], [bx, by] = e.pts[i], L = Math.hypot(bx - ax, by - ay), m = Math.min(40, Math.ceil(L / 8)); for (let k = 1; k <= m; k++) pts.push([ax + ((bx - ax) * k) / m, ay + ((by - ay) * k) / m]); }
+    const z = pts.map(([x, y]) => zOn(list, x, y)); if (!z.some(Number.isFinite)) continue;
+    e.pts = pts; e.inner = pts.slice(1, -1); e.z = z; e.flags |= 8; measured++;
+  }
+}
 let bytes = 4 + 4 + V.length * 4 + 4; for (const e of E) bytes += 16 + e.inner.length * 4 + (e.z ? e.z.length * 2 : 0);
 const buf = Buffer.alloc(bytes); let o = 0;
 const q = (v) => Math.max(-32768, Math.min(32767, Math.round(v * 2)));
@@ -124,4 +147,4 @@ if (o !== bytes) throw new Error(`net.bin size ${o} ≠ ${bytes}`);
 fs.mkdirSync(path.join(ROOT, 'public/live'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'public/live/net.bin'), buf);
 fs.writeFileSync(path.join(ROOT, 'public/live/names.json'), JSON.stringify(names));
-console.log(`network: ${ways.size} ways → ${V.length} junctions, ${E.length} edges (${[0, 1, 2].map((k) => E.filter((e) => e.k === k).length).join('/')} street/major/rail, ${E.filter((e) => e.flags & 1).length} one-way, ${E.filter((e) => e.flags & 2).length} bridge (${decks} on authored decks), ${E.filter((e) => e.flags & 4).length} tunnel, ${names.length} names), ${(bytes / 1024).toFixed(0)} KB`);
+console.log(`network: ${ways.size} ways → ${V.length} junctions, ${E.length} edges (${[0, 1, 2].map((k) => E.filter((e) => e.k === k).length).join('/')} street/major/rail, ${E.filter((e) => e.flags & 1).length} one-way, ${E.filter((e) => e.flags & 2).length} bridge (${decks} on authored decks, ${measured} edges on measured decks/ramps), ${E.filter((e) => e.flags & 4).length} tunnel, ${names.length} names), ${(bytes / 1024).toFixed(0)} KB`);

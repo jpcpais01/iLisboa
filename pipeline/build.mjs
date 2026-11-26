@@ -17,7 +17,9 @@ import ClipperLib from 'clipper-lib';
 import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNodes, parseMeters, pointInRing, ringArea } from './lib/osm.mjs';
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { loadDetail } from './lib/detail.mjs';
-import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp } from './lib/buildings.mjs';
+import { buildBridges } from './lib/bridges.mjs';
+import { makeCuts, cutCell, clipUnion } from './lib/cuts.mjs';
+import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp, tri as triRaw } from './lib/buildings.mjs';
 import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb, twinSpires, bullringRoof } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
@@ -214,13 +216,20 @@ if (dem.lidarFix) dem.lidarFix(polysB.filter((p) => !p.tags['building:part']));
 }
 const polysArea = extractPolygons(els, proj, (t) => !isBuilding(t) && (t.golf || t.landuse || t.leisure || t.natural || t.place || t.amenity || t.highway || t['area:highway'] || t.man_made || t.tourism || t.railway === 'platform'));
 for (const [id, tags, ring] of AREAS) { const outer = ring.map(([la, lo]) => proj.fwd(la, lo)); polysArea.push({ id, tags, outer, holes: [], area: Math.abs(ringArea(outer)), c: [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length] }); }
-const roads0 = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !underground(t));
+const isTunnel = (t) => (t.tunnel && t.tunnel !== 'no') || t.location === 'underground';   // layer -1 alone is a road below another: still open
+const roads0 = extractLines(els, proj, (t) => t.highway && !t.area && t.area !== 'yes' && !isTunnel(t));
 // roads and rails up on the Ponte 25 de Abril deck are part of the authored bridge, not of the ground
 const ponteXY = PONTE_LINE.map(([la, lo]) => proj.fwd(la, lo));
 const nearPonte = (x, y) => { for (let i = 0; i + 1 < ponteXY.length; i++) { const [ax, ay] = ponteXY[i], [bx, by] = ponteXY[i + 1], dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))); if (Math.hypot(ax + dx * t - x, ay + dy * t - y) < 16) return true; } return false; };
 const onPonte = (l) => l.tags.bridge && l.tags.bridge !== 'no' && l.pts.every(([x, y]) => nearPonte(x, y));
-const roads = roads0.filter((r) => !onPonte(r));
-const rails = (extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !underground(t))).filter((r) => !onPonte(r));
+// bridges: decks measured by pipeline/decks.mjs (data/decks.json) stand in 3D (lib/bridges.mjs), so they are not painted on the ground
+const DECKS = (() => {
+  const f = path.join(ROOT, 'data/decks.json'); if (!fs.existsSync(f) || process.env.NO_DECKS) return [];
+  const M = 80; return JSON.parse(fs.readFileSync(f, 'utf8')).decks.filter((d) => d.pts.some(([x, y]) => x > minX - M && x < maxX + M && y > minY - M && y < maxY + M));
+})();
+const deckIds = new Set(DECKS.filter((d) => !d.ramp).map((d) => d.id));
+const roads = roads0.filter((r) => !onPonte(r) && !deckIds.has(r.id));
+const rails = (extractLines(els, proj, (t) => (t.railway === 'tram' || t.railway === 'rail' || t.railway === 'funicular' || t.railway === 'light_rail') && !isTunnel(t))).filter((r) => !onPonte(r) && !deckIds.has(r.id));
 const coast = extractLines(els, proj, (t) => t.natural === 'coastline');
 const treeNodes = extractNodes(els, proj, (t) => t.natural === 'tree');
 const treeRows = extractLines(els, proj, (t) => t.natural === 'tree_row');
@@ -292,7 +301,7 @@ const LAND_MIN = 1.6;
 const groundAt = (x, y) => (isDeepWater(x, y) ? -5 : Math.max(LAND_MIN, dem.ground(x, y)));
 // the height of the rendered terrain mesh (8 m grid per 500 m tile, split b–d like the index buffer): small things
 // (cars, lamps, trees, posts) sit on this so they neither float nor sink where the slope bends between grid nodes
-const meshAt = (x, y) => {
+const meshAt0 = (x, y) => {
   const ni_ = Math.ceil((maxX - minX) / TILE), nj_ = Math.ceil((maxY - minY) / TILE);
   const i = Math.max(0, Math.min(ni_ - 1, Math.floor((x - minX) / TILE))), j = Math.max(0, Math.min(nj_ - 1, Math.floor((y - minY) / TILE)));
   const x0 = minX + i * TILE, x1 = Math.min(maxX, x0 + TILE), y0 = minY + j * TILE, y1 = Math.min(maxY, y0 + TILE);
@@ -303,6 +312,26 @@ const meshAt = (x, y) => {
   const a = N(r, c), b = N(r, c + 1), d = N(r + 1, c), e = N(r + 1, c + 1);
   return u + v <= 1 ? a + u * (b - a) + v * (d - a) : e + (1 - u) * (d - e) + (1 - v) * (b - e);
 };
+// cuttings, underpasses and tunnel mouths (lib/cuts.mjs): the mesh is re-cut down to the true road level along
+// roads and tracks that run below it; everything placed on the ground after this reads the cut surface
+const CUTS = (() => {
+  if (process.env.NO_CUTS) return null;
+  const W0 = { motorway: 16, trunk: 14, primary: 12, secondary: 10, tertiary: 8, unclassified: 6, residential: 6, living_street: 5, service: 4 };
+  const roadW = (t) => parseMeters(t.width) ?? (parseInt(t.lanes, 10) > 0 ? parseInt(t.lanes, 10) * 3.3 + 1 : W0[t.highway.replace('_link', '')]);
+  const drivable = (t) => !!W0[(t.highway || '').replace('_link', '')] && t.service !== 'parking_aisle' && t.service !== 'driveway';
+  const tun = extractLines(els, proj, (t) => isTunnel(t) && t.tunnel !== 'building_passage' && !t.area && (drivable(t) || t.railway === 'rail' || t.railway === 'light_rail' || t.railway === 'tram'));
+  const lines = [
+    ...roads.filter((r) => drivable(r.tags)).map((r) => ({ pts: r.pts, w: roadW(r.tags), tunnel: false })),
+    ...rails.filter((r) => r.tags.railway === 'rail' || r.tags.railway === 'light_rail').map((r) => ({ pts: r.pts, w: 3.2, rail: true })),
+    ...tun.map((r) => ({ pts: r.pts, w: r.tags.railway ? 3.2 : roadW(r.tags), tunnel: true, rail: !!r.tags.railway, highway: r.tags.highway })),
+  ].filter((l) => l.pts.some(([x, y]) => x > minX - 20 && x < maxX + 20 && y > minY - 20 && y < maxY + 20));
+  const tunnelEnds = tun.flatMap((r) => [r.pts[0], r.pts[r.pts.length - 1]]);
+  const c = makeCuts({ lines, meshAt: meshAt0, levelAt: (x, y) => (isDeepWater(x, y) ? NaN : Math.max(LAND_MIN, dem.ground(x, y))), tunnelEnds, bounds: [minX, minY, maxX, maxY] });
+  log(`cuts: ${c.runs.length} runs (${c.runs.filter((r) => r.tunnel).length} open tunnel ramps), ${c.runs.reduce((a, r) => a + r.pts.reduce((b, p, i) => (i ? b + Math.hypot(p[0] - r.pts[i - 1][0], p[1] - r.pts[i - 1][1]) : 0), 0), 0).toFixed(0)} m, ${c.portals.length} portals`);
+  if (process.env.DBG_CUTS) { fs.writeFileSync(process.env.DBG_CUTS, JSON.stringify({ runs: c.runs.map((r) => { const m = r.pts[r.pts.length >> 1], [la, lo] = proj.inv(...m); return { la: +la.toFixed(5), lo: +lo.toFixed(5), tunnel: !!r.tunnel, rail: !!r.rail, n: r.pts.length, maxDepth: +Math.max(...r.depth).toFixed(1) }; }), portals: c.portals.map((p) => { const [la, lo] = proj.inv(p.x, p.y); return { la, lo, depth: p.depth }; }) })); process.exit(0); }
+  return c;
+})();
+const meshAt = (x, y) => { const m = meshAt0(x, y); if (!CUTS) return m; const z = CUTS.levelIn(x, y, 0); return Number.isFinite(z) ? Math.min(m, z) : m; };
 if (process.env.DBG) { let mx = 0, sum = 0, n = 0, big = 0; for (let k = 0; k < 20000; k++) { const x = minX + Math.random() * (maxX - minX), y = minY + Math.random() * (maxY - minY), d = Math.abs(meshAt(x, y) - groundAt(x, y)); mx = Math.max(mx, d); sum += d; n++; if (d > 0.5) big++; } console.log('mesh vs groundAt: mean', (sum / n).toFixed(2), 'max', mx.toFixed(2), '>0.5m', big); }
 
 // ─── colours ────────────────────────────────────────────────────────────
@@ -1417,13 +1446,13 @@ function addBuilding_(p) {
 
 // ─── structures that cross area seams: built whole, each area keeps the triangles over its own ground ───
 const FARX = new Map();   // tile → triangles of authored structures (bridges, aqueduct) that the far level must keep too
-function distribute(T) {
+function distribute(T, far = true) {
   let kept = 0;
   for (let t = 0; t < T.pos.length / 9; t++) {
     const o = t * 9, cx = (T.pos[o] + T.pos[o + 3] + T.pos[o + 6]) / 3, cy = -(T.pos[o + 2] + T.pos[o + 5] + T.pos[o + 8]) / 3;
     if (cx < minX || cx >= maxX || cy < minY || cy >= maxY) continue;
     const D = tileB0(cx, cy); kept++;
-    { const [ti, tj] = tileOf(cx, cy), k = `${ti}_${tj}`, F = FARX.get(k) || FARX.set(k, { P: [], C: [] }).get(k);
+    if (far) { const [ti, tj] = tileOf(cx, cy), k = `${ti}_${tj}`, F = FARX.get(k) || FARX.set(k, { P: [], C: [] }).get(k);
       for (let q = 0; q < 9; q++) { F.P.push(T.pos[o + q]); F.C.push(T.col[o + q]); } }
     for (let k = 0; k < 9; k++) { D.pos.push(T.pos[o + k]); D.nrm.push(T.nrm[o + k]); D.col.push(T.col[o + k]); }
     for (let k = 0; k < 12; k++) { D.info.push(T.info[t * 12 + k]); D.style.push(T.style[t * 12 + k]); }
@@ -1692,6 +1721,8 @@ for (const r of sorted) {
   const w = parseMeters(r.tags.width) ?? ROAD_W[k];
   gm.strokeLine(r.pts, w, paint(pedestrianish(k) ? C.calcada : C.asphalt));
 }
+// the open ramps of tunnels (found by the cuts): painted like the road they are
+if (CUTS) for (const r of CUTS.runs) if (r.tunnel) { gm.strokeLine(r.pts, r.w + 2.2, paint(r.rail ? C.ballast : C.calcada)); gm.strokeLine(r.pts, r.w, paint(r.rail ? C.ballast : C.asphalt)); }
 // sports pitches: football lines; tennis, padel and basketball as coloured hard courts with their lines
 {
   const LINE = srgb('#f1efe8'), TURF = srgb('#6e9f58'), HARD = srgb('#5b87a0'), BASKET = srgb('#c27352'), RED = srgb('#b9765a');
@@ -1744,8 +1775,8 @@ for (const r of sorted) {
     dashed(r.pts, 0.9, 30, 20, WHITE);
   }
 }
-for (const r of rails) if (r.tags.railway === 'rail' && !underground(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
-for (const r of rails) if (r.tags.railway === 'tram' && !underground(r.tags)) gm.strokeLine(r.pts, 2.3, paint(C.setts));   // granite setts between and beside the tram rails
+for (const r of rails) if (r.tags.railway === 'rail' && !isTunnel(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
+for (const r of rails) if (r.tags.railway === 'tram' && !isTunnel(r.tags)) gm.strokeLine(r.pts, 2.3, paint(C.setts));   // granite setts between and beside the tram rails
 for (const r of rails) { // two rails per track
   const tramish = r.tags.railway === 'tram' || r.tags.railway === 'funicular';
   const g = tramish ? 0.9 : (+r.tags.gauge || 1668) / 1000;
@@ -2126,6 +2157,29 @@ const cars = [];
   }
   log(`cars ${cars.length / 6}`);
 }
+// bridge decks, walled ramps and piers (lib/bridges.mjs); the bigger ones also stand in the far level
+{
+  const clearOK = (x, y) => !isWaterAt(x, y) && !asphaltAt(x, y);
+  const big = (d) => { const L = d.pts.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - d.pts[i - 1][0], p[1] - d.pts[i - 1][1]) : 0), 0); return L > 60 || d.z.some((v, i) => d.g[i] != null && v - d.g[i] > 6); };
+  const Tn = makeSink(), Tf = makeSink();
+  const s1 = buildBridges(Tn, DECKS.filter((d) => !big(d)), { meshAt, clearOK, lin, srgb, lamps });
+  const s2 = buildBridges(Tf, DECKS.filter(big), { meshAt, clearOK, lin, srgb, lamps });
+  stats.bridges = { decks: s1.decks + s2.decks, ramps: s1.ramps + s2.ramps, piers: s1.piers + s2.piers, abutments: s1.abutments + s2.abutments, tris: distribute(Tn, false) + distribute(Tf, true) };
+  // trees under a deck would grow through it
+  const segs = []; for (const d of DECKS) for (let i = 0; i + 1 < d.pts.length; i++) segs.push([d.pts[i], d.pts[i + 1], Math.max(d.hwL[i], d.hwR[i]) + 2, Math.min(d.z[i], d.z[i + 1])]);
+  const G = new Map(); segs.forEach((sg, k) => { const key = `${Math.floor((sg[0][0] + sg[1][0]) / 80)},${Math.floor((sg[0][1] + sg[1][1]) / 80)}`; (G.get(key) || G.set(key, []).get(key)).push(k); });
+  let cut = 0; const keep = [];
+  for (let t = 0; t < trees.length; t += 4) {
+    const x = trees[t], y = -trees[t + 2], gz = trees[t + 1]; let hit = false;
+    for (let a = -1; a <= 1 && !hit; a++) for (let b = -1; b <= 1 && !hit; b++) for (const k of G.get(`${Math.floor(x / 40) + a},${Math.floor(y / 40) + b}`) || []) {
+      const [p, q, r, zd] = segs[k], dx = q[0] - p[0], dy = q[1] - p[1], u = Math.max(0, Math.min(1, ((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1)));
+      if (Math.hypot(p[0] + dx * u - x, p[1] + dy * u - y) < r && zd - gz < 16) { hit = true; break; }
+    }
+    if (hit) cut++; else keep.push(trees[t], trees[t + 1], trees[t + 2], trees[t + 3]);
+  }
+  trees.length = 0; for (const v of keep) trees.push(v);
+  log(`bridges: ${stats.bridges.decks} decks, ${stats.bridges.ramps} ramps, ${stats.bridges.piers} piers, ${stats.bridges.abutments} abutments, ${stats.bridges.tris} triangles; ${cut} trees cleared from under them`);
+}
 const manifest = {
   area: AREA, origin: { lat: lat0, lon: lon0 }, bbox: { S, W, N, E }, bounds: { minX, minY, maxX, maxY }, waterY: WATER_Y, baseY: BASE_Y,
   tiles: [], stats: { ...stats, waterSource, trees: trees.length / 4, treesMapped: nTagged, lamps: lamps.length / 3, cars: cars.length / 6 },
@@ -2161,9 +2215,38 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     const n = [-hx / dx, 1, -hz / dz], l = Math.hypot(...n);
     nrm.set(n.map((v) => v / l), (r * cols + c) * 3);
   }
+  // cells crossed by a cut are re-triangulated (lib/cuts.mjs): road level inside, the cell's own surface outside,
+  // retaining walls between them in the building mesh
+  const cutCells = new Set(), xPos = [], xUv = [], xN = [], wallsHere = [];
+  if (CUTS && CUTS.near(x0 - 2, y0 - 2, x1 + 2, y1 + 2).length) {
+    const cdx = (x1 - x0) / (cols - 1), cdy = (y1 - y0) / (rows - 1), U = clipUnion(CUTS, x0 - 2, y0 - 2, x1 + 2, y1 + 2);
+    for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) {
+      const cx0 = x0 + cdx * c, cx1 = cx0 + cdx, cy1 = y1 - cdy * r, cy0 = cy1 - cdy;
+      if (!CUTS.near(cx0 - 0.5, cy0 - 0.5, cx1 + 0.5, cy1 + 0.5).length) continue;
+      const Ha = H[r * cols + c], Hb = H[r * cols + c + 1], Hd = H[(r + 1) * cols + c], He = H[(r + 1) * cols + c + 1];
+      const cellH = (x, y) => { const u = Math.max(0, Math.min(1, (x - cx0) / cdx)), v = Math.max(0, Math.min(1, (cy1 - y) / cdy)); return u + v <= 1 ? Ha + u * (Hb - Ha) + v * (Hd - Ha) : He + (1 - u) * (Hd - He) + (1 - v) * (Hb - He); };
+      const res = cutCell(CUTS, cx0, cy0, cx1, cy1, cellH, U); if (!res) continue;
+      cutCells.add(r * cols + c);
+      const nAt = (x, y) => { const u = (x - cx0) / cdx, v = (cy1 - y) / cdy, k = [r * cols + c, r * cols + c + 1, (r + 1) * cols + c, (r + 1) * cols + c + 1], w = [(1 - u) * (1 - v), u * (1 - v), (1 - u) * v, u * v], o = [0, 0, 0]; k.forEach((kk, i) => { for (let a = 0; a < 3; a++) o[a] += nrm[kk * 3 + a] * w[i]; }); const l = Math.hypot(...o) || 1; return o.map((q2) => q2 / l); };
+      for (const t of res.tris) {
+        // world axes are (x, up, -y): cross the two edges there and wind the triangle to face up
+        const [A, B2, C2] = t, e1 = [B2[0] - A[0], B2[2] - A[2], -(B2[1] - A[1])], e2 = [C2[0] - A[0], C2[2] - A[2], -(C2[1] - A[1])];
+        const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        const ord = n[1] >= 0 ? [A, B2, C2] : [A, C2, B2];
+        const onCut = t.cut;
+        const fl = Math.hypot(...n) || 1, fn = n.map((q2) => (q2 / fl) * (n[1] >= 0 ? 1 : -1));
+        for (const P3 of ord) {
+          xPos.push(P3[0], P3[2], -P3[1]); xUv.push((P3[0] - x0) / (x1 - x0), (y1 - P3[1]) / (y1 - y0));
+          const nn = onCut ? fn : nAt(P3[0], P3[1]); xN.push(nn[0], nn[1], nn[2]);
+        }
+      }
+      wallsHere.push(...res.walls);
+    }
+  }
   const idx = new Uint32Array((cols - 1) * (rows - 1) * 6);
   let q = 0;
   for (let r = 0; r + 1 < rows; r++) for (let c = 0; c + 1 < cols; c++) {
+    if (cutCells.has(r * cols + c)) continue;
     const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
     idx.set([a, d, b, b, d, e], q); q += 6;
   }
@@ -2174,11 +2257,38 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   for (let r = 0; r < rows; r++) edge.push([r * cols + cols - 1, 1]);
   for (let c = cols - 1; c >= 0; c--) edge.push([(rows - 1) * cols + c, 2]);
   for (let r = rows - 1; r >= 0; r--) edge.push([r * cols, 3]);
-  const nV = cols * rows, sPos = new Float32Array(pos.length + edge.length * 3), sUv = new Float32Array(uv.length + edge.length * 2), sN = new Float32Array(nrm.length + edge.length * 3);
+  const nX = xPos.length / 3;
+  const nV = cols * rows, sPos = new Float32Array(pos.length + edge.length * 3 + nX * 3), sUv = new Float32Array(uv.length + edge.length * 2 + nX * 2), sN = new Float32Array(nrm.length + edge.length * 3 + nX * 3);
   sPos.set(pos); sUv.set(uv); sN.set(nrm);
   edge.forEach(([k], i) => { sPos.set([pos[k * 3], pos[k * 3 + 1] - 3, pos[k * 3 + 2]], (nV + i) * 3); sUv.set([uv[k * 2], uv[k * 2 + 1]], (nV + i) * 2); sN.set([nrm[k * 3], nrm[k * 3 + 1], nrm[k * 3 + 2]], (nV + i) * 3); });
-  const sIdx = new Uint32Array(idx.length + edge.length * 6); sIdx.set(idx); let sq = idx.length;
-  for (let i = 0; i + 1 < edge.length; i++) { if (edge[i][1] !== edge[i + 1][1]) continue; const a = edge[i][0], b = edge[i + 1][0], a2 = nV + i, b2 = nV + i + 1; sIdx.set([a, b, a2, b, b2, a2], sq); sq += 6; }
+  const sIdx = new Uint32Array(q + edge.length * 6 + nX); sIdx.set(idx.subarray(0, q)); let sq = q;
+  const cellOfEdge = (a, b) => { const ra = Math.floor(a / cols), ca = a % cols, rb = Math.floor(b / cols), cb = b % cols; return Math.min(ra, rb, rows - 2) * cols + Math.min(ca, cb, cols - 2); };
+  for (let i = 0; i + 1 < edge.length; i++) { if (edge[i][1] !== edge[i + 1][1]) continue; const a = edge[i][0], b = edge[i + 1][0], a2 = nV + i, b2 = nV + i + 1; if (cutCells.has(cellOfEdge(a, b))) continue; sIdx.set([a, b, a2, b, b2, a2], sq); sq += 6; }
+  { const base = nV + edge.length; sPos.set(xPos, base * 3); sUv.set(xUv, base * 2); sN.set(xN, base * 3); for (let k = 0; k < nX; k++) sIdx[sq++] = base + k; }
+  // retaining walls (and parapets on the deeper ones) and tunnel portals, in this tile's building mesh
+  if (wallsHere.length || (CUTS && CUTS.portals.some((p) => p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1))) {
+    const Sb = getTile(i, j).b, PLs = [KIND.PLAIN / 8, 5 / 8, 0.3, 1], I0 = [0, 0, 0, 0], U0 = [0, 0];
+    const WALL = lin(srgb('#b4ad9f')), CAP = lin(srgb('#cdc6b8')), DARK = lin(srgb('#1d1c1b')), FRAME = lin(srgb('#a59e91'));
+    const q4 = (A, B2, C2, D2, col, n) => { triRaw(Sb, A, B2, C2, n, col, U0, U0, U0, I0, PLs); triRaw(Sb, A, C2, D2, n, col, U0, U0, U0, I0, PLs); };
+    const fix = (A, B2, C2, D2, col, want) => { const e1 = [B2[0] - A[0], B2[1] - A[1], B2[2] - A[2]], e2 = [C2[0] - A[0], C2[1] - A[1], C2[2] - A[2]]; let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...n) || 1; n = n.map((v) => v / l); if (n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) { n = n.map((v) => -v); q4(A, D2, C2, B2, col, n); } else q4(A, B2, C2, D2, col, n); };
+    for (const w of wallsHere) {
+      const deep = Math.max(w.zl0 - w.zf0, w.zl1 - w.zf1) > 1.6, par = deep ? 0.9 : 0.12, T = 0.3;
+      const [ax, ay] = w.p, [bx, by] = w.q, ox = -w.nx * T, oy = -w.ny * T;   // the wall's thickness goes back into the bank
+      const inward = [w.nx, 0, -w.ny];
+      fix([ax, w.zf0 - 0.3, -ay], [bx, w.zf1 - 0.3, -by], [bx, w.zl1 + par, -by], [ax, w.zl0 + par, -ay], WALL, inward);
+      fix([ax, w.zl0 + par, -ay], [bx, w.zl1 + par, -by], [bx + ox, w.zl1 + par, -(by + oy)], [ax + ox, w.zl0 + par, -(ay + oy)], CAP, [0, 1, 0]);
+      if (par > 0.3) fix([ax + ox, w.zl0 - 0.2, -(ay + oy)], [bx + ox, w.zl1 - 0.2, -(by + oy)], [bx + ox, w.zl1 + par, -(by + oy)], [ax + ox, w.zl0 + par, -(ay + oy)], WALL, inward.map((v) => -v));
+    }
+    for (const p of CUTS ? CUTS.portals : []) {
+      if (!(p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1)) continue;
+      // the mouth: a dark opening the width of the road in the end wall, under a concrete lintel band
+      const h = Math.min(p.depth - 0.5, p.w > 7 ? 5.6 : 4.8), hw = p.w / 2 + 0.3, nx = -p.uy, ny = p.ux, bx = p.x - p.ux * 0.06, by = p.y - p.uy * 0.06;
+      const want = [-p.ux, 0, p.uy];
+      fix([bx + nx * hw, p.z - 0.2, -(by + ny * hw)], [bx - nx * hw, p.z - 0.2, -(by - ny * hw)], [bx - nx * hw, p.z + h, -(by - ny * hw)], [bx + nx * hw, p.z + h, -(by + ny * hw)], DARK, want);
+      const cx = p.x - p.ux * 0.12, cy = p.y - p.uy * 0.12, fh = 0.7, fw = hw + 0.6;
+      fix([cx + nx * fw, p.z + h, -(cy + ny * fw)], [cx - nx * fw, p.z + h, -(cy - ny * fw)], [cx - nx * fw, p.z + h + fh, -(cy - ny * fw)], [cx + nx * fw, p.z + h + fh, -(cy + ny * fw)], FRAME, want);
+    }
+  }
   addMesh(doc, scene, 'terrain', { POSITION: [sPos, 'VEC3'], NORMAL: [sN, 'VEC3'], TEXCOORD_0: [sUv, 'VEC2'], indices: [sIdx.subarray(0, sq)] }, gmat);
   totalTris += idx.length / 3;
   // buildings

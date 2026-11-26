@@ -304,11 +304,14 @@ export function createCars(ctx) {
           const k = Math.max(0, 1 - c.s / 10);
           if (k <= 0) { c.jx = c.jy = 0; } else { x += c.jx * k * k; y += c.jy * k * k; }
         }
-        let z;
-        if (l.deck) { const es = l.dir ? l.eL - (c.s / l.L) * l.eL : (c.s / l.L) * l.eL, dz = net.deckAt(l.e, es); z = Number.isFinite(dz) ? Math.max(dz, ground.at(x, y) + (l.vg ? 7 : 0)) : ground.at(x, y); }
-        else z = ground.at(x, y);
+        let z, pitch = NaN;
+        if (l.deck) {   // up on a bridge deck or a walled ramp: its measured level (never below the ground under it)
+          const es = l.dir ? l.eL - (c.s / l.L) * l.eL : (c.s / l.L) * l.eL, dz = net.deckAt(l.e, es);
+          z = Number.isFinite(dz) ? Math.max(dz, ground.at(x, y) + (l.vg ? 7 : 0)) : ground.at(x, y);
+          if (Number.isFinite(dz)) { const f = net.deckAt(l.e, es + 2.5), b = net.deckAt(l.e, es - 2.5); if (Number.isFinite(f) && Number.isFinite(b)) pitch = Math.atan2((f - b) * (l.dir ? -1 : 1), 5); }
+        } else z = ground.at(x, y);
         // pitch along the slope (Lisbon's hills), looked up 2.5 m ahead and behind
-        const pitch = l.deck ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
+        if (!Number.isFinite(pitch)) pitch = l.deck && l.vg ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
         const d = Math.hypot(x - cx, z - cy, -y - cz);
         const infl = Math.min(MAX_INFL, Math.max(1, (MIN_PX * pxK * d) / CAR_L));
         P[n * 4] = x; P[n * 4 + 1] = z + 0.05; P[n * 4 + 2] = -y; P[n * 4 + 3] = Math.atan2(a.hx, a.hy);
