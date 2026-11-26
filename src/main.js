@@ -121,10 +121,10 @@ function base(a) {
       for (const o of [...g.scene.children]) {
         const m = /^f([tb])_(\d+)_(\d+)$/.exec(o.name), t = m && tileAt.get(`${a.area}:${m[2]}_${m[3]}`);
         if (!t || !o.isMesh) continue;
-        if (m[1] === 't') { const map = o.material.map; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.anisotropy = 4; o.material = terrainMaterial(map, a.mask, a.bounds); }
+        if (m[1] === 't') { const map = o.material.map; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.anisotropy = maxAniso; o.material = terrainMaterial(map, a.mask, a.bounds); }
         else { o.material = farBuildingMat; }
-        o.receiveShadow = true; o.visible = t.state !== 2;
-        t.far.push(o); scene.add(o);
+        o.receiveShadow = true;
+        (m[1] === 't' ? t.farT : t.farB).push(o); o.visible = m[1] === 't' ? t.mode !== 'full' : t.state !== 2; scene.add(o);
       }
     }
   })());
@@ -139,16 +139,17 @@ function wake(a) {
   })());
 }
 
-const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, obj: null, bal: null, far: [] })));   // state 0 idle, 1 loading, 2 shown
+const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, mode: null, obj: null, bal: null, farT: [], farB: [] })));   // state 0 idle, 1 loading, 2 shown; mode 'full' (own ground) or 'mid' (buildings over the far ground)
 for (const t of tiles) tileAt.set(`${t.a.area}:${t.t.i}_${t.t.j}`, t);
 const areaDist = (a) => rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], controls.target.x, -controls.target.z);
 let farReady = null;   // started once the camera is placed: nearest area first, the loading screen waits only for the one under the view
 const startFar = () => { const order = [...AREAS].sort((p, q) => areaDist(p) - areaDist(q)); farReady = base(order[0]).catch((e) => console.error(e)); (async () => { for (const a of order.slice(1)) await base(a).catch((e) => console.error(e)); })(); };
-const showFar = (t, v) => { for (const o of t.far) o.visible = v; };
-function adopt(tile, gltf) {
-  const { a } = tile;
+const showFar = (t) => { for (const o of t.farT) o.visible = t.state !== 2 || t.mode !== 'full'; for (const o of t.farB) o.visible = t.state !== 2; };
+function adopt(tile, gltf, mode) {
+  const { a } = tile, strip = [];
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
+    if (mode === 'mid' && o.name.startsWith('terrain')) { strip.push(o); return; }
     if (o.name.startsWith('buildings')) {
       const g = o.geometry;
       if (!g.attributes._info || !g.attributes._style) throw new Error(`stale tile ${o.name}`);
@@ -159,11 +160,14 @@ function adopt(tile, gltf) {
       o.castShadow = o.receiveShadow = true;
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
-      map.anisotropy = Math.min(8, maxAniso); map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
+      map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
       o.material = terrainMaterial(map, a.mask, a.bounds);
       o.receiveShadow = true;
     }
   });
+  // a mid-distance tile keeps only its buildings: the ground there is the far level's (its 0.5 m texture would cost ~4 MB of
+  // video memory per tile for a few hundred pixels on screen)
+  for (const o of strip) { o.parent.remove(o); o.geometry.dispose(); o.material.map?.image?.close?.(); o.material.map?.dispose(); o.material.dispose(); }
   return gltf.scene;
 }
 function dispose(tile) {
@@ -179,22 +183,33 @@ function dispose(tile) {
   }
   const i = balconyChunks.indexOf(tile.bal); if (i >= 0) balconyChunks.splice(i, 1);
   dropDetail(tile);
-  tile.obj = tile.bal = null; tile.state = 0; showFar(tile, true);
+  tile.obj = tile.bal = null; tile.state = 0; tile.mode = null; showFar(tile);
 }
-async function load(tile) {
-  tile.state = 1; const gen = (tile.gen = (tile.gen || 0) + 1);
+async function load(tile, mode) {
+  const upgrade = tile.state === 2;   // mid → full: the mid copy stays on screen until the full one is in
+  tile.state = upgrade ? 2 : 1; tile.loading = mode; const gen = (tile.gen = (tile.gen || 0) + 1);
+  const drop = (o) => o.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); if (m.material !== matBuildings) { m.material.map?.dispose(); m.material.dispose(); } } });
   try {
     await wake(tile.a);
     const gltf = await loader.loadAsync(url(tile.a, tile.t.file));
-    if (tile.state !== 1 || tile.gen !== gen) { tile.obj = gltf.scene; tile.bal = null; const st = tile.state; dispose(tile); tile.state = st; return; }   // dropped while in flight
-    tile.obj = adopt(tile, gltf); scene.add(tile.obj);
-    tile.state = 2; showFar(tile, false);
-  } catch (e) { console.error(e); if (tile.gen === gen) tile.state = 0; tile.failed = (tile.failed || 0) + 1; }
+    if (tile.gen !== gen || tile.state === 0) { drop(gltf.scene); return; }   // dropped or superseded while in flight
+    const obj = adopt(tile, gltf, mode);
+    if (tile.obj) { scene.remove(tile.obj); drop(tile.obj); }
+    tile.obj = obj; scene.add(obj);
+    tile.state = 2; tile.mode = mode; showFar(tile);
+  } catch (e) { console.error(e); if (tile.gen === gen && !upgrade) tile.state = 0; tile.failed = (tile.failed || 0) + 1; }
+  finally { if (tile.gen === gen) tile.loading = null; }
+}
+// full → mid when the view moves away: drop the ground and its texture, keep the buildings
+function downgrade(tile) {
+  const strip = []; tile.obj.traverse((o) => { if (o.isMesh && o.name.startsWith('terrain')) strip.push(o); });
+  for (const o of strip) { o.parent.remove(o); o.geometry.dispose(); o.material.map?.dispose(); o.material.dispose(); }
+  tile.mode = 'mid'; showFar(tile); invalidate(true);
 }
 // façade relief (cornices, string courses, cunhais) and balconies: separate files per tile, only within ~900 m of the camera
 function dropDetail(t) { if (t.detail) { scene.remove(t.detail); t.detail.traverse((m) => m.isMesh && m.geometry.dispose()); } t.detail = null; t.dstate = 0; }
+let DR = 900;   // façade relief and balconies: set per frame from the camera height (see stream)
 function detail(t, d) {
-  const DR = 900 * lodK;
   if (t.state !== 2 || !(t.t.detail || t.t.balconies)) return;
   if (!ready || inflight > 1) { if (d > DR + 400 && t.dstate) dropDetail(t); return; }   // near-only detail waits until the city is on screen and its tiles are in
   if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
@@ -209,30 +224,42 @@ function detail(t, d) {
   }).catch(() => { t.dstate = 0; });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
-const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);   // beyond this the far level of detail stands in
+const nearR = (dist) => THREE.MathUtils.clamp(dist * 0.4 + 600, 900, 1450);   // tiles with their own 0.5 m ground
+// beyond that, out to ~3× as far, tiles keep their full buildings (window grids, roofs, colours) over the far ground; only past
+// this do the plain far blocks stand in. Phones get 60 % of it.
+const midR = (dist) => THREE.MathUtils.clamp(dist * 1.15 + 700, 1450, 4400) * (isMobile ? 0.6 : 1);
+const _fwd = new THREE.Vector3();
+window.__stream = () => stream(true);   // for checks: stream without waiting for frames
+window.__tileStats = () => tiles.reduce((o, t) => { const k = t.state === 2 ? t.mode : t.state ? 'loading' : 'idle'; o[k] = (o[k] || 0) + 1; return o; }, {});
 const rectDist = (b, x, y) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - y, 0, y - b[3]));
-let inflight = 0, lodK = 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
+const LOD_PIN = +new URLSearchParams(location.search).get('lod') || 0;   // ?lod=1 pins it, for checks on slow test machines
+let inflight = 0, lodK = LOD_PIN || 1;   // lodK scales detail distances; drops on devices that stay slow at dpr 1
 function stream(force) {
   const x = controls.target.x, y = -controls.target.z, dist = camera.position.distanceTo(controls.target);
-  const R = nearR(dist) * (0.75 + 0.25 * lodK);
+  const R = nearR(dist) * (0.75 + 0.25 * lodK), M = midR(dist) * (0.5 + 0.5 * lodK);
+  DR = THREE.MathUtils.clamp(700 + camera.position.y * 0.9, 900, 2700) * lodK;   // relief and balconies reach further as the view rises
+  camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
   const want = [];
   for (const t of tiles) {
     const d = rectDist(t.b, x, y);
     detail(t, rectDist(t.b, camera.position.x, -camera.position.z));
-    if (d > R + 900 && t.state === 2) dispose(t);
-    else if (d > R + 900 && t.state === 1) t.state = 0;
-    else if (d <= R && t.state === 0 && (t.failed || 0) < 3) want.push([d, t]);
+    if (t.state === 2 && d > M + 900) { dispose(t); continue; }
+    if (t.state === 1 && d > M + 900) { t.state = 0; t.gen = (t.gen || 0) + 1; t.loading = null; continue; }
+    if (t.state === 2 && t.mode === 'full' && !t.loading && d > R + 900) downgrade(t);
+    if ((t.failed || 0) >= 3 || t.loading) continue;
+    if (d <= R && (t.state === 0 || (t.state === 2 && t.mode === 'mid'))) want.push([d, t, 'full']);
+    else if (d <= M && t.state === 0 && ((t.b[0] + t.b[2]) / 2 - cx) * fx + ((t.b[1] + t.b[3]) / 2 - cy) * fy > -400) want.push([d + 400, t, 'mid']);   // mid tiles only ahead of the camera
   }
   want.sort((p, q) => p[0] - q[0]);
-  for (const [, t] of want) {
+  for (const [, t, mode] of want) {
     if (inflight >= (force ? 8 : 4)) break;
-    inflight++; load(t).finally(() => { inflight--; tick(); });
+    inflight++; load(t, mode).finally(() => { inflight--; tick(); });
   }
   return want.length;
 }
 // tiles near the view that are not on screen yet (the loading screen waits for these)
 const pending = () => { const x = controls.target.x, y = -controls.target.z, R = Math.min(nearR(camera.position.distanceTo(controls.target)), 2000);
-  return tiles.filter((t) => t.state !== 2 && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R).length; };
+  return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R).length; };
 
 // trees: instanced, in chunks with three levels of detail (sculpted near 230 m, lobed to 760 m, a single lobe beyond)
 const treeChunks = [], treeHi = [];
@@ -494,12 +521,12 @@ function setTime(h) {
   cityUniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(elev, -0.04, 0.1);
   const golden = 1 - THREE.MathUtils.smoothstep(elev, 0.05, 0.5);
   sun.color.copy(noon).lerp(warm, golden);
-  sun.intensity = 3.1 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);
+  sun.intensity = 3.5 * THREE.MathUtils.smoothstep(elev, -0.02, 0.12);   // a Lisbon sun: hard light, shade about a third of it
   const night = cityUniforms.uNight.value;
   document.body.classList.toggle('night', night > 0.5);
   // night: cool moonlit sky light, no warm ground bounce; the warmth comes from the windows
   hemi.color.set(0xdfeaff).lerp(moonSky, night); hemi.groundColor.set(0xb59a7c).lerp(moonGround, night);
-  hemi.intensity = (0.3 + 0.35 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6)) * (1 - 0.5 * night);
+  hemi.intensity = (0.24 + 0.27 * THREE.MathUtils.smoothstep(elev, -0.1, 0.6)) * (1 - 0.5 * night);
   scene.environmentIntensity = (0.22 + 0.22 * THREE.MathUtils.smoothstep(elev, -0.1, 0.5)) * (1 - 0.85 * night);
   renderer.toneMappingExposure = 0.88 + 0.22 * golden;
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
@@ -605,7 +632,7 @@ renderer.setAnimationLoop((now) => {
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
   fitShadow();
   if (++nf % 12 === 0 || !ready) stream(!ready);
-  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < 900 * lodK;
+  for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
@@ -626,7 +653,7 @@ renderer.setAnimationLoop((now) => {
     const fps = frames / acc;
     if (ready && introT >= 1) {
       if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
-      else if (fps < 45 && lodK > 0.55) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
+      else if (fps < 45 && lodK > 0.55 && !LOD_PIN) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
     }
     if (SHOW_STATS) statsEl.textContent = `${fps.toFixed(0)} fps · dpr ${pixelRatio}\n${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris`;
