@@ -365,8 +365,8 @@
     2391.6941382635796,
     584.6225301362629
    ],
-   "bytes": 86204,
-   "balconies": null,
+   "bytes": 86800,
+   "balconies": "bal_0_3.bin",
    "detail": "d_0_3.glb"
   },
   {
@@ -477,7 +477,7 @@
     2391.6941382635796,
     1084.6225301362629
    ],
-   "bytes": 386836,
+   "bytes": 389420,
    "balconies": "bal_0_4.bin",
    "detail": "d_0_4.glb"
   },
@@ -491,7 +491,7 @@
     2891.6941382635796,
     1084.6225301362629
    ],
-   "bytes": 52864,
+   "bytes": 53348,
    "balconies": null,
    "detail": null
   },
@@ -589,7 +589,7 @@
     2391.6941382635796,
     1415.377469864526
    ],
-   "bytes": 312396,
+   "bytes": 317484,
    "balconies": "bal_0_5.bin",
    "detail": "d_0_5.glb"
   },
@@ -603,7 +603,7 @@
     2891.6941382635796,
     1415.377469864526
    ],
-   "bytes": 104652,
+   "bytes": 105308,
    "balconies": "bal_1_5.bin",
    "detail": "d_1_5.glb"
   },
@@ -617,7 +617,7 @@
     3391.6941382635796,
     1415.377469864526
    ],
-   "bytes": 34588,
+   "bytes": 34596,
    "balconies": null,
    "detail": null
   },
@@ -695,24 +695,24 @@
  "stats": {
   "authored": 1,
   "buildings": 209,
-  "lidar": 0,
-  "height": 15,
-  "levels": 42,
-  "estimated": 151,
-  "planar": 127,
-  "skeleton": 15,
-  "flat": 65,
+  "lidar": 189,
+  "height": 2,
+  "levels": 3,
+  "estimated": 14,
+  "planar": 132,
+  "skeleton": 16,
+  "flat": 60,
   "skeletonFail": 0,
   "parts": 168,
   "skippedOutlines": 16,
   "partyEdges": 185,
-  "balconies": 1290,
+  "balconies": 824,
   "statues": 0,
   "wallsM": 4792.734140578423,
   "pillars": 0,
-  "chimneys": 165,
+  "chimneys": 141,
   "thinParts": 21,
-  "dormers": 32,
+  "dormers": 16,
   "churches": 1,
   "landmarks": 3,
   "trams": 0,
@@ -732,14 +732,14 @@
   "lamps": 336,
   "cars": 684,
   "water": 0.9445,
-  "bytes": 3383914,
-  "detailTris": 20072,
-  "triangles": 387158
+  "bytes": 3351426,
+  "detailTris": 17638,
+  "triangles": 384893
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T01:23:41.903Z",
+ "built": "2026-11-26T05:23:24.394Z",
  "far": {
-  "bytes": 136056,
+  "bytes": 136624,
   "tris": 37062
  }
 }

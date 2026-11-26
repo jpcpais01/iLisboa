@@ -29,7 +29,7 @@
     2391.6941382635796,
     -6576.887349320264
    ],
-   "bytes": 73452,
+   "bytes": 76004,
    "balconies": null,
    "detail": null
   },
@@ -43,7 +43,7 @@
     2891.6941382635796,
     -6576.887349320264
    ],
-   "bytes": 66540,
+   "bytes": 68068,
    "balconies": null,
    "detail": null
   },
@@ -57,7 +57,7 @@
     3391.6941382635796,
     -6576.887349320264
    ],
-   "bytes": 67536,
+   "bytes": 68852,
    "balconies": null,
    "detail": null
   },
@@ -113,7 +113,7 @@
     5391.69413826358,
     -6576.887349320264
    ],
-   "bytes": 111508,
+   "bytes": 113128,
    "balconies": "bal_6_0.bin",
    "detail": "d_6_0.glb"
   },
@@ -127,7 +127,7 @@
     5675.082414790893,
     -6576.887349320264
    ],
-   "bytes": 92288,
+   "bytes": 92936,
    "balconies": "bal_7_0.bin",
    "detail": "d_7_0.glb"
   },
@@ -197,7 +197,7 @@
     4391.69413826358,
     -6076.887349320264
    ],
-   "bytes": 74092,
+   "bytes": 75028,
    "balconies": null,
    "detail": "d_4_1.glb"
   },
@@ -211,7 +211,7 @@
     4891.69413826358,
     -6076.887349320264
    ],
-   "bytes": 99132,
+   "bytes": 102628,
    "balconies": "bal_5_1.bin",
    "detail": "d_5_1.glb"
   },
@@ -225,7 +225,7 @@
     5391.69413826358,
     -6076.887349320264
    ],
-   "bytes": 295024,
+   "bytes": 301808,
    "balconies": "bal_6_1.bin",
    "detail": "d_6_1.glb"
   },
@@ -239,7 +239,7 @@
     5675.082414790893,
     -6076.887349320264
    ],
-   "bytes": 246412,
+   "bytes": 250956,
    "balconies": "bal_7_1.bin",
    "detail": "d_7_1.glb"
   },
@@ -309,7 +309,7 @@
     4391.69413826358,
     -5576.887349320264
    ],
-   "bytes": 77920,
+   "bytes": 79476,
    "balconies": "bal_4_2.bin",
    "detail": "d_4_2.glb"
   },
@@ -323,7 +323,7 @@
     4891.69413826358,
     -5576.887349320264
    ],
-   "bytes": 132608,
+   "bytes": 137024,
    "balconies": "bal_5_2.bin",
    "detail": "d_5_2.glb"
   },
@@ -337,7 +337,7 @@
     5391.69413826358,
     -5576.887349320264
    ],
-   "bytes": 800400,
+   "bytes": 811632,
    "balconies": "bal_6_2.bin",
    "detail": "d_6_2.glb"
   },
@@ -351,7 +351,7 @@
     5675.082414790893,
     -5576.887349320264
    ],
-   "bytes": 439280,
+   "bytes": 446196,
    "balconies": "bal_7_2.bin",
    "detail": "d_7_2.glb"
   },
@@ -435,7 +435,7 @@
     4891.69413826358,
     -5076.887349320264
    ],
-   "bytes": 50040,
+   "bytes": 49600,
    "balconies": null,
    "detail": null
   },
@@ -449,7 +449,7 @@
     5391.69413826358,
     -5076.887349320264
    ],
-   "bytes": 175508,
+   "bytes": 176792,
    "balconies": "bal_6_3.bin",
    "detail": "d_6_3.glb"
   },
@@ -463,7 +463,7 @@
     5675.082414790893,
     -5076.887349320264
    ],
-   "bytes": 234936,
+   "bytes": 236640,
    "balconies": "bal_7_3.bin",
    "detail": "d_7_3.glb"
   },
@@ -575,7 +575,7 @@
     5675.082414790893,
     -4576.887349320264
    ],
-   "bytes": 31948,
+   "bytes": 31664,
    "balconies": null,
    "detail": null
   },
@@ -695,25 +695,25 @@
  "stats": {
   "authored": 2,
   "buildings": 3149,
-  "lidar": 0,
+  "lidar": 1946,
   "height": 1,
-  "levels": 218,
-  "estimated": 2928,
-  "planar": 1281,
-  "skeleton": 74,
-  "flat": 1792,
+  "levels": 26,
+  "estimated": 1174,
+  "planar": 1309,
+  "skeleton": 69,
+  "flat": 1769,
   "skeletonFail": 0,
   "parts": 22,
   "skippedOutlines": 5,
   "partyEdges": 8061,
-  "balconies": 3795,
+  "balconies": 1546,
   "statues": 3,
   "wallsM": 5209.10854602125,
   "pillars": 0,
-  "chimneys": 1443,
+  "chimneys": 1231,
   "sawtooth": 1,
   "churches": 2,
-  "dormers": 33,
+  "dormers": 4,
   "landmarks": 3,
   "trams": 0,
   "tramPoles": 0,
@@ -731,14 +731,14 @@
   "lamps": 983,
   "cars": 1894,
   "water": 0.8473,
-  "bytes": 6501975,
-  "detailTris": 111007,
-  "triangles": 537215
+  "bytes": 6302187,
+  "detailTris": 95146,
+  "triangles": 522597
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T01:16:42.100Z",
+ "built": "2026-11-26T05:52:55.367Z",
  "far": {
-  "bytes": 347484,
+  "bytes": 349464,
   "tris": 55139
  }
 }
