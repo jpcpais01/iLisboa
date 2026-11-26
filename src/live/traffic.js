@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { buildRibbons, drape, ribbonMaterial } from './ribbons.js';
 import { lisbonNow } from './clock.js';
+import { getFlow } from './flow.js';
 
 const POLL = 180000;
 // Google-like palette
@@ -13,7 +14,7 @@ const colorFor = (r, out) => r < 0.25 ? out.copy(C[0]) : r < 0.5 ? out.copy(C[1]
 const W = [1.25, 1.1, 1.0, 0.85, 0.72, 0.62, 0.55];   // band width by road class, motorway first
 
 // rush-hour hot spots (lon, lat → local metres at runtime): where Lisbon queues every working day
-const HOT = [
+export const HOT = [
   [-9.1500, 38.7253, 700, 1.0],  // Marquês de Pombal / Fontes Pereira de Melo
   [-9.1458, 38.7195, 900, 0.7],  // Av. da Liberdade
   [-9.1700, 38.7580, 1600, 1.0], // 2.ª Circular west
@@ -26,11 +27,19 @@ const HOT = [
   [-9.1600, 38.7470, 900, 0.7],  // Praça de Espanha / Sete Rios
 ];
 
+// congestion pressure for Lisbon right now (0 empty … 1 gridlock)
+export function pressure() {
+  const { h: hh, weekend: wkd } = lisbonNow(), h = hh % 24;
+  const g = (c, w) => Math.exp(-((h - c) ** 2) / (2 * w * w));
+  if (wkd) return 0.08 + 0.32 * g(13, 2.6) + 0.22 * g(18.5, 1.6);
+  return 0.05 + 0.78 * g(8.75, 0.75) + 0.88 * g(18.4, 1.05) + 0.3 * g(13.3, 1.4);
+}
+
 export function createTraffic(ctx) {
   const { scene, ground, ll } = ctx;
   const group = new THREE.Group(); group.visible = false; scene.add(group);
   const mat = ribbonMaterial({ px: 2.4, minW: 1.4, opacity: 0.9, casing: 0.58 });
-  let mesh = null, roads = null, source = '', timer = 0, on = false, lastDrape = -1, error = '', when = 0;
+  let mesh = null, roads = null, source = '', shownT = 0, timer = 0, on = false, lastDrape = -1, error = '', when = 0;
   const hot = HOT.map(([lon, lat, r, k]) => { const v = ll(lat, lon); return [v.x, -v.z, r, k]; });
 
   function setMesh(lines) {
@@ -58,13 +67,6 @@ export function createTraffic(ctx) {
     return (roads = out);
   }
 
-  // congestion pressure for Lisbon right now (0 empty … 1 gridlock)
-  function pressure() {
-    const { h: hh, weekend: wkd } = lisbonNow(), h = hh % 24;
-    const g = (c, w) => Math.exp(-((h - c) ** 2) / (2 * w * w));
-    if (wkd) return 0.08 + 0.32 * g(13, 2.6) + 0.22 * g(18.5, 1.6);
-    return 0.05 + 0.78 * g(8.75, 0.75) + 0.88 * g(18.4, 1.05) + 0.3 * g(13.3, 1.4);
-  }
   function colourTypical() {
     const P = pressure(), t = Date.now() / 600000;   // drifts over ~10 min so the map breathes
     const ca = mesh.geometry.attributes.aColor.array, f = mesh.geometry.userData.first, c = new THREE.Color();
@@ -80,15 +82,16 @@ export function createTraffic(ctx) {
     if (!on) return;
     if (document.visibilityState === 'visible') {
       try {
-        const r = await fetch('/api/traffic');
-        const d = r.ok ? await r.json() : { source: 'none' };
+        const d = await getFlow();
         if (d.source === 'tomtom' && d.segs?.length) {
+          if (d.t === shownT && source === 'tomtom') { timer = setTimeout(poll, POLL); return; }   // same city as on screen (shared, cached feed)
+          shownT = d.t;
           const c = new THREE.Color();
           setMesh(d.segs.filter((s) => s[1] <= 5).map((s) => {
             const pts = []; for (let i = 2; i + 1 < s.length; i += 2) pts.push([s[i], s[i + 1]]);
             return { pts, color: colorFor(s[0] / 100, c).toArray(), w: W[s[1]] ?? 0.6, off: 0.55 };   // drawn on its side of the road, like a map
           }));
-          source = 'tomtom'; when = Date.now(); error = '';
+          source = 'tomtom'; when = d.t ? d.t * 1000 : Date.now(); error = '';
         } else {
           if (source !== 'typical') { const rs = await loadRoads(); setMesh(rs.map((r) => ({ pts: r.pts, w: W[r.cls] }))); source = 'typical'; }
           colourTypical(); when = Date.now();

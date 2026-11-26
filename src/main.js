@@ -572,7 +572,7 @@ controls.addEventListener('end', () => {
   history.replaceState(null, '', '#' + v.join(','));
 });
 // live layers (traffic, transport, planes): separate module, off until toggled
-const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase }); window.__live = live;
+const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, minY, maxX, maxY }, chase, night: cityUniforms.uNight, mobile: isMobile, lod: () => lodK }); window.__live = live;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
@@ -603,7 +603,8 @@ renderer.setAnimationLoop((now) => {
   if (moving) stillN = 0; else stillN++;
   let resized = false;   // a resized canvas is blank until drawn, so it is drawn this frame
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
-  if (!active && !resized && curRatio === pixelRatio && idleN % 4) { if (++nf % 12 === 0) stream(false); last = now; return; }
+  // a still view renders at a quarter rate, or half (30 fps) while the ambient cars drive
+  if (!active && !resized && curRatio === pixelRatio && idleN % (live.cars.count ? 2 : 4)) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);

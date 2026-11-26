@@ -7,6 +7,7 @@ import { beaconUniforms } from './beacons.js';
 import { createTraffic } from './traffic.js';
 import { createTransit } from './transit.js';
 import { createPlanes } from './planes.js';
+import { createCars } from './cars.js';
 
 const LAYERS = [
   { key: 'traffic', label: 'Trânsito', icon: '<rect x="7.5" y="2.5" width="9" height="19" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>' },
@@ -14,10 +15,12 @@ const LAYERS = [
   { key: 'planes', label: 'Aviões', icon: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l7 4v2l-7-2v5l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-5l-7 2v-2l7-4V3.5z"/>' },
 ];
 
-export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase }) {
+export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, night = { value: 0 }, mobile = false, lod = () => 1 }) {
   const ground = createGround(scene, bounds);
   const ctx = { scene, ground, ll, status: () => renderStatus() };
   const layers = { traffic: createTraffic(ctx), transit: createTransit(ctx), planes: createPlanes(ctx) };
+  // ambient cars: always on, no toggle; their numbers and speeds follow the live traffic
+  const cars = createCars({ scene, ground, ll, camera, canvas, night, mobile, lod });
 
   // ─── UI: a stack of toggles, a status line under each, a traffic legend ───
   const panel = document.createElement('nav');
@@ -51,17 +54,19 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase })
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 400) return;
     const r = canvas.getBoundingClientRect(), v = new THREE.Vector3();
     let best = null, bd = e.pointerType === 'touch' ? 34 : 26;   // a fingertip is less precise than a cursor
-    for (const { key } of LAYERS) {
-      if (!layers[key].on) continue;
-      for (const c of layers[key].pickables()) {
+    for (const { key } of [...LAYERS, { key: 'cars' }]) {
+      const src = key === 'cars' ? cars : layers[key];
+      if (key !== 'cars' && !src.on) continue;
+      for (const c of src.pickables()) {
         v.set(...c.pos).project(camera);
         if (v.z > 1) continue;
         const sx = r.left + ((v.x + 1) / 2) * r.width, sy = r.top + ((1 - v.y) / 2) * r.height, d = Math.hypot(sx - e.clientX, sy - e.clientY);
-        if (d < bd) { bd = d; best = { ...c, key }; }
+        const dd = key === 'cars' ? d * 1.8 : d;   // a bus, tram or plane wins over a passing car
+        if (dd < bd) { bd = dd; best = { ...c, key }; }
       }
     }
     if (!best) { if (!followed) card.hidden = true; return; }   // while following, a stray tap on the map does not end it
-    if (best.id != null && layers[best.key].track) startFollow(best.key, best.id);
+    if (best.id != null && layers[best.key]?.track) startFollow(best.key, best.id);
     else showCard(best.key, best.info(), false);
   });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && followed) stopFollow(); });
@@ -132,9 +137,10 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase })
     // called on every rendered frame; the viewer renders at a lower rate when still, so time is measured here
     update(_dt, now) {
       const dt = Math.min(0.5, last ? (now - last) / 1000 : 0); last = now;
-      const any = layers.traffic.on || layers.transit.on || layers.planes.on;
-      if (!any) { if (chase.busy) ground.scan(now); return; }   // drive mode follows with every layer off: still needs the ground
       ground.scan(now);
+      cars.update(dt, now);
+      const any = layers.traffic.on || layers.transit.on || layers.planes.on;
+      if (!any) return;
       // on-screen widths: metres per CSS pixel at unit distance
       ribbonUniforms.uPx.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, canvas.clientHeight);
       beaconUniforms.uDpr.value = renderer.getPixelRatio();
@@ -142,7 +148,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase })
       if (followed && now - chipT > 500) { chipT = now; renderChip(false); }
       if (now - lastStatus > 5000) { lastStatus = now; renderStatus(); }
     },
-    layers, ground,
+    layers, ground, cars,
     get following() { return followed && { key: followed.key, id: followed.id }; },
     follow: startFollow, unfollow: stopFollow,
     // moving things on screen: the viewer keeps full frame rate (traffic alone is static and needs none)

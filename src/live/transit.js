@@ -73,6 +73,7 @@ export function createTransit(ctx) {
       if (bearing >= 0 && v.cum[v.cum.length - 1] < 1) v.head = (bearing * Math.PI) / 180;
       Object.assign(v, { kind, line, name, speed, age, fixAt: now - age, seen: now, rail });
       if (pattern && v.pattern !== pattern) { v.pattern = pattern; v.dest = null; }
+      v.deck = !!(net && ((sn && net.edges[sn.e].z) || (v.snap && net.edges[v.snap.e].z)));   // on (or onto) a bridge deck
     }
     for (const [k, v] of vehicles) if (!seen.has(k) && now - v.seen > 60) vehicles.delete(k);
   }
@@ -179,7 +180,11 @@ export function createTransit(ctx) {
       const h = v.hs, sx = Math.sin(h), sy = Math.cos(h);
       // drive on the right: buses keep to their lane, trams sit on the rail
       const off = v.rail ? 0 : 1.7, dx = v.x + sy * off, dy = v.y - sx * off;
-      const z = ground.at(dx, dy), zf = ground.at(dx + sx * 4, dy + sy * 4), zb = ground.at(dx - sx * 4, dy - sy * 4);
+      let z = ground.at(dx, dy), zf = ground.at(dx + sx * 4, dy + sy * 4), zb = ground.at(dx - sx * 4, dy - sy * 4);
+      if (v.deck) {   // up on the 25 de Abril or Vasco da Gama deck, not in the river
+        const d = net.snap(v.x, v.y, false, 20), dz = d && net.edges[d.e].z ? net.deckAt(d.e, d.s) : NaN;
+        if (Number.isFinite(dz) && dz > z) { z = dz; zf = zb = 0; }
+      }
       e.set(0, Math.PI / 2 - h, Math.atan2(zf - zb, 8)); q.setFromEuler(e);
       const tramLike = v.kind === 'tram' || v.kind === 'lift';
       v.rx = dx; v.ry = dy; v.rz = z;
