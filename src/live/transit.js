@@ -1,6 +1,7 @@
 // Public transport.
 //  · Carris buses, trams and lifts + Carris Metropolitana buses: LIVE GPS (via /api/transit, polled every 15 s).
-//    Each vehicle glides from where it was drawn to its newest fix over the next poll interval.
+//    Each vehicle is snapped onto its street (buses) or rail (trams, funiculars) and, between fixes, drives the
+//    shortest way along the network to its newest one (public/live/net.bin), keeping to the right-hand lane.
 //  · Metro de Lisboa: the Metro publishes no train positions, so trains run on a timetable model (real track and
 //    stations from OSM, typical headways by time of day, dwell at every station). Labelled "estimado".
 import * as THREE from 'three';
@@ -8,6 +9,7 @@ import { busGeometry, tramGeometry, metroGeometry } from './models.js';
 import { createBeacons } from './beacons.js';
 import { buildRibbons, drape, ribbonMaterial } from './ribbons.js';
 import { lisbonNow } from './clock.js';
+import { loadNetwork, measure, along } from './network.js';
 
 const POLL = 15000, MAXV = 1500;
 const COL = { bus: 0xf2a900, cm: 0xffd21f, tram: 0xd8402e, lift: 0xd8402e };
@@ -32,31 +34,49 @@ export function createTransit(ctx) {
       try {
         const r = await fetch('/api/transit');
         if (!r.ok) throw new Error(`${r.status}`);
-        ingest(await r.json()); lastOk = Date.now(); error = '';
+        await ingest(await r.json()); lastOk = Date.now(); error = '';
       } catch (e) { error = String(e.message || e); }
       ctx.status();
     }
     timer = setTimeout(poll, POLL);
   }
-  function ingest(d) {
+  let net = null, netReady = null;
+  const railOf = (kind) => kind === 'tram' || kind === 'lift';
+  async function ingest(d) {
+    if (!netReady) netReady = loadNetwork().then((n) => { net = n; }).catch((e) => console.warn('network', e));
+    await netReady;
     const now = performance.now() / 1000, seen = new Set();
     counts = {};
     for (const [kind, id, line, x, y, bearing, speed, age, name] of d.v) {
       seen.add(id); counts[kind] = (counts[kind] || 0) + 1;
+      const rail = railOf(kind), elevator = line === '54E';   // Santa Justa goes up, not along anything
+      // onto the network: rail for trams (falls back to streets where the rail isn't mapped), streets for buses
+      let sn = net && !elevator ? net.snap(x, y, rail, rail ? 30 : 45) || (rail ? net.snap(x, y, false, 45) : null) : null;
+      const tx = sn ? sn.x : x, ty = sn ? sn.y : y;
       let v = vehicles.get(id);
-      if (!v) { v = { id, x, y, fx: x, fy: y, tx: x, ty: y, t0: now, dur: 1, head: bearing >= 0 ? (bearing * Math.PI) / 180 : NaN }; vehicles.set(id, v); }
-      else if (Math.hypot(x - v.tx, y - v.ty) > 0.5) {
-        const jump = Math.hypot(x - v.x, y - v.y);
-        if (jump > 800) { v.fx = v.x = x; v.fy = v.y = y; }
-        else { v.fx = v.x; v.fy = v.y; }
-        if (jump > 4 && bearing < 0) v.head = Math.atan2(x - v.fx, y - v.fy);
-        v.tx = x; v.ty = y; v.t0 = now; v.dur = POLL / 1000 + 1;
+      if (!v) {
+        v = { id, x: tx, y: ty, path: [[tx, ty], [tx, ty]], cum: [0, 0], t0: now, dur: 1, snap: sn, head: bearing >= 0 ? (bearing * Math.PI) / 180 : NaN };
+        vehicles.set(id, v);
+      } else if (Math.hypot(tx - v.path[v.path.length - 1][0], ty - v.path[v.path.length - 1][1]) > 2) {
+        const straight = Math.hypot(tx - v.x, ty - v.y);
+        let path = null;
+        if (net && sn && straight < 1500) {
+          const onRail = rail && edgesRail(sn), from = net.snap(v.x, v.y, onRail, 12) || v.snap;
+          if (from) path = net.route(from, sn, onRail, Math.max(400, straight * 3));
+        }
+        if (!path) path = straight < 60 ? [[v.x, v.y], [tx, ty]] : [[tx, ty], [tx, ty]];   // no way along the network: short hop or reappear
+        const cum = measure(path), L = cum[cum.length - 1];
+        // GPS jitter backwards along the street: hold position rather than U-turn on the spot
+        const back = L < 25 && isFinite(v.head) && path.length > 1 && Math.sin(v.head) * (path[path.length - 1][0] - path[0][0]) + Math.cos(v.head) * (path[path.length - 1][1] - path[0][1]) < 0;
+        if (!back) { v.path = path; v.cum = cum; v.t0 = now; v.dur = POLL / 1000 + 1; v.snap = sn; }
       }
-      if (bearing >= 0) v.head = (bearing * Math.PI) / 180;
-      Object.assign(v, { kind, line, name, speed, age, fixAt: now - age, seen: now });
+      if (bearing >= 0 && v.cum[v.cum.length - 1] < 1) v.head = (bearing * Math.PI) / 180;
+      Object.assign(v, { kind, line, name, speed, age, fixAt: now - age, seen: now, rail });
     }
     for (const [k, v] of vehicles) if (!seen.has(k) && now - v.seen > 60) vehicles.delete(k);
   }
+  // a snap found on the street fallback means the tram has to drive the streets there too
+  const edgesRail = (sn) => !!net && !!net.snap(sn.x, sn.y, true, 1);
 
   // ─── Metro (timetable model) ───
   let metro = null;
@@ -150,17 +170,19 @@ export function createTransit(ctx) {
     let nb = 0, nt = 0;
     beacons.begin();
     for (const v of vehicles.values()) {
-      const f = Math.min(1, (now - v.t0) / v.dur), ef = f * f * (3 - 2 * f) * 0.6 + f * 0.4;
-      v.x = v.fx + (v.tx - v.fx) * ef; v.y = v.fy + (v.ty - v.fy) * ef;
+      const f = Math.min(1, (now - v.t0) / v.dur), ef = f * f * (3 - 2 * f) * 0.6 + f * 0.4, L = v.cum[v.cum.length - 1];
+      along(v.path, v.cum, L * ef, v);
       const h = isFinite(v.head) ? v.head : 0, sx = Math.sin(h), sy = Math.cos(h);
-      const z = ground.at(v.x, v.y), zf = ground.at(v.x + sx * 4, v.y + sy * 4), zb = ground.at(v.x - sx * 4, v.y - sy * 4);
+      // drive on the right: buses keep to their lane, trams sit on the rail
+      const off = v.rail ? 0 : 1.7, dx = v.x + sy * off, dy = v.y - sx * off;
+      const z = ground.at(dx, dy), zf = ground.at(dx + sx * 4, dy + sy * 4), zb = ground.at(dx - sx * 4, dy - sy * 4);
       e.set(0, Math.PI / 2 - h, Math.atan2(zf - zb, 8)); q.setFromEuler(e);
       const tramLike = v.kind === 'tram' || v.kind === 'lift';
-      m.compose(p.set(v.x, z, -v.y), q, v.kind === 'lift' ? lift : one);
+      m.compose(p.set(dx, z, -dy), q, v.kind === 'lift' ? lift : one);
       col.setHex(BODY[v.kind]);
       if (tramLike) { if (nt < 200) { trams.setMatrixAt(nt, m); trams.setColorAt(nt, col); nt++; } }
       else if (nb < MAXV) { buses.setMatrixAt(nb, m); buses.setColorAt(nb, col); nb++; }
-      beacons.push(v.x, z, -v.y, cb.setHex(COL[v.kind]), tramLike ? 1.05 : 0.9);
+      beacons.push(dx, z, -dy, cb.setHex(COL[v.kind]), tramLike ? 1.05 : 0.9);
     }
     buses.count = nb; trams.count = nt;
     for (const x of [buses, trams]) { x.instanceMatrix.needsUpdate = true; if (x.instanceColor) x.instanceColor.needsUpdate = true; }
