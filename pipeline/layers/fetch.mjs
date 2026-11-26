@@ -115,7 +115,9 @@ try {
   const log = [];
   for (const reg of regions) {
     const c = by.get(norm(reg.name)) || [];
-    const pick = c.find((e) => (reg.lvl === 8 ? e.code.length === 6 : e.code.length === 4)) || c[0];
+    // only codes of the concelhos around the diorama (names repeat across the country: Alvalade, São Vicente, Seixal…)
+    const AREA = /^(1106|1107|1110|1111|1115|1116|1502|1503|1504|1506|1507|1510)/;
+    const pick = c.find((e) => AREA.test(e.code) && (reg.lvl === 8 ? e.code.length === 6 : e.code.length === 4));
     if (pick) { reg.ine = reg.ine || pick.code; reg.popIne = pick.pop; }
     log.push(`${reg.lvl} ${reg.name}: osm ${reg.popOsm} (${reg.popDate}) ine ${pick?.pop} ${pick?.code} [${c.length}]`);
   }
