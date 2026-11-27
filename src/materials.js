@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export const cityUniforms = { uNight: { value: 0 } };
+export const cityUniforms = { uNight: { value: 0 }, uBounce: { value: new THREE.Color(0, 0, 0) } };   // uBounce: sunlight bounced off the city (main.js setTime)
 // map overlay (src/layers/overlay.js): one texture draped over ground, walls and roofs alike (temperature, rain, freguesias)
 export const overlayUniforms = { uOv: { value: null }, uOvBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uOvK: { value: 0 }, uOvLev: { value: 0 }, uOvMode: { value: 0 }, uOvLift: { value: 0 } };
 
@@ -398,13 +398,13 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 export function terrainMaterial(map, mask, bounds, surf = false) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (s) => {
-    s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
+    s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight; s.uniforms.uBounce = cityUniforms.uBounce; Object.assign(s.uniforms, overlayUniforms);
     s.uniforms.uBounds = { value: new THREE.Vector4(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY) };
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight;${surf ? '\n#define SURF' : ''}`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight; uniform vec3 uBounce;${surf ? '\n#define SURF' : ''}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   vec2 muv = vec2((vWPos.x - uBounds.x) / (uBounds.z - uBounds.x), (-vWPos.z - uBounds.y) / (uBounds.w - uBounds.y));
   if (texture2D(uMask, muv).r > 0.5) discard;
@@ -420,23 +420,48 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
     // and the colour (map or photo) is left exactly as it is
     // crisp edges: the map is 0.5 m a texel, so kerbs and lawn edges blur over a metre up close. Where the class changes,
     // look half a texel either side along the class gradient and put a hard (anti-aliased) edge between the two surfaces.
-    float aR = diffuseColor.a, faR = fwidth(aR);
-    vec2 gUv = dFdx(vMapUv) * dFdx(aR) + dFdy(vMapUv) * dFdy(aR);
-    if (fw < .35 && dot(gUv, gUv) > 1e-14) {
-      vec2 dd = normalize(gUv) * .75 / vec2(textureSize(map, 0));
+    float aR = diffuseColor.a, faR = fwidth(aR); bool edged = false;
+    // the class gradient is measured in the texture itself (half a texel either side), not from screen derivatives: at a
+    // grazing view those swing from pixel to pixel and fanned the edge out into streaks towards the horizon
+    vec2 ts = 1. / vec2(textureSize(map, 0)), gUv = vec2(0.);
+    if (fw < .35) gUv = vec2(textureLod(map, vMapUv + vec2(ts.x * .5, 0.), 0.).a - textureLod(map, vMapUv - vec2(ts.x * .5, 0.), 0.).a,
+                             textureLod(map, vMapUv + vec2(0., ts.y * .5), 0.).a - textureLod(map, vMapUv - vec2(0., ts.y * .5), 0.).a);
+    if (fw < .35 && dot(gUv, gUv) > 4e-4) {
+      vec2 dd = normalize(gUv) * .75 * ts;
       vec4 c1 = textureLod(map, vMapUv + dd, 0.), c0 = textureLod(map, vMapUv - dd, 0.);
       float dA = c1.a - c0.a;
       if (abs(dA) > .06) {
         float f = clamp((aR - c0.a) / dA, 0., 1.), w = clamp(faR / abs(dA), .02, .5), sh = smoothstep(.5 - w, .5 + w, f);
         float kk = 1. - smoothstep(.15, .35, fw);
         diffuseColor.rgb = mix(diffuseColor.rgb, mix(c0.rgb, c1.rgb, sh), kk); diffuseColor.a = mix(aR, mix(c0.a, c1.a, sh), kk);
-        c = diffuseColor.rgb; L = dot(c, vec3(.3, .59, .11));
+        c = diffuseColor.rgb; L = dot(c, vec3(.3, .59, .11)); edged = true;
       }
     }
     float sa = diffuseColor.a * 255.;
     float wPave = 1. - smoothstep(14., 24., abs(sa - 255.)), wSett = 1. - smoothstep(14., 22., abs(sa - 215.));
     float wAsph = 1. - smoothstep(14., 22., abs(sa - 175.)), wGrass = 1. - smoothstep(4., 12., abs(sa - 135.));
     diffuseColor.a = 1.;
+    // road paint: the 0.3 m lines are a soft grey smear in the 0.5 m map; up close they are re-drawn as crisp white paint on
+    // clean asphalt (threshold half-way between the two, anti-aliased over one pixel)
+    float dLp = fwidth(L);
+    if (fw < .35) {
+      // up close the map's own texels (0.5 m, WebP blocks, soft baked shading) are what reads as smears and blobs: inside one
+      // surface take the colour from a coarser level of the map (~2 m), which is smooth, and let the world-space patterns below
+      // carry all the detail. Next to another surface (the coarse sample mixes classes) the full-res colour stays.
+      // Both are explicit-LOD bilinear reads: the hardware's anisotropic filter, at a grazing view, averages the texels along
+      // the line of sight and draws the map's little variations out into streaks running towards the horizon.
+      vec4 cLo = textureLod(map, vMapUv, 1.5), cHi = textureLod(map, vMapUv, 0.);
+      float kk = 1. - smoothstep(.15, .35, fw), same = 1. - smoothstep(.01, .12, abs(cLo.a - sa / 255.));
+      vec3 base = mix(c, mix(edged ? c : cHi.rgb, cLo.rgb, same), kk);
+      if (wAsph > .5) {
+        // road paint: the 0.3 m lines are a soft grey smear in the 0.5 m map; up close they are re-drawn as crisp white paint
+        // on clean asphalt (threshold half-way between the two, anti-aliased over one pixel)
+        float m = clamp((L - .4) / max(dLp * 1.5, 1e-4) + .5, 0., 1.), Lb = dot(base, vec3(.3, .59, .11));
+        vec3 asph = base * min(1., .16 / max(Lb, 1e-3));
+        base = mix(base, mix(asph, vec3(.58, .57, .53), m), kk * wAsph);
+      }
+      c = base; L = dot(c, vec3(.3, .59, .11));
+    }
 #else
     float wPave = smoothstep(.5, .62, L) * grey, wAsph = smoothstep(.31, .25, L) * smoothstep(.1, .15, L) * grey;
     float wSett = smoothstep(.22, .17, L) * grey * (1. - wAsph), wGrass = smoothstep(.02, .06, c.g - max(c.r, c.b));
@@ -476,7 +501,9 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
     // after dusk: streets and squares under the lamps, pools of warm light along the paved surfaces
     if (uNight > .01) tLit = grey * smoothstep(.1, .16, L) * (1. - wGrass) * (.1 + .38 * smoothstep(.4, .85, tvn(p / 9.)) + .08 * tvn(p / 2.7));
     // steep banks (the ground map smears there): Lisbon's retaining walls, coursed limestone with dark joints and rain streaks
-    vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
+    // the mesh's own normal: one rebuilt from screen derivatives of world position is noise at a grazing view (kilometres of
+    // coordinate, centimetres of step), and flicked flat street into 'retaining wall' in streaks
+    vec3 gn = normalize((vec4(vNormal, 0.) * viewMatrix).xyz);
     float steep = (1. - smoothstep(.5, .68, abs(gn.y))) * (1. - wGrass);
     if (steep > .001) {
       vec2 hz = normalize(vec2(-gn.z, gn.x) + 1e-4);
@@ -489,12 +516,17 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
       diffuseColor.rgb = mix(diffuseColor.rgb, wall * macro, steep);
     }
   }`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .68, .38) * tLit * uNight;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .68, .38) * tLit * uNight;')
+      // the height-field AO dims all indirect light in a street canyon, but the light bounced off the sunlit walls is not
+      // occluded by those walls, it comes from them: give the street floor that share back
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n#ifdef HF_AO_SET\nreflectedLight.indirectDiffuse += uBounce * BRDF_Lambert( diffuseColor.rgb ) * ( 1. - hfAO );\n#endif\n// and a floor of it everywhere: a street floor sees the lit walls across it, so shade on the ground is grey, not sky-blue black\nreflectedLight.indirectDiffuse += uBounce * BRDF_Lambert( diffuseColor.rgb ) * 1.5;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
-float th(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+// integer hash of a cell: the old fract(sin)-style float hash ran out of precision at city coordinates (cells of a few cm,
+// kilometres from the origin), which drew streaks along the street instead of grain
+float th(vec2 p) { uvec2 q = uvec2(ivec2(p) + 32768); q = q * 1664525u + 1013904223u; q.x += q.y * 1664525u; q.y += q.x * 1664525u; q ^= q >> 16u; q.x += q.y * 1664525u; q.y += q.x * 1664525u; q ^= q >> 16u; return float(q.x) * 2.3283064e-10; }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => `ilisboa-terrain-v9${surf ? 's' : ''}`;
+  m.customProgramCacheKey = () => `ilisboa-terrain-v12${surf ? 's' : ''}`;
   return m;
 }
 

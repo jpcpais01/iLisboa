@@ -619,7 +619,8 @@ let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today
 // paler shadows. Global light under cloud follows Kasten & Czeplak (G = G_clear·(1 − 0.75·c^3.4)); the direct beam goes
 // first (broken cloud hides the sun part of the time), the sky's diffuse share grows.
 let overcast = 0, lastH = 12;
-const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);   // always present: a light count change recompiles every shader
+const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);
+const _bounce = new THREE.Color(), CITY_TINT = new THREE.Color(1.0, 0.92, 0.82);   // always present: a light count change recompiles every shader
 function setOvercast(c) {
   if (Math.abs(c - overcast) < 0.02) return;
   overcast = c; setTime(lastH, true);
@@ -652,7 +653,13 @@ function setTime(h, now = false) {
     // (the clear-sky environment is blue; under a full deck part of it hands over to that neutral light)
     const day = Math.max(0, sunDir.y + 0.05) / (Math.abs(sunDir.y) + 0.3);
     scene.environmentIntensity = 1 - 0.45 * c * c;
-    cloudLight.intensity = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
+    // one bounce of sunlight off the city (ground and sunlit walls, albedo ~0.25, half the hemisphere of a street-level
+    // point): without it a street in shade is lit by the blue sky alone and goes near-black navy. Warm, as the city is.
+    const cloudI = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
+    const sunH = (st.sunColor.r + st.sunColor.g + st.sunColor.b) / 3 * beam * Math.max(0, sunDir.y), bounceI = 0.28 * sunH;
+    cloudLight.color.setRGB(0.91, 0.93, 0.95).multiplyScalar(cloudI).add(_bounce.copy(st.sunColor).multiplyScalar(1 / Math.max(1e-3, (st.sunColor.r + st.sunColor.g + st.sunColor.b) / 3)).multiply(CITY_TINT).multiplyScalar(bounceI));
+    cloudLight.intensity = 1;
+    cityUniforms.uBounce.value.copy(_bounce);
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
   };

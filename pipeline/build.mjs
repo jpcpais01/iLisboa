@@ -2178,7 +2178,26 @@ const GW = Math.round((maxX - minX) / 0.5), GH = Math.round((maxY - minY) / 0.5)
 let groundAO = null;   // the baked contact darkening, kept so the photo ground can paint without it
 let ground1 = await sharp(Buffer.from(gm.data.buffer), { raw: { width: gm.w, height: gm.h, channels: 3 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'lanczos3' }).raw().toBuffer();
 gm.data = null;
-const cls1 = await sharp(Buffer.from(gcls.buffer), { raw: { width: gm.w, height: gm.h, channels: 1 }, limitInputPixels: false }).resize(GW, GH, { kernel: 'nearest' }).raw().toBuffer();
+// the class raster is area-averaged (not nearest) down to the texture: edges then carry sub-texel coverage, so the shader's
+// threshold contour runs straight along a diagonal kerb instead of in 0.5 m stair steps (which read as stripes up close)
+const areaDown = (src, w, h, W, H) => {
+  const pass = (a, n, m, N, rows) => {   // average runs of length n -> N along the fast axis, for `rows` lines
+    const out = new Float32Array(N * rows), k = n / N;
+    for (let r = 0; r < rows; r++) for (let o = 0; o < N; o++) {
+      const s0 = o * k, s1 = s0 + k; let acc = 0;
+      for (let q = Math.floor(s0); q < Math.min(n, Math.ceil(s1)); q++) acc += a[r * n + q] * (Math.min(s1, q + 1) - Math.max(s0, q));
+      out[r * N + o] = acc / k;
+    }
+    return out;
+  };
+  const tr = (a, cols, rows) => { const t = new Float32Array(a.length); for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) t[c * rows + r] = a[r * cols + c]; return t; };
+  const hor = pass(src, w, 0, W, h);                    // h rows of W
+  const ver = pass(tr(hor, W, h), h, 0, H, W);          // W columns of H
+  const t = tr(ver, H, W), out = Buffer.alloc(W * H);
+  for (let i = 0; i < out.length; i++) out[i] = Math.round(t[i]);
+  return out;
+};
+const cls1 = areaDown(gcls, gm.w, gm.h, GW, GH);
 {
   const bm = new Raster(minX, minY, maxX, maxY, (maxX - minX) / GW);
   const mask = new Float32Array(bm.w * bm.h);
@@ -2186,7 +2205,7 @@ const cls1 = await sharp(Buffer.from(gcls.buffer), { raw: { width: gm.w, height:
   const ao = boxBlur(mask, bm.w, bm.h, 6, 3);
   groundAO = new Float32Array(GW * GH);
   for (let i = 0; i < GW * GH; i++) {
-    const k = 1 - Math.min(1, ao[i] * 1.15) * 0.42; groundAO[i] = k;
+    const k = 1 - Math.min(1, ao[i] * 1.15) * 0.2; groundAO[i] = k;   // light: real-time shadows and the city bounce do the rest (0.42 read as dark blobs at street level)
     ground1[i * 3] *= k; ground1[i * 3 + 1] *= k; ground1[i * 3 + 2] *= k;
   }
 }
@@ -2518,7 +2537,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   const tw = Math.max(16, Math.round((TEX_PX * (x1 - x0)) / 1000)), th = Math.max(16, Math.round((TEX_PX * (y1 - y0)) / 1000));   // TEX_PX per km
   const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } })
     .extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).sharpen({ sigma: 0.7, m1: 0.6, m2: 1.4 }).raw().toBuffer()
-    .then(async (rgb) => sharp(rgb, { raw: { width: tw, height: th, channels: 3 } }).joinChannel(await sharp(cls1, { raw: { width: GW, height: GH, channels: 1 } }).extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'nearest' }).raw().toBuffer(), { raw: { width: tw, height: th, channels: 1 } })
+    .then(async (rgb) => sharp(rgb, { raw: { width: tw, height: th, channels: 3 } }).joinChannel(await sharp(cls1, { raw: { width: GW, height: GH, channels: 1 } }).extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'nearest' }).extractChannel(0).raw().toBuffer(), { raw: { width: tw, height: th, channels: 1 } })   // extractChannel: sharp hands back 3 channels from a 1-channel resize, which squashed the class rows 3× into stripes
       .webp({ quality: 80, alphaQuality: 100, effort: 6 }).toBuffer());
   doc.createExtension(EXTTextureWebP).setRequired(true);
   const tex = doc.createTexture('ground').setImage(webp).setMimeType('image/webp');
