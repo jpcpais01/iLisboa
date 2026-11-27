@@ -243,27 +243,38 @@ const water = wr.data; // 0 land, 1 barrier, 2 water
 let waterSource = 'osm-coastline';
 {
   for (const c of coast) wr.strokeLine(c.pts, 2.2, (i) => { water[i] = 1; });
-  const queue = new Int32Array(wr.w * wr.h);
-  let qh = 0, qt = 0;
-  const seed = (x, y) => {
+  // which side is water: the coastline splits the raster into regions; each region takes the side the coastline's samples
+  // put it on (OSM: water on the right). A vote per region, not a flood from every seed: on tight bends and narrow piers a
+  // seed 3 m to the right lands across the line, and one such seed used to flood the land too (99% "water" → DEM fallback)
+  const lab = new Int32Array(water.length).fill(-1), queue = new Int32Array(water.length);
+  let nc = 0;
+  for (let st = 0; st < water.length; st++) if (water[st] === 0 && lab[st] < 0) {
+    let qh = 0, qt = 0; queue[qt++] = st; lab[st] = nc;
+    while (qh < qt) {
+      const i = queue[qh++], x = i % wr.w;
+      if (x > 0 && water[i - 1] === 0 && lab[i - 1] < 0) { lab[i - 1] = nc; queue[qt++] = i - 1; }
+      if (x < wr.w - 1 && water[i + 1] === 0 && lab[i + 1] < 0) { lab[i + 1] = nc; queue[qt++] = i + 1; }
+      if (i >= wr.w && water[i - wr.w] === 0 && lab[i - wr.w] < 0) { lab[i - wr.w] = nc; queue[qt++] = i - wr.w; }
+      if (i + wr.w < water.length && water[i + wr.w] === 0 && lab[i + wr.w] < 0) { lab[i + wr.w] = nc; queue[qt++] = i + wr.w; }
+    }
+    nc++;
+  }
+  const vote = new Float64Array(nc);
+  const labAt = (x, y) => {
     const c = Math.floor(wr.px(x)), r = Math.floor(wr.py(y));
-    if (c < 0 || r < 0 || c >= wr.w || r >= wr.h) return;
-    const i = r * wr.w + c;
-    if (water[i] === 0) { water[i] = 2; queue[qt++] = i; }
+    return c < 0 || r < 0 || c >= wr.w || r >= wr.h ? -1 : lab[r * wr.w + c];
   };
   for (const c of coast) for (let i = 0; i + 1 < c.pts.length; i++) {
     const [x1, y1] = c.pts[i], [x2, y2] = c.pts[i + 1];
     const L = Math.hypot(x2 - x1, y2 - y1); if (L < 1e-3) continue;
     const nx = (y2 - y1) / L, ny = -(x2 - x1) / L; // right-hand side = water
-    for (let s = 0.5; s < L; s += 2) seed(x1 + ((x2 - x1) * s) / L + nx * 3, y1 + ((y2 - y1) * s) / L + ny * 3);
+    for (let s = 0.5; s < L; s += 2) {
+      const x = x1 + ((x2 - x1) * s) / L, y = y1 + ((y2 - y1) * s) / L;
+      const a = labAt(x + nx * 3, y + ny * 3), b = labAt(x - nx * 3, y - ny * 3);
+      if (a >= 0) vote[a]++; if (b >= 0) vote[b]--;
+    }
   }
-  while (qh < qt) {
-    const i = queue[qh++], x = i % wr.w, y = (i / wr.w) | 0;
-    if (x > 0 && water[i - 1] === 0) { water[i - 1] = 2; queue[qt++] = i - 1; }
-    if (x < wr.w - 1 && water[i + 1] === 0) { water[i + 1] = 2; queue[qt++] = i + 1; }
-    if (y > 0 && water[i - wr.w] === 0) { water[i - wr.w] = 2; queue[qt++] = i - wr.w; }
-    if (y < wr.h - 1 && water[i + wr.w] === 0) { water[i + wr.w] = 2; queue[qt++] = i + wr.w; }
-  }
+  for (let i = 0; i < water.length; i++) if (lab[i] >= 0 && vote[lab[i]] > 0) water[i] = 2;
   let nW = 0, agree = 0;
   for (let i = 0; i < water.length; i++) if (water[i] === 2) {
     nW++;
