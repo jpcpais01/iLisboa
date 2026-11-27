@@ -1,0 +1,112 @@
+/* Photo mode: the canvas alone, plus a small bar that steps aside when the view is still */
+body.photo > :not(#c):not(.photo-ui) { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+.photo-ui { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: #fff; font: 600 13px/1.2 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; }
+.photo-ui[hidden], .photo-ui [hidden] { display: none !important; }
+.photo-ui button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+
+.ph-hint {
+  position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translate(-50%, -8px);
+  padding: 8px 14px; border-radius: 999px; background: rgba(16, 18, 24, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  white-space: nowrap; opacity: 0; letter-spacing: 0.01em;
+}
+.photo-ui.hinted .ph-hint { animation: ph-hint 3.2s ease both; }
+@keyframes ph-hint { 0% { opacity: 0; transform: translate(-50%, -8px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+
+.ph-bar {
+  position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px;
+  background: rgba(16, 18, 24, 0.58); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: opacity 0.5s ease, transform 0.5s ease; pointer-events: auto;
+}
+.ph-bar.away { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.ph-go { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px; padding: 8px 12px; border-radius: 999px; transition: background 0.15s; }
+.ph-go b { font-size: 15px; font-weight: 750; letter-spacing: -0.01em; }
+.ph-go small { font-size: 10px; font-weight: 500; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.ph-go:hover, .ph-go:focus-visible { background: rgba(255, 255, 255, 0.14); outline: none; }
+.ph-go:active { transform: scale(0.96); }
+.ph-x { display: grid; place-items: center; width: 40px; height: 40px; margin-left: 2px; border-radius: 50%; border-left: 1px solid rgba(255, 255, 255, 0.12) !important; }
+.ph-x:hover { background: rgba(255, 255, 255, 0.14); }
+.ph-x svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.ph-work {
+  position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-radius: 999px;
+  background: rgba(16, 18, 24, 0.66); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); white-space: nowrap; pointer-events: auto;
+}
+.photo-ui.working { pointer-events: auto; }   /* the frame holds still while the detail comes in */
+.ph-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: ph-spin 0.8s linear infinite; }
+@keyframes ph-spin { to { transform: rotate(360deg); } }
+.ph-msg { font-variant-numeric: tabular-nums; }
+.ph-cancel { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.12) !important; font-weight: 600; }
+
+.ph-done {
+  position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(360px, calc(100vw - 32px)); padding: 10px; border-radius: 18px; pointer-events: auto;
+  background: rgba(16, 18, 24, 0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.1); animation: ph-up 0.3s ease both;
+}
+@keyframes ph-up { from { opacity: 0; transform: translate(-50%, 12px); } }
+.ph-pic { position: relative; }
+.ph-done img { display: block; width: 100%; max-height: 34vh; object-fit: contain; border-radius: 10px; }
+.ph-badge { position: absolute; left: 8px; bottom: 8px; padding: 5px 9px 5px 8px; border-radius: 999px; background: rgba(16, 18, 24, 0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ph-badge::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #5fd38a; vertical-align: 1px; }
+.ph-badge[data-q="mid"]::before { background: #f2c14e; }
+.ph-badge[data-q="lo"]::before { background: #ef6b5b; }
+.ph-seg { display: flex; gap: 2px; margin-top: 8px; padding: 3px; border-radius: 11px; background: rgba(255, 255, 255, 0.08); }
+.ph-seg button { flex: 1; padding: 7px 6px; border-radius: 8px; font-weight: 650; opacity: 0.7; }
+.ph-seg button[aria-selected="true"] { background: rgba(255, 255, 255, 0.18) !important; opacity: 1; }
+.ph-ai { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin: 0 0 6px; padding: 10px 8px; border-radius: 12px; font-weight: 700;
+  background: linear-gradient(100deg, rgba(255, 196, 120, 0.28), rgba(150, 170, 255, 0.28)) !important; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.ph-ai svg { flex: none; width: 17px; height: 17px; fill: currentColor; }
+.ph-ai.busy { background-size: 200% 100% !important; animation: ph-shimmer 1.6s linear infinite; }
+.ph-ai.busy svg { animation: ph-spin 2.4s linear infinite; }
+.ph-ai.err { background: rgba(239, 107, 91, 0.22) !important; }
+.ph-ai span { font-variant-numeric: tabular-nums; }
+@keyframes ph-shimmer { from { background-position: 0 0; } to { background-position: -200% 0; } }
+.ph-info { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 8px; }
+.ph-info b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.ph-info small { opacity: 0.65; font-weight: 500; }
+.ph-acts { display: flex; gap: 6px; }
+.ph-acts button { flex: 1; padding: 10px 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.12) !important; font-weight: 650; }
+.ph-acts .ph-save { background: #fff !important; color: #14161c; }
+.ph-acts button:active { transform: scale(0.97); }
+@media (max-width: 420px) { .ph-go { min-width: 0; padding: 8px 11px; } }
+
+/* saved views */
+.ph-vw { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; }
+.ph-vw:hover, .ph-vw[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
+.ph-vw svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
+.ph-vw[aria-expanded="true"] svg { fill: currentColor; }
+.ph-n { position: absolute; top: 3px; right: 2px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: #fff; color: #14161c; font: 700 9.5px/15px ui-sans-serif, system-ui, sans-serif; font-style: normal; text-align: center; }
+.ph-views {
+  position: absolute; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(380px, calc(100vw - 24px)); max-height: min(62vh, 560px); display: flex; flex-direction: column;
+  padding: 12px; border-radius: 18px; pointer-events: auto;
+  background: rgba(16, 18, 24, 0.72); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.1); animation: ph-up2 0.25s ease both;
+}
+@keyframes ph-up2 { from { opacity: 0; transform: translate(-50%, 10px); } }
+.ph-views header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 10px; }
+.ph-views header b { font-size: 14px; }
+.pv-add { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px 7px 9px; border-radius: 999px; background: #fff !important; color: #14161c !important; font-weight: 650; }
+.pv-add svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pv-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; }
+.pv-list li { display: flex; align-items: center; gap: 10px; padding: 5px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.pv-go { flex: none; width: 92px; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, 0.08) !important; }
+.pv-go img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.25s; }
+.pv-go:hover img { transform: scale(1.05); }
+.pv-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pv-name { width: 100%; font: 650 13.5px/1.2 inherit; font-family: inherit; color: #fff; background: none; border: 0; border-radius: 6px; padding: 3px 4px; margin: -3px -4px; outline: none; text-overflow: ellipsis; pointer-events: auto; -webkit-user-select: text; user-select: text; }
+.pv-name[readonly] { pointer-events: none; }
+.pv-name:not([readonly]) { background: rgba(255, 255, 255, 0.14); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5); }
+.pv-tx small { font-size: 11px; font-weight: 500; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.pv-acts { display: flex; flex: none; }
+.pv-acts button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; opacity: 0.75; }
+.pv-acts button:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
+.pv-acts svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pv-list .pv-undo { justify-content: space-between; padding: 8px 8px 8px 12px; font-weight: 500; opacity: 0.9; }
+.pv-undo button { padding: 5px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.14) !important; font-weight: 650; }
+.pv-empty { margin: 2px 4px 4px; font-weight: 500; font-size: 12.5px; line-height: 1.45; opacity: 0.7; }
+.pv-toast { margin: 8px 0 0; text-align: center; font-size: 12px; font-weight: 600; opacity: 0.85; word-break: break-all; }
+@media (max-width: 420px) { .pv-go { width: 78px; } }

@@ -171,6 +171,7 @@ export function createChase({ camera, controls, ground = () => 0, roofs = null }
 
   return {
     follow, release, update,
+    halt: () => { out = null; },   // drop the glide-out (a saved view is taking the camera)
     get active() { return !!get; },
     get busy() { return !!get || !!out; },
     get speed() { return speed; },

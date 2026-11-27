@@ -64,7 +64,7 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
         <button type="button" class="alf-reset" title="${T.reset}" aria-label="${T.reset}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>
         <button type="button" class="alf-x" title="${T.close}" aria-label="${T.close}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </header>
-      <div class="alf-log" aria-live="polite"></div>
+      <div class="alf-body"><div class="alf-log" aria-live="polite"></div><div class="alf-rail" aria-hidden="true"><i></i></div></div>
       <form class="alf-form"><textarea rows="1" maxlength="1000" placeholder="${T.ph}" enterkeyhint="send"></textarea>
         <button type="submit" class="alf-send" aria-label="${T.send}"><svg viewBox="0 0 24 24"><path d="M5 12h12M12 6l6 6-6 6"/></svg></button></form>
     </section>
@@ -123,8 +123,15 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
     bird.style.left = `${to.x}px`; bird.style.top = `${to.y}px`;
     bird.classList.toggle('perched', open);
   }
+  // wide screens: the chat docks on the right edge where the layer dock lives, so the dock folds away while it's open
+  // (and comes back after); opening the dock while chatting closes the chat
+  const dock = document.querySelector('.dock'), dockBtn = dock?.querySelector('.dock-toggle'), wide = matchMedia('(min-width: 641px)');
+  let dockWas = false, dockBusy = false;
+  const foldDock = (v) => { if (!dockBtn || !wide.matches) return; if (v) { dockWas = dock.classList.contains('open'); if (dockWas) { dockBusy = true; dockBtn.click(); dockBusy = false; } } else if (dockWas && !dock.classList.contains('open')) { dockBusy = true; dockBtn.click(); dockBusy = false; dockWas = false; } };
+  if (dock) new MutationObserver(() => { if (!dockBusy && open && wide.matches && dock.classList.contains('open')) { dockWas = false; setOpen(false); } }).observe(dock, { attributes: true, attributeFilter: ['class'] });
   function setOpen(v) {
     if (v === open) return;
+    foldDock(v);
     const from = place(bird);
     open = v; root.classList.toggle('open', v); peek.hidden = true;
     if (v) {
@@ -137,6 +144,32 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
       setTimeout(() => { if (!open) panel.hidden = true; }, 320);
     }
   }
+  // ─── hand-made scrollbar: a glazed cobalt pill on a dotted rail (the native one is hidden) ───
+  const rail = $('.alf-rail'), thumb = rail.firstElementChild;
+  let idle;
+  function railSync(show) {
+    const H = log.clientHeight, S = log.scrollHeight, over = S - H > 2;
+    rail.classList.toggle('off', !over); if (!over) return;
+    const rh = rail.clientHeight, th = Math.max(28, (rh * H) / S), y = ((rh - th) * log.scrollTop) / (S - H);
+    thumb.style.height = `${th}px`; thumb.style.transform = `translateY(${y}px)`;
+    if (show) { rail.classList.add('on'); clearTimeout(idle); idle = setTimeout(() => rail.classList.remove('on'), 1300); }
+  }
+  log.addEventListener('scroll', () => railSync(true), { passive: true });
+  new ResizeObserver(() => railSync()).observe(log);
+  new MutationObserver(() => railSync()).observe(log, { childList: true, subtree: true, characterData: true });
+  thumb.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation(); thumb.setPointerCapture(e.pointerId); rail.classList.add('drag'); log.style.scrollBehavior = 'auto';
+    const y0 = e.clientY, s0 = log.scrollTop, k = (log.scrollHeight - log.clientHeight) / Math.max(1, rail.clientHeight - thumb.offsetHeight);
+    const mv = (ev) => { log.scrollTop = s0 + (ev.clientY - y0) * k; };
+    const up = () => { rail.classList.remove('drag'); log.style.scrollBehavior = ''; thumb.removeEventListener('pointermove', mv); thumb.removeEventListener('pointerup', up); thumb.removeEventListener('pointercancel', up); railSync(true); };
+    thumb.addEventListener('pointermove', mv); thumb.addEventListener('pointerup', up); thumb.addEventListener('pointercancel', up);
+  });
+  rail.addEventListener('pointerdown', (e) => {   // a click on the rail pages toward it
+    if (e.target !== rail) return;
+    const r = thumb.getBoundingClientRect();
+    log.scrollBy({ top: (e.clientY < r.top ? -1 : 1) * log.clientHeight * 0.85, behavior: 'smooth' });
+  });
+
   nest.onclick = () => setOpen(true);
   bird.onclick = () => { if (!open) setOpen(true); else if (root.classList.contains('peeking')) unpeek(); };
   $('.alf-x').onclick = () => setOpen(false);
@@ -185,12 +218,12 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
   const SCALE = { street: 350, neighbourhood: 1100, city: 4200 };
   function act(a, lastText) {
     if (a.type === 'show') {
-      const ok = a.qid && marks.select(a.qid);
-      if (!ok && isFinite(a.lat)) { const p = ll(a.lat, a.lon); marks.flyTo(p.x, -p.z, SCALE[a.scale] || 1100); }
+      const ok = a.qid && marks.select(a.qid, { orbit: true });
+      if (!ok && isFinite(a.lat)) { const p = ll(a.lat, a.lon); marks.flyTo(p.x, -p.z, SCALE[a.scale] || 1100, { orbit: true }); }
       peekAt(lastText() || a.label || '');
     } else if (a.type === 'layer') setLayer(a.layer, a.on);
     else if (a.type === 'follow') {
-      setLayer(a.kind, true);
+      if (a.kind !== 'planes') setLayer(a.kind, true);   // planes always fly; their toggle is only the markers
       let n = 0; const tick = () => { live.follow(a.kind, a.id); if (!live.following && n++ < 20) setTimeout(tick, 400); };
       tick(); peekAt(lastText() || '');
     }

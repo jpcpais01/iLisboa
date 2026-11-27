@@ -79,6 +79,12 @@
   "functions": {
     "api/assistant.js": {
       "maxDuration": 60
+    },
+    "api/ships.js": {
+      "maxDuration": 45
+    },
+    "api/aiphoto.js": {
+      "maxDuration": 120
     }
   }
 }

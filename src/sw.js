@@ -5,7 +5,7 @@
 const VERSION = '__VERSION__';
 const SHELL = __SHELL__;
 const CACHE = `ilisboa-shell-${VERSION}`;
-const BYPASS = /^\/(tiles|api|live|lm|transit)\//;
+const BYPASS = /^\/(tiles|api|live|lm|transit|water)\//;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', ...SHELL])).then(() => self.skipWaiting()));

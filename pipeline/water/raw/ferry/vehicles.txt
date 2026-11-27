@@ -1,0 +1,1 @@
+vehicle_id,license_plate,make,model,typology,propulsion,agency_id,owner,registration_date,available_seats,available_standing,emission,climatization,wheelchair,lowered_floor,ramp,kneeling,static_information,onboard_monitor,front_display,rear_display,side_display,internal_sound,external_sound,consumption_meter,bicycles,passenger_counting,video_surveillance,num_carriages

@@ -250,6 +250,16 @@ export function initHud({ onTime, onWeather = () => {} }) {
   return {
     sunDay: () => sunL().doy, utcOffset: () => sunL().offset, hour: () => hour, live: () => live,
     weatherPick: () => PICKS[tempo] || null, month: () => mes || null,
+    // a saved view's light: hour (null = live clock), month (0 = live), weather pick ('' = live)
+    setScene: ({ hour: h = null, mes: m = 0, tempo: w = '' } = {}) => {
+      mes = m >= 1 && m <= 12 ? Math.round(m) : 0; mesSel.value = mes ? String(mes) : ''; modelTrack(); if (!mes && W) take(W);
+      tempo = PICKS[w] ? w : ''; tempoSel.value = tempo;
+      L = lisbon();
+      if (h == null || !isFinite(h)) { hour = L.h; setLive(true); } else { hour = Math.min(24, Math.max(0, h)); setLive(false); }
+      apply(true);
+    },
+    tempo: () => tempo,
+    picks: Object.fromEntries(Object.entries(PICKS).map(([k, p]) => [k, p.label])),
     el,
   };
 }

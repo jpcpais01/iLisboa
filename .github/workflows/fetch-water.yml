@@ -1,0 +1,31 @@
+name: fetch-water
+# River data the sandbox can't reach: EMODnet bathymetry (depth under the Tagus) and the Transtejo/Soflusa ferry timetable
+# (GTFS, found through the Mobility Database catalogue) → pipeline/water/raw + probe. Runs on demand, weekly (timetables
+# roll forward), or when the water scripts change.
+on:
+  workflow_dispatch:
+  schedule: [{ cron: '37 4 * * 1' }]
+  push:
+    paths: [pipeline/water/fetch.sh, pipeline/water/ferry.mjs, .github/workflows/fetch-water.yml]
+concurrency: fetch-water
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "pipeline/water\npublic/water\n.github", sparse-checkout-cone-mode: true }
+      - name: Fetch
+        run: bash pipeline/water/fetch.sh
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Ferry timetable → public/water/ferry.json
+        run: '[ -f pipeline/water/raw/ferry/stop_times.txt ] && node pipeline/water/ferry.mjs || echo "no GTFS this time"'
+      - name: Commit
+        run: |
+          du -sh pipeline/water/raw || true
+          git config user.name "ilisboa-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add pipeline/water/raw pipeline/water/probe public/water/ferry.json
+          git diff --cached --quiet || (git commit -m "data: refresh river bathymetry + ferry timetable [skip ci]" && git pull --rebase -q && git push)

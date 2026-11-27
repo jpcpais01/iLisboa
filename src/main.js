@@ -5,6 +5,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { initTouch } from './touch.js';
 import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { addOcean } from './water.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { createSky, AO } from './sky.js';
@@ -19,6 +20,8 @@ import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
 import { initAssistant } from './ui/assistant.js';
+import { initPhoto } from './ui/photo.js';
+import { beaconUniforms } from './live/beacons.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -26,7 +29,8 @@ const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 // ─── renderer ───────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-let pixelRatio = Math.min(devicePixelRatio, isMobile ? 1.5 : 2);   // phones: 1.5 is sharp at arm's length and costs half the pixels of 2
+const MAX_PR = Math.min(devicePixelRatio, isMobile ? 1.5 : 2);
+let pixelRatio = MAX_PR;   // phones: 1.5 is sharp at arm's length and costs half the pixels of 2
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -37,7 +41,7 @@ renderer.shadowMap.autoUpdate = false;   // re-rendered only when needed (see fi
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 30000);
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 150000);   // (near follows the zoom, see the loop: depth stays precise from the street to the whole region)
 
 // Sky, sun, ambient light and haze all come from one physical atmosphere (src/sky.js), re-solved when the clock moves.
 const Q = new URLSearchParams(location.search);
@@ -77,7 +81,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = false;
 controls.minDistance = 60;
-controls.maxDistance = 7000;
+controls.maxDistance = 32000;   // far enough to see the whole region, river mouth to Montijo
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
 // fingers get their own maps-style navigation (pan / pinch / twist / tilt, fling); MapControls keeps the mouse
@@ -94,6 +98,7 @@ const ok = (r) => { if (!r.ok) throw new Error(`${r.status} ${r.url}`); return r
 const index = await (await fetch('/tiles/index.json', { cache: 'no-cache' })).json();
 const AREAS = index.areas;
 const manifest = AREAS[0];   // origin, water level and attribution are shared by every area
+addOcean(scene, manifest.waterY);   // the open sea out to the horizon, past the areas (src/water.js)
 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 for (const a of AREAS) { minX = Math.min(minX, a.bounds.minX); minY = Math.min(minY, a.bounds.minY); maxX = Math.max(maxX, a.bounds.maxX); maxY = Math.max(maxY, a.bounds.maxY); }
 const center = new THREE.Vector3((minX + maxX) / 2, 0, -(minY + maxY) / 2);
@@ -385,7 +390,7 @@ const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (is
 // the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
 // ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
 // exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
-const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2', LEGACY = Q.get('lodv') === '1';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default; ?lodv=1 = all as before 2026-11-27)
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2', LEGACY = Q.get('lodv') === '1';   // (full detail by default, João 2026-11-27: the far blocks read too plain; ?lodv=2 = screen-space LOD test, ?lodv=1 = all as before 2026-11-27. Was: ?lodv=0 = distance LOD only, ?lodv=1 = all as before 2026-11-27)
 const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
 const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
@@ -403,6 +408,9 @@ function stream(force) {
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
   if (!OLDLOD) DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
   const FC = fullCap(), MC = midCap();
+  // an area's trees, parked cars and lamps come with its first tile; past the tiles' reach (far views draw only the far level)
+  // they are woken by distance instead, so a forest seen from afar still stands
+  if (!OLDLOD) for (const a of AREAS) if (!a.ready && a.far && rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], x, y) <= M + 900) wake(a).catch((e) => console.error(e));
   const want = [];
   for (const t of tiles) {
     const d = rectDist(t.b, x, y), dc = camDist(t.b);
@@ -426,7 +434,7 @@ const pending = () => { const x = controls.target.x, y = -controls.target.z, R =
   const FC = fullCap(); return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R && camDist(t.b) <= FC).length; };
 
 // trees: instanced, in chunks with three levels of detail (sculpted near 230 m, lobed to 760 m, a single lobe beyond)
-const treeChunks = [], treeHi = [];
+const treeChunks = [], treeHi = [], treeAreas = [];
 let KINDS = null;
 function addTrees(buf) {
   const d = new Float32Array(buf), n = d.length / 4;
@@ -434,22 +442,34 @@ function addTrees(buf) {
   // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
   const cellsOf = (CH) => { const cells = new Map(); for (let i = 0; i < n; i++) { const kind = Math.min(3, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); } return cells.values(); };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-  const place = (meshes, K, ids) => ids.forEach((i, j) => {
+  const place = (meshes, K, ids, mul = 1) => ids.forEach((i, j) => {
     const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
     const k = d[i * 4 + 3] - Math.min(3, Math.floor(d[i * 4 + 3] / 10)) * 10;
-    s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
+    s.set(k * mul, k * mul * (0.9 + Math.abs(r) * 0.3), k * mul);
     m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
     for (const mesh of meshes) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
   });
   const fin = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); return mesh; };
+  const chunks = [];
   for (const { kind, ids } of cellsOf(600)) {
     const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
     place([near, lo], K, ids); fin(near); fin(lo);
     // a few pixels across, a tree is its crown: six vertices instead of 78, on the same instance buffers
     const min = new THREE.InstancedMesh(K.min, K.mat, ids.length); min.instanceMatrix = lo.instanceMatrix; min.instanceColor = lo.instanceColor; fin(min);
-    treeChunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
+    chunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
+  // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city);
+  if (chunks.length) {
+    // and further still, every second tree at √2 the size, then every fourth at twice: the same canopy cover in a half, a quarter of the work
+    const hs = (i) => Math.abs(Math.sin(i * 78.233) * 12543.17 % 1);
+    const lv = (OLDLOD ? [1] : [1, 0.5, 0.25]).map((f) => [...cellsOf(1e7)].map(({ kind, ids }) => { ids = f < 1 ? ids.filter((i) => hs(i) < f) : ids; const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, Math.max(1, ids.length)); place([a], K, ids, 1 / Math.sqrt(f)); a.count = ids.length; fin(a).castShadow = false; a.visible = false; return a; }));
+    const agg = lv[0];
+    const b = new THREE.Box3(); for (const a of agg) b.union(new THREE.Box3().setFromCenterAndSize(a.boundingSphere.center, new THREE.Vector3().setScalar(a.boundingSphere.radius * 2)));
+    const sph = b.getBoundingSphere(new THREE.Sphere());
+    const A = { lv, chunks, c: sph.center, r: sph.radius, far: false, at: -1 }; for (const t of chunks) t.area = A; treeAreas.push(A);
+  }
+  treeChunks.push(...chunks);
   for (const { kind, ids } of cellsOf(160)) {
     const K = KINDS[kind], hi = new THREE.InstancedMesh(K.hi, K.matHi, ids.length);
     place([hi], K, ids); fin(hi).visible = false; hi.castShadow = false;
@@ -529,6 +549,7 @@ function treeKinds() {
   const cypressFar = mergeGeometries([cyTrunk(3), spindle(1.2, 6.5, 5, 0xf0f0f0, 0.3)]); cypressFar.computeVertexNormals(); soften(cypressFar, 0, 6.5, 0, 0.35);
   // the crown alone, as an indexed octahedron the size of the far lobe (normals bent out like soften), for trees a few pixels across
   const crown = (r, y, ry, shade = 0xf0f0f0) => {
+    r *= 1.25; ry *= 1.25;   // a diamond covers 2r² where the lobes' round crown covers πr²: same canopy from afar
     const P = [r, y, 0, -r, y, 0, 0, y + ry, 0, 0, y - ry, 0, 0, y, r, 0, y, -r], N = [], C = [], c = new THREE.Color(shade), v = new THREE.Vector3();
     for (let i = 0; i < 6; i++) { v.set(P[i * 3], (P[i * 3 + 1] - y) * 1.4, P[i * 3 + 2]).normalize(); N.push(v.x, v.y, v.z); C.push(c.r, c.g, c.b); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
@@ -754,7 +775,7 @@ function fitShadow(now) {
   const key = `${R.toFixed(2)}|${nf.ka}|${nf.kb}|${dirKey}`;
   // a moved frame redraws at once; new tiles streaming in redraw it at most every 0.4 s, not on every arrival (a wide view takes
   // in dozens, and each redraw of a city-wide map costs several frames' worth of GPU time)
-  if (key !== shadowKey || (shadowDirty && (OLDLOD || now - nearT > 400))) { shadowKey = key; shadowDirty = false; nearT = now; nf.apply(); return; }   // one cascade per frame at most
+  if (key !== shadowKey || (shadowDirty && (LEGACY || now - nearT > 400))) { shadowKey = key; shadowDirty = false; nearT = now; nf.apply(); return; }   // one cascade per frame at most
   // far: from just behind the camera out towards the horizon
   const RF = Math.min(lim, Math.max(isMobile ? 2600 : 3600, R * 2.5));
   const tf = _sf.copy(camera.position).setY(controls.target.y).addScaledVector(_fw, RF * 0.75 * grazing);
@@ -791,8 +812,9 @@ if (camOnGround) {
   controls.target.copy(tgt);
   camera.position.copy(tgt).add(new THREE.Vector3(-Math.sin(hr) * Math.sin(tr) * d, Math.cos(tr) * d, Math.cos(hr) * Math.sin(tr) * d));
   introT = 1;
-} else if (fromHash.length === 6 && fromHash.every(isFinite)) {
+} else if ((fromHash.length === 6 || fromHash.length === 7) && fromHash.every(isFinite)) {   // #x,y,z,tx,ty,tz[,fov] (saved views share a 7th: their lens)
   camera.position.fromArray(fromHash, 0); controls.target.fromArray(fromHash, 3); introT = 1;
+  if (fromHash[6] >= 10 && fromHash[6] <= 90) { camera.fov = fromHash[6]; camera.updateProjectionMatrix(); }
 } else {
   camera.position.copy(startPos); controls.target.copy(focus);
 }
@@ -812,14 +834,30 @@ const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, i
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 // Alfacinha, the Lisbon guide: a swallow in the corner that opens a chat (src/ui/assistant.js → /api/assistant)
 window.__alf = initAssistant({ camera, controls, marks, live, hud, ll, mobile: isMobile });
+// photo mode (src/ui/photo.js): while a photo is being made, streaming and pixel-sized things see the photo's resolution
+let shotF = 0, shotDraw = null, shotLod = 0;
+const tanHalf = () => Math.tan((camera.fov * Math.PI) / 360);
+initPhoto({ renderer, camera, canvas, controls, mobile: isMobile, hooks: {
+  scene, invalidate, hud,
+  free: () => { if (drive.active) drive.exit(); chase.release(false); chase.halt(); introT = 1; },   // a saved view takes the camera back
+  begin: (W, H) => { shotF = H / (2 * tanHalf()); shotLod = lodK; if (!LOD_PIN) lodK = 1; },   // full detail distances, whatever the fps
+  end: () => { shotF = 0; if (!LOD_PIN) lodK = shotLod; },
+  pending: () => stream(true) + inflight + tiles.filter((t) => t.dstate === 1).length,   // tiles wanted, loading, or fetching relief
+  shoot: (draw) => { shotDraw = draw; invalidate(); },   // the next frame draws the photo instead of the screen
+  scale: (H) => {   // sizes set in screen pixels follow the photo's height; returns the undo
+    const l = lampUniforms.uScale.value, d = beaconUniforms.uDpr.value;
+    lampUniforms.uScale.value = H / (2 * tanHalf()); beaconUniforms.uDpr.value = H / Math.max(1, canvas.clientHeight);
+    return () => { lampUniforms.uScale.value = l; beaconUniforms.uDpr.value = d; };
+  },
+} });
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
-let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio;
-const setFocal = () => { px.f = (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
+let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio, fast = 0, upT = -1e9, upWait = 8000;
+const setFocal = () => { px.f = shotF || (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
 setFocal();
 renderer.setAnimationLoop((now) => {
   setFocal();
@@ -846,11 +884,12 @@ renderer.setAnimationLoop((now) => {
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
   // a still view renders at a quarter rate, or up to half (30 fps) while the ambient cars drive: as often as a car (~14 m/s)
   // moves half a pixel, so a city-wide view (cars crawl a pixel or two a second) no longer redraws the whole city 30 times a second
-  const carStep = OLDLOD ? (live.cars.count ? 2 : 4) : live.cars.count ? THREE.MathUtils.clamp(Math.floor(60 / (28 * px.f / Math.max(1, camera.position.distanceTo(controls.target)))), 2, 4) : 4;
+  const carStep = LEGACY ? (live.cars.count ? 2 : 4) : live.cars.count ? THREE.MathUtils.clamp(Math.floor(60 / (28 * px.f / Math.max(1, camera.position.distanceTo(controls.target)))), 2, 4) : 4;
   if (!active && !resized && curRatio === pixelRatio && idleN % carStep) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
+  { const nr = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * 0.003, 4, 120); if (Math.abs(nr - camera.near) > camera.near * 0.15) { camera.near = nr; camera.updateProjectionMatrix(); } }
   const skyS = (now / 1000) % 2e5;   // (wrapped every ~2 days so the drift stays precise in float32)
   fitShadow(now); sky.tick(skyS);
   sunFar.color.setRGB(sky.dome.material.uniforms.uCover.value, skyS * 0.004, skyS * 0.0011);   // the deck's drift, as in the dome
@@ -867,7 +906,14 @@ renderer.setAnimationLoop((now) => {
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
-  for (const t of treeChunks) { const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
+  // crowns: full detail swaps the lobed tree for its 6-vertex crown only once the whole tree is under ~1.5 px (?lodv=2: 3 px)
+  const tinyD = OLDLOD ? Math.max(2200, 3.6 * px.f) : Math.max(1100, 1.8 * px.f) * lodK;
+  for (const A of treeAreas) {
+    const dA = camera.position.distanceTo(A.c) - A.r, far = dA > tinyD, at = !far ? -1 : OLDLOD ? 0 : dA > 4 * tinyD ? 2 : dA > 2 * tinyD ? 1 : 0;
+    if (at !== A.at) { A.at = at; A.lv.forEach((L, k) => { for (const a of L) a.visible = k === at; }); }
+    if (far !== A.far) { A.far = far; if (far) for (const t of A.chunks) t.near.visible = t.lo.visible = t.min.visible = false; }
+  }
+  for (const t of treeChunks) { if (t.area?.far) continue; const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !nearby && dd > tinyD; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
@@ -875,6 +921,7 @@ renderer.setAnimationLoop((now) => {
   live.update(dt, now);
   stations.update();
   layers.update(dt, now);
+  if (shotDraw) { const d = shotDraw; shotDraw = null; d(); wasActive = false; last = performance.now(); needRender = 2; return; }   // (a photo frame is slow by design: not timed)
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones (timed on consecutive moving frames only)
@@ -886,6 +933,15 @@ renderer.setAnimationLoop((now) => {
       if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
       else if (fps < 45 && lodK > 0.55 && !LOD_PIN) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
+      // and back up when the view gets lighter (a heavy wide view must not leave the city blurry for good): after 4 s of full
+      // rate, detail first, then sharpness, a step at a time; a step that brings the slowness back waits twice as long next time
+      if (fps < 52 && now - upT < 6000) upWait = Math.min(upWait * 2, 120000);
+      if (fps >= 57) fast++; else fast = 0;
+      if (fast >= 4 && now - upT > upWait && (lodK < 1 && !LOD_PIN || pixelRatio < MAX_PR)) {
+        if (lodK < 1 && !LOD_PIN) lodK = Math.min(1, lodK + 0.15);
+        else { pixelRatio = Math.min(MAX_PR, pixelRatio + 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); }
+        fast = 0; upT = now;
+      }
     }
     if (SHOW_STATS) statsEl.textContent = `${fps.toFixed(0)} fps · dpr ${pixelRatio}\n${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris`;
     window.__perf = { fps, dpr: pixelRatio, lod: lodK, calls: renderer.info.render.calls, tris: renderer.info.render.triangles };

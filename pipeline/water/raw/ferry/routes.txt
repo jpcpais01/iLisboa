@@ -1,0 +1,6 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_id,line_short_name,line_long_name,path_type,circular,school
+1_0,4,MT,Montijo - Cais do Sodré,4,E6126C,FFFFFF,1,MT,Montijo - Cais do Sodré,1,0,0
+3_0,4,SX,Seixal - Cais do Sodré,4,009A9E,FFFFFF,3,SX,Seixal - Cais do Sodré,1,0,0
+5_0,4,CA,Cacilhas - Cais do Sodré,4,FAB900,000000,5,CA,Cacilhas - Cais do Sodré,1,0,0
+7_0,4,BR,Barreiro - Terreiro do Paço,4,5185C4,FFFFFF,7,BR,Barreiro - Terreiro do Paço,1,0,0
+9_0,4,TF,Trafaria - Porto Brandão - Belém - Algés,4,ED7402,FFFFFF,9,TF,Trafaria - Porto Brandão - Belém - Algés,1,0,0

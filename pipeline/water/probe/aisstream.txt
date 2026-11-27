@@ -1,0 +1,4 @@
+Fri Nov 27 20:33:09 UTC 2026
+aisstream https 400 connect 0.170536s tls 0.310562s total 18.195290s
+aisstream ws-upgrade 400 15.370933s
+136.243.173.177 stream.aisstream.io

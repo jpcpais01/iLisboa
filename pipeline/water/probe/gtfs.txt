@@ -1,0 +1,80 @@
+try https://api.transtejo.pt/files/GTFS.zip
+try https://files.mobilitydatabase.org/mdb-2921/latest.zip
+ok https://files.mobilitydatabase.org/mdb-2921/latest.zip
+total 196
+drwxr-xr-x 2 runner runner  4096 Nov 27 19:39 .
+drwxr-xr-x 3 runner runner  4096 Nov 27 19:39 ..
+-rw-r--r-- 1 runner runner   238 Aug 16 03:00 agency.txt
+-rw-r--r-- 1 runner runner  1124 Aug 16 03:00 calendar.txt
+-rw-r--r-- 1 runner runner  3871 Aug 16 03:00 calendar_dates.txt
+-rw-r--r-- 1 runner runner   148 Aug 16 03:00 fare_attributes.txt
+-rw-r--r-- 1 runner runner    47 Aug 16 03:00 fare_rules.txt
+-rw-r--r-- 1 runner runner   237 Aug 16 03:00 feed_info.txt
+-rw-r--r-- 1 runner runner   633 Aug 16 03:00 routes.txt
+-rw-r--r-- 1 runner runner  8248 Aug 16 03:00 shapes.txt
+-rw-r--r-- 1 runner runner 89705 Aug 16 03:00 stop_times.txt
+-rw-r--r-- 1 runner runner   665 Aug 16 03:00 stops.txt
+-rw-r--r-- 1 runner runner 51757 Aug 16 03:00 trips.txt
+-rw-r--r-- 1 runner runner   371 Aug 16 03:00 vehicles.txt
+tml positions failed
+-rw-r--r-- 1 runner runner 0 Nov 27 19:39 probe/tml-positions.json
+try https://api.transtejo.pt/files/GTFS.zip
+try https://files.mobilitydatabase.org/mdb-2921/latest.zip
+ok https://files.mobilitydatabase.org/mdb-2921/latest.zip
+total 196
+drwxr-xr-x 2 runner runner  4096 Nov 27 19:43 .
+drwxr-xr-x 3 runner runner  4096 Nov 27 19:43 ..
+-rw-r--r-- 1 runner runner   238 Aug 16 03:00 agency.txt
+-rw-r--r-- 1 runner runner  1124 Aug 16 03:00 calendar.txt
+-rw-r--r-- 1 runner runner  3871 Aug 16 03:00 calendar_dates.txt
+-rw-r--r-- 1 runner runner   148 Aug 16 03:00 fare_attributes.txt
+-rw-r--r-- 1 runner runner    47 Aug 16 03:00 fare_rules.txt
+-rw-r--r-- 1 runner runner   237 Aug 16 03:00 feed_info.txt
+-rw-r--r-- 1 runner runner   633 Aug 16 03:00 routes.txt
+-rw-r--r-- 1 runner runner  8248 Aug 16 03:00 shapes.txt
+-rw-r--r-- 1 runner runner 89705 Aug 16 03:00 stop_times.txt
+-rw-r--r-- 1 runner runner   665 Aug 16 03:00 stops.txt
+-rw-r--r-- 1 runner runner 51757 Aug 16 03:00 trips.txt
+-rw-r--r-- 1 runner runner   371 Aug 16 03:00 vehicles.txt
+tml positions failed
+-rw-r--r-- 1 runner runner 0 Nov 27 19:43 probe/tml-positions.json
+try https://api.transtejo.pt/files/GTFS.zip
+try https://files.mobilitydatabase.org/mdb-2921/latest.zip
+ok https://files.mobilitydatabase.org/mdb-2921/latest.zip
+total 196
+drwxr-xr-x 2 runner runner  4096 Nov 27 20:27 .
+drwxr-xr-x 3 runner runner  4096 Nov 27 20:27 ..
+-rw-r--r-- 1 runner runner   238 Aug 16 03:00 agency.txt
+-rw-r--r-- 1 runner runner  1124 Aug 16 03:00 calendar.txt
+-rw-r--r-- 1 runner runner  3871 Aug 16 03:00 calendar_dates.txt
+-rw-r--r-- 1 runner runner   148 Aug 16 03:00 fare_attributes.txt
+-rw-r--r-- 1 runner runner    47 Aug 16 03:00 fare_rules.txt
+-rw-r--r-- 1 runner runner   237 Aug 16 03:00 feed_info.txt
+-rw-r--r-- 1 runner runner   633 Aug 16 03:00 routes.txt
+-rw-r--r-- 1 runner runner  8248 Aug 16 03:00 shapes.txt
+-rw-r--r-- 1 runner runner 89705 Aug 16 03:00 stop_times.txt
+-rw-r--r-- 1 runner runner   665 Aug 16 03:00 stops.txt
+-rw-r--r-- 1 runner runner 51757 Aug 16 03:00 trips.txt
+-rw-r--r-- 1 runner runner   371 Aug 16 03:00 vehicles.txt
+tml positions failed
+-rw-r--r-- 1 runner runner 0 Nov 27 20:27 probe/tml-positions.json
+try https://api.transtejo.pt/files/GTFS.zip
+try https://files.mobilitydatabase.org/mdb-2921/latest.zip
+ok https://files.mobilitydatabase.org/mdb-2921/latest.zip
+total 196
+drwxr-xr-x 2 runner runner  4096 Nov 27 20:33 .
+drwxr-xr-x 3 runner runner  4096 Nov 27 20:33 ..
+-rw-r--r-- 1 runner runner   238 Aug 16 03:00 agency.txt
+-rw-r--r-- 1 runner runner  1124 Aug 16 03:00 calendar.txt
+-rw-r--r-- 1 runner runner  3871 Aug 16 03:00 calendar_dates.txt
+-rw-r--r-- 1 runner runner   148 Aug 16 03:00 fare_attributes.txt
+-rw-r--r-- 1 runner runner    47 Aug 16 03:00 fare_rules.txt
+-rw-r--r-- 1 runner runner   237 Aug 16 03:00 feed_info.txt
+-rw-r--r-- 1 runner runner   633 Aug 16 03:00 routes.txt
+-rw-r--r-- 1 runner runner  8248 Aug 16 03:00 shapes.txt
+-rw-r--r-- 1 runner runner 89705 Aug 16 03:00 stop_times.txt
+-rw-r--r-- 1 runner runner   665 Aug 16 03:00 stops.txt
+-rw-r--r-- 1 runner runner 51757 Aug 16 03:00 trips.txt
+-rw-r--r-- 1 runner runner   371 Aug 16 03:00 vehicles.txt
+tml positions failed
+-rw-r--r-- 1 runner runner 0 Nov 27 20:33 probe/tml-positions.json

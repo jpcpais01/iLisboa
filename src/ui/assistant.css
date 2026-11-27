@@ -1,5 +1,5 @@
 /* ─── Alfacinha: the swallow in the corner and its chat (src/ui/assistant.js) ─── */
-.alf { --kb: 0px; --alf-w: 392px; }
+.alf { --kb: 0px; --alf-w: 344px; }
 .alf-nest {
   position: fixed; z-index: 6; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 44px);
   width: 64px; height: 64px; border-radius: 50%; padding: 0; cursor: pointer;
@@ -65,21 +65,26 @@ body.night .alf-panel { background: rgba(26, 31, 46, 0.86); }
 .alf-panel.in { opacity: 1; transform: none; }
 .alf-panel[hidden] { display: none; }
 .alf-head {
-  position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding: 26px 10px 10px 18px;
+  position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding: 21px 8px 7px 14px;
   border-bottom: 1px solid var(--line);
 }
 .alf-head::before {   /* azulejo frieze: cobalt quarter-flowers on glaze, a hand-painted band */
-  content: ''; position: absolute; inset: 0 0 auto; height: 14px; opacity: 0.9;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Crect width='28' height='14' fill='%23f7f3ea'/%3E%3Cg fill='%231b4c9c'%3E%3Cpath d='M14 1.6c1.9 1.9 1.9 4 0 5.9-1.9-1.9-1.9-4 0-5.9zM14 12.4c1.9-1.9 1.9-4 0-5.9-1.9 1.9-1.9 4 0 5.9zM8.1 7c1.9-1.9 4-1.9 5.9 0-1.9 1.9-4 1.9-5.9 0zM19.9 7c-1.9-1.9-4-1.9-5.9 0 1.9 1.9 4 1.9 5.9 0z'/%3E%3Cpath d='M0 0h3.2A3.2 3.2 0 0 1 0 3.2zM28 0h-3.2A3.2 3.2 0 0 0 28 3.2zM0 14h3.2A3.2 3.2 0 0 0 0 10.8zM28 14h-3.2a3.2 3.2 0 0 1 3.2-3.2z'/%3E%3C/g%3E%3Cpath d='M0 13.5h28' stroke='%231b4c9c' stroke-width='1'/%3E%3C/svg%3E") repeat-x 0 0 / 28px 14px;
+  content: ''; position: absolute; inset: 0 0 auto; height: 12px; opacity: 0.9;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Crect width='28' height='14' fill='%23f7f3ea'/%3E%3Cg fill='%231b4c9c'%3E%3Cpath d='M14 1.6c1.9 1.9 1.9 4 0 5.9-1.9-1.9-1.9-4 0-5.9zM14 12.4c1.9-1.9 1.9-4 0-5.9-1.9 1.9-1.9 4 0 5.9zM8.1 7c1.9-1.9 4-1.9 5.9 0-1.9 1.9-4 1.9-5.9 0zM19.9 7c-1.9-1.9-4-1.9-5.9 0 1.9 1.9 4 1.9 5.9 0z'/%3E%3Cpath d='M0 0h3.2A3.2 3.2 0 0 1 0 3.2zM28 0h-3.2A3.2 3.2 0 0 0 28 3.2zM0 14h3.2A3.2 3.2 0 0 0 0 10.8zM28 14h-3.2a3.2 3.2 0 0 1 3.2-3.2z'/%3E%3C/g%3E%3Cpath d='M0 13.5h28' stroke='%231b4c9c' stroke-width='1'/%3E%3C/svg%3E") repeat-x 0 0 / 24px 12px;
 }
 body.night .alf-head::before { opacity: 0.55; }
-.alf-perch { position: absolute; right: 108px; top: -19px; width: 1px; height: 1px; }   /* the swallow sits on the panel's top rim */
-.alf-bird.perched { width: 66px; height: 59px; }
+.alf-perch { position: absolute; left: 50px; top: -16px; width: 1px; height: 1px; }   /* the swallow sits on the panel's top rim */
+.alf-bird.perched { width: 58px; height: 52px; }
 .alf-bird { transition: width 0.3s ease, height 0.3s ease; }
-@media (min-width: 1000px) { .alf-panel { right: max(312px, calc(50vw - 560px)); } }   /* left of the layer dock, toward the middle */
+/* wide screens: docked to the right edge, under the Camadas button (the layer dock folds while the chat is open) */
+@media (min-width: 641px) {
+  .alf-panel { right: max(12px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + 54px); bottom: auto; height: min(540px, calc(100vh - 160px)); border-radius: 18px; width: min(var(--alf-w), calc(100vw - 24px)); transform-origin: 100% 0; }
+}
+/* … and above the time slider where the two would meet (slider is 440 px wide, centred) */
+@media (min-width: 641px) and (max-width: 1290px) { .alf-panel { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 62px); } }
 .alf-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.1; }
-.alf-name b { font: italic 650 24px/1.05 'Lisboa Display', 'Fraunces', Georgia, serif; color: var(--azul); letter-spacing: -0.01em; }
-.alf-name small { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.alf-name b { font: italic 650 19px/1.05 'Lisboa Display', 'Fraunces', Georgia, serif; color: var(--azul); letter-spacing: -0.01em; }
+.alf-name small { color: var(--muted); font-size: 11px; margin-top: 1px; }
 .alf-head button {
   flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); cursor: pointer;
   display: grid; place-items: center; transition: background 0.2s, color 0.2s;
@@ -87,22 +92,41 @@ body.night .alf-head::before { opacity: 0.55; }
 .alf-head button:hover { background: var(--line); color: var(--ink); }
 .alf-head svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; scroll-behavior: smooth; }
-.alf-m { max-width: 88%; font-size: 14.5px; line-height: 1.5; animation: alf-in 0.32s cubic-bezier(.2, .8, .2, 1); overflow-wrap: anywhere; }
+.alf-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.alf-log { scrollbar-width: none; -ms-overflow-style: none; }
+.alf-log::-webkit-scrollbar { display: none; }
+.alf-rail { position: absolute; top: 10px; bottom: 10px; right: 3px; width: 9px; cursor: pointer; opacity: 0; transition: opacity 0.35s ease; touch-action: none; }
+.alf-rail::before {   /* the rail: a dotted cobalt line, like the frieze's border */
+  content: ''; position: absolute; top: 2px; bottom: 2px; left: 4px; width: 1px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--azul) 45%, transparent) 0.7px, transparent 1px) 0 0 / 1px 5px repeat-y;
+}
+.alf-rail i {   /* the thumb: a little glazed cobalt pill with a highlight down its side */
+  position: absolute; left: 1.5px; top: 0; width: 6px; border-radius: 4px; cursor: grab;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--azul) 82%, white) 0 30%, var(--azul) 30% 100%);
+  box-shadow: 0 1px 2px rgba(20, 30, 70, 0.25), inset 0 0 0 0.5px rgba(255, 255, 255, 0.35);
+  transition: width 0.15s ease, left 0.15s ease;
+}
+.alf-body:hover .alf-rail, .alf-rail.on, .alf-rail.drag { opacity: 1; }
+.alf-rail:hover i, .alf-rail.drag i { width: 8px; left: 0.5px; }
+.alf-rail.drag i { cursor: grabbing; }
+.alf-rail.off { display: none; }
+@media (hover: none) { .alf-rail i { pointer-events: none; } .alf-rail { pointer-events: none; } }
+.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 6px 11px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; scroll-behavior: smooth; }
+.alf-m { max-width: 90%; font-size: 13px; line-height: 1.45; animation: alf-in 0.32s cubic-bezier(.2, .8, .2, 1); overflow-wrap: anywhere; }
 .alf-m p { margin: 0 0 6px; } .alf-m p:last-child { margin-bottom: 0; }
-.alf-m ul, .alf-m ol { margin: 4px 0 6px; padding-left: 20px; } .alf-m li { margin: 2px 0; }
+.alf-m ul, .alf-m ol { margin: 3px 0 5px; padding-left: 17px; } .alf-m li { margin: 1px 0; }
 .alf-m b { font-weight: 650; }
 .alf-m code { font-size: 0.92em; background: var(--line); border-radius: 4px; padding: 0 4px; }
 .alf-m a { color: var(--azul); }
-.alf-m.a { align-self: flex-start; padding: 9px 13px; border-radius: 4px 18px 18px 18px; background: color-mix(in srgb, white 55%, transparent); border: 1px solid var(--line); }
+.alf-m.a { align-self: flex-start; padding: 7px 11px; border-radius: 4px 15px 15px 15px; background: color-mix(in srgb, white 55%, transparent); border: 1px solid var(--line); }
 body.night .alf-m.a { background: rgba(255, 255, 255, 0.06); }
-.alf-m.u { align-self: flex-end; padding: 8px 13px; border-radius: 18px 18px 4px 18px; background: var(--azul-deep); color: #fff; }
+.alf-m.u { align-self: flex-end; padding: 6px 11px; border-radius: 15px 15px 4px 15px; background: var(--azul-deep); color: #fff; }
 body.night .alf-m.u { background: #2e4f96; }
-.alf-m.hello { font-size: 14px; color: var(--ink); }
+.alf-m.hello { font-size: 13px; color: var(--ink); }
 .alf-m.err { border-color: color-mix(in srgb, var(--terracotta) 40%, transparent); }
 .alf-retry { margin-top: 6px; border: 0; border-radius: 999px; padding: 6px 12px; background: var(--terracotta); color: #fff; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
 @keyframes alf-in { from { opacity: 0; transform: translateY(6px); } }
-.alf-status { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.alf-status { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .alf-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--azul); opacity: 0.35; animation: alf-dot 1.2s infinite; }
 .alf-status i:nth-child(2) { animation-delay: 0.15s; } .alf-status i:nth-child(3) { animation-delay: 0.3s; }
 .alf-status span { margin-left: 5px; font-style: italic; }
@@ -113,21 +137,21 @@ body.night .alf-m.u { background: #2e4f96; }
 .alf-tips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; animation: alf-in 0.4s 0.1s both; }
 .alf-tips button {
   border: 1px solid color-mix(in srgb, var(--azul) 30%, transparent); background: color-mix(in srgb, var(--glaze) 60%, transparent); color: var(--azul);
-  border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+  border-radius: 999px; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;
 }
 .alf-tips button:hover { background: color-mix(in srgb, var(--azul) 10%, transparent); }
 
-.alf-form { flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 12px 14px; border-top: 1px solid var(--line); }
+.alf-form { flex: none; display: flex; align-items: flex-end; gap: 7px; padding: 8px 8px 9px 11px; border-top: 1px solid var(--line); }
 .alf-form textarea {
-  flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); border-radius: 18px; padding: 9px 14px; max-height: 110px;
-  font: inherit; font-size: 16px; line-height: 1.35; color: var(--ink); background: color-mix(in srgb, white 70%, transparent); outline: none;
+  flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); border-radius: 16px; padding: 7px 12px; max-height: 96px;
+  font: inherit; font-size: 13.5px; line-height: 1.35; color: var(--ink); background: color-mix(in srgb, white 70%, transparent); outline: none;
 }
 body.night .alf-form textarea { background: rgba(255, 255, 255, 0.07); }
 .alf-form textarea:focus { border-color: color-mix(in srgb, var(--azul) 50%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--azul) 12%, transparent); }
-.alf-send { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--terracotta); color: #fff; cursor: pointer; display: grid; place-items: center; transition: transform 0.15s, opacity 0.2s; }
+.alf-send { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--terracotta); color: #fff; cursor: pointer; display: grid; place-items: center; transition: transform 0.15s, opacity 0.2s; }
 .alf-send:active { transform: scale(0.92); }
 .alf.busy .alf-send { opacity: 0.45; pointer-events: none; }
-.alf-send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.alf-send svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
 
 /* phones: a sheet over the bottom of the screen; folds to a peek when the map shows something */
 .alf-peek {
@@ -147,6 +171,8 @@ body.night .alf-form textarea { background: rgba(255, 255, 255, 0.07); }
     height: calc(min(76vh, 640px) - var(--kb) * 0.35); max-height: calc(100dvh - var(--kb) - 70px); border-radius: 24px; transform-origin: 50% 100%;
   }
   .alf.peeking .alf-bird { pointer-events: none; }
+  .alf-form textarea { font-size: 16px; }   /* below 16 px iOS zooms into the field */
+  .alf-m { font-size: 14px; }
 }
 body.driving .alf, body.driving .alf-bird { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .alf-svg, .alf-svg *, .alf-panel { animation: none !important; transition: none !important; } }
