@@ -177,7 +177,11 @@ export function createShips(ctx) {
   }
   // AIS sends names/types only every ~6 min, so a ship first appears as type 0: guess from speed and the ferry lanes
   function nearFerryLane(x, y) {
-    for (const pts of ferry?.shapes || []) for (let i = 0; i < pts.length; i += 2) if (Math.hypot(pts[i][0] - x, pts[i][1] - y) < 300) return true;
+    for (const pts of ferry?.shapes || []) for (let i = 1; i < pts.length; i++) {   // shapes are sparse (km-long legs): distance to each leg
+      const [ax, ay] = pts[i - 1], dx = pts[i][0] - ax, dy = pts[i][1] - ay, l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+      if (Math.hypot(ax + t * dx - x, ay + t * dy - y) < 700) return true;
+    }
     return false;
   }
   function guessKind(type, L, name, sog, x, y) {
@@ -186,8 +190,8 @@ export function createShips(ctx) {
     return sog > 3 && nearFerryLane(x, y) ? 'ferry' : 'cargo';
   }
   const v0kind = (id, type, len, name, sog, x, y) => {
-    const v = vessels.get(id);   // keep an earlier guess until real static data arrives, so a hull doesn't flip back and forth
-    return !type && !len && v?.guess ? v.kind : guessKind(type, len, name, sog, x, y);
+    const v = vessels.get(id);   // a ferry guess holds while it stands at a pier, so the hull doesn't flip to cargo
+    return !type && !len && v?.guess && v.kind === 'ferry' ? 'ferry' : guessKind(type, len, name, sog, x, y);
   };
   function ingest(d) {
     const now = performance.now() / 1000;
