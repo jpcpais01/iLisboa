@@ -19,6 +19,8 @@ import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
 import { initAssistant } from './ui/assistant.js';
+import { initPhoto } from './ui/photo.js';
+import { beaconUniforms } from './live/beacons.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -829,6 +831,21 @@ const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, i
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 // Alfacinha, the Lisbon guide: a swallow in the corner that opens a chat (src/ui/assistant.js → /api/assistant)
 window.__alf = initAssistant({ camera, controls, marks, live, hud, ll, mobile: isMobile });
+// photo mode (src/ui/photo.js): while a photo is being made, streaming and pixel-sized things see the photo's resolution
+let shotF = 0, shotDraw = null, shotLod = 0;
+const tanHalf = () => Math.tan((camera.fov * Math.PI) / 360);
+initPhoto({ renderer, camera, canvas, controls, mobile: isMobile, hooks: {
+  scene, invalidate,
+  begin: (W, H) => { shotF = H / (2 * tanHalf()); shotLod = lodK; if (!LOD_PIN) lodK = 1; },   // full detail distances, whatever the fps
+  end: () => { shotF = 0; if (!LOD_PIN) lodK = shotLod; },
+  pending: () => stream(true) + inflight + tiles.filter((t) => t.dstate === 1).length,   // tiles wanted, loading, or fetching relief
+  shoot: (draw) => { shotDraw = draw; invalidate(); },   // the next frame draws the photo instead of the screen
+  scale: (H) => {   // sizes set in screen pixels follow the photo's height; returns the undo
+    const l = lampUniforms.uScale.value, d = beaconUniforms.uDpr.value;
+    lampUniforms.uScale.value = H / (2 * tanHalf()); beaconUniforms.uDpr.value = H / Math.max(1, canvas.clientHeight);
+    return () => { lampUniforms.uScale.value = l; beaconUniforms.uDpr.value = d; };
+  },
+} });
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -836,7 +853,7 @@ const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
 let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio, fast = 0, upT = -1e9, upWait = 8000;
-const setFocal = () => { px.f = (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
+const setFocal = () => { px.f = shotF || (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
 setFocal();
 renderer.setAnimationLoop((now) => {
   setFocal();
@@ -899,6 +916,7 @@ renderer.setAnimationLoop((now) => {
   live.update(dt, now);
   stations.update();
   layers.update(dt, now);
+  if (shotDraw) { const d = shotDraw; shotDraw = null; d(); wasActive = false; last = performance.now(); needRender = 2; return; }   // (a photo frame is slow by design: not timed)
   renderer.render(scene, camera);
 
   // adaptive resolution: hold 60 fps on phones (timed on consecutive moving frames only)

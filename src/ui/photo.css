@@ -1,0 +1,58 @@
+/* Photo mode: the canvas alone, plus a small bar that steps aside when the view is still */
+body.photo > :not(#c):not(.photo-ui) { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+.photo-ui { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: #fff; font: 600 13px/1.2 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; }
+.photo-ui[hidden], .photo-ui [hidden] { display: none !important; }
+.photo-ui button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+
+.ph-hint {
+  position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translate(-50%, -8px);
+  padding: 8px 14px; border-radius: 999px; background: rgba(16, 18, 24, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  white-space: nowrap; opacity: 0; letter-spacing: 0.01em;
+}
+.photo-ui.hinted .ph-hint { animation: ph-hint 3.2s ease both; }
+@keyframes ph-hint { 0% { opacity: 0; transform: translate(-50%, -8px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+
+.ph-bar {
+  position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px;
+  background: rgba(16, 18, 24, 0.58); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: opacity 0.5s ease, transform 0.5s ease; pointer-events: auto;
+}
+.ph-bar.away { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.ph-go { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px; padding: 8px 12px; border-radius: 999px; transition: background 0.15s; }
+.ph-go b { font-size: 15px; font-weight: 750; letter-spacing: -0.01em; }
+.ph-go small { font-size: 10px; font-weight: 500; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.ph-go:hover, .ph-go:focus-visible { background: rgba(255, 255, 255, 0.14); outline: none; }
+.ph-go:active { transform: scale(0.96); }
+.ph-x { display: grid; place-items: center; width: 40px; height: 40px; margin-left: 2px; border-radius: 50%; border-left: 1px solid rgba(255, 255, 255, 0.12) !important; }
+.ph-x:hover { background: rgba(255, 255, 255, 0.14); }
+.ph-x svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.ph-work {
+  position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-radius: 999px;
+  background: rgba(16, 18, 24, 0.66); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); white-space: nowrap; pointer-events: auto;
+}
+.photo-ui.working { pointer-events: auto; }   /* the frame holds still while the detail comes in */
+.ph-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: ph-spin 0.8s linear infinite; }
+@keyframes ph-spin { to { transform: rotate(360deg); } }
+.ph-msg { font-variant-numeric: tabular-nums; }
+.ph-cancel { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.12) !important; font-weight: 600; }
+
+.ph-done {
+  position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(360px, calc(100vw - 32px)); padding: 10px; border-radius: 18px; pointer-events: auto;
+  background: rgba(16, 18, 24, 0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.1); animation: ph-up 0.3s ease both;
+}
+@keyframes ph-up { from { opacity: 0; transform: translate(-50%, 12px); } }
+.ph-done img { display: block; width: 100%; max-height: 34vh; object-fit: contain; border-radius: 10px; }
+.ph-info { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 8px; }
+.ph-info b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.ph-info small { opacity: 0.65; font-weight: 500; }
+.ph-acts { display: flex; gap: 6px; }
+.ph-acts button { flex: 1; padding: 10px 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.12) !important; font-weight: 650; }
+.ph-acts .ph-save { background: #fff !important; color: #14161c; }
+.ph-acts button:active { transform: scale(0.97); }
+@media (max-width: 420px) { .ph-go { min-width: 0; padding: 8px 11px; } }

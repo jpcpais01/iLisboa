@@ -37,16 +37,18 @@ export function initDrive({ scene, camera, controls, canvas, chase, live, waterY
       <span class="msg"></span>
       <button type="button" class="reset" aria-label="Voltar à estrada"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>
       <button type="button" class="view" aria-label="Mudar de câmara"><svg viewBox="0 0 24 24"><path d="M3 8.5h3l2-2.5h8l2 2.5h3V19H3z"/><circle cx="12" cy="13" r="3.4"/></svg></button>
+      <button type="button" class="shot" aria-label="Modo fotografia"><svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 15l5-4.5 4 3.5 3-2.5 5 4"/><circle cx="16" cy="9.5" r="1.3"/></svg></button>
       <button type="button" class="snd" aria-label="Som"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path class="w" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
     </div>
     <div class="speedo"><b>0</b><small>km/h</small></div>
     <div class="road" hidden></div>
-    <div class="keys">W / ↑ acelerar · S / ↓ travar e marcha-atrás · A D / ← → virar · Espaço travão de mão · C câmara · R estrada · Esc sair</div>`;
+    <div class="keys">W / ↑ acelerar · S / ↓ travar e marcha-atrás · A D / ← → virar · Espaço travão de mão · C câmara · P fotografia · R estrada · Esc sair</div>`;
   document.body.appendChild(hud);
   const speedEl = hud.querySelector('.speedo b'), msgEl = hud.querySelector('.msg'), roadEl = hud.querySelector('.road');
   let names = null, roadT = 0, roadName = '';
   hud.querySelector('.exit').onclick = () => exit();
   hud.querySelector('.reset').onclick = () => respawn();
+  hud.querySelector('.shot').onclick = () => dispatchEvent(new Event('photo'));   // photo mode (src/ui/photo.js)
   hud.querySelector('.view').onclick = () => { view = (view + 1) % VIEWS.length; film(0.35); flash(`câmara: ${VIEWS[view].name}`); };
   const sndBtn = hud.querySelector('.snd');
   const paintSnd = () => sndBtn.classList.toggle('off', !audio.on);
