@@ -7,7 +7,7 @@ import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
-import { createSky } from './sky.js';
+import { createSky, AO } from './sky.js';
 import { initLive } from './live/index.js';
 import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
@@ -39,7 +39,8 @@ const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 3000
 const Q = new URLSearchParams(location.search);
 const sky = createSky(renderer, scene, { mobile: isMobile });
 if (Q.has('clouds')) sky.clouds = +Q.get('clouds');
-if (Q.get('tm')) renderer.toneMapping = { neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping }[Q.get('tm')];
+renderer.toneMapping = THREE.CustomToneMapping;   // the grade in src/sky.js
+if (Q.get('tm')) renderer.toneMapping = { neutral: THREE.NeutralToneMapping, agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping, custom: THREE.CustomToneMapping }[Q.get('tm')];
 
 // The sun casts two shadow cascades: a sharp map around the view (follows it closely) and a wide, coarse one out to the
 // horizon (re-drawn only every few hundred metres of travel or when the sun moves), so the far city keeps its form at a
@@ -57,7 +58,13 @@ sunFar.shadow.bias = -0.0004;
 sunFar.shadow.normalBias = 2.5;
 sunFar.shadow.camera.layers.set(1);   // only buildings and ground cast into it (trees, cars, lamps are below its texel)
 for (const l of [sun, sunFar]) l.shadow.autoUpdate = false;
-scene.add(sun, sun.target, sunFar, sunFar.target);
+// ambient occlusion: a black light straight overhead lends its depth map of the city's heights (see sky.js)
+const aoLight = new THREE.DirectionalLight(0x000000, 0);
+aoLight.castShadow = true; aoLight.shadow.autoUpdate = false;
+aoLight.shadow.mapSize.setScalar(AO.size); aoLight.shadow.bias = 0; aoLight.shadow.normalBias = 0;
+aoLight.shadow.camera.layers.set(1); aoLight.shadow.camera.up.set(0, 0, -1);
+{ const sc = aoLight.shadow.camera; sc.left = -AO.R; sc.right = AO.R; sc.top = AO.R; sc.bottom = -AO.R; sc.near = 0; sc.far = AO.range; sc.updateProjectionMatrix(); }
+scene.add(sun, sun.target, sunFar, sunFar.target, aoLight, aoLight.target);
 const BIG = 1;   // layer for far-cascade casters
 const bigCaster = (o) => { o.layers.enable(BIG); return o; };
 
@@ -633,7 +640,7 @@ const EXPOSURE = +Q.get('exp') || 1.0;
 // re-drawn when its snapped frame, the light, or the scene's contents change. The far map covers ~5 km ahead and is re-drawn
 // only when its frame moves a quarter of its width, when the light moves, or (at most every 2 s) when tiles come in.
 const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3(), _fw = new THREE.Vector3(), _lc = new THREE.Vector3();
-let shadowKey = '', farKey = '', shadowDirty = true, farDirty = true, farT = 0;
+let shadowKey = '', farKey = '', shadowDirty = true, farDirty = true, farT = 0, aoKey = '', aoDirty = true, aoT = 0;
 function frame(light, R, t, step, depth) {
   const ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
   return { ka, kb, apply() {
@@ -646,6 +653,15 @@ function frame(light, R, t, step, depth) {
   } };
 }
 function fitShadow(now) {
+  { // AO height map: centred on half-radius steps around the view, redrawn when it moves on or (≤ every 2.5 s) when tiles change
+    const st = AO.R / 2, ax = Math.round(controls.target.x / st) * st, az = Math.round(controls.target.z / st) * st, k = `${ax},${az}`;
+    if (k !== aoKey || (aoDirty && now - aoT > 2500)) {
+      aoKey = k; aoDirty = false; aoT = now;
+      aoLight.position.set(ax, AO.range - 100, az); aoLight.target.position.set(ax, -100, az); aoLight.target.updateMatrixWorld();
+      aoLight.shadow.needsUpdate = true; renderer.shadowMap.needsUpdate = true;
+      return;   // one map per frame
+    }
+  }
   if (!sunLit) return;
   const f = chase.focus(), dist = f ? f.d : camera.position.distanceTo(controls.target), lim = size * 0.6;
   lightRight.crossVectors(lightDir, THREE.Object3D.DEFAULT_UP).normalize();
@@ -667,7 +683,7 @@ function fitShadow(now) {
   if (fk !== farKey || (farDirty && now - farT > 2000)) { farKey = fk; farDirty = false; farT = now; ff.apply(); }
 }
 let needRender = 3;
-const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = true; };
+const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = aoDirty = true; };
 // the clock: Lisbon's real time and date by default (the HUD keeps it ticking); the slider picks any hour of today. ?t=hour pins it.
 const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); } }); window.__hud = hud;
 initDock();
