@@ -438,11 +438,11 @@ function addTrees(buf) {
   // chunked (per kind) so each patch of the city swaps detail by camera distance and frustum-culls on its own
   const cellsOf = (CH) => { const cells = new Map(); for (let i = 0; i < n; i++) { const kind = Math.min(3, Math.floor(d[i * 4 + 3] / 10)), k = kind + ':' + Math.floor(d[i * 4] / CH) + ',' + Math.floor(d[i * 4 + 2] / CH); if (!cells.has(k)) cells.set(k, { kind, ids: [] }); cells.get(k).ids.push(i); } return cells.values(); };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-  const place = (meshes, K, ids) => ids.forEach((i, j) => {
+  const place = (meshes, K, ids, mul = 1) => ids.forEach((i, j) => {
     const r = Math.sin(i * 12.9898) * 43758.5453 % 1;
     q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, r * 6.28);
     const k = d[i * 4 + 3] - Math.min(3, Math.floor(d[i * 4 + 3] / 10)) * 10;
-    s.set(k, k * (0.9 + Math.abs(r) * 0.3), k);
+    s.set(k * mul, k * mul * (0.9 + Math.abs(r) * 0.3), k * mul);
     m.compose(p.set(d[i * 4], d[i * 4 + 1] - 0.2, d[i * 4 + 2]), q, s);
     for (const mesh of meshes) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
   });
@@ -455,12 +455,15 @@ function addTrees(buf) {
     const min = new THREE.InstancedMesh(K.min, K.mat, ids.length); min.instanceMatrix = lo.instanceMatrix; min.instanceColor = lo.instanceColor; fin(min);
     chunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
-  // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city)
+  // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city);
   if (!OLDLOD && chunks.length) {
-    const agg = [...cellsOf(1e7)].map(({ kind, ids }) => { const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, ids.length); place([a], K, ids); fin(a).castShadow = false; a.visible = false; return a; });
+    // and further still, every second tree at √2 the size, then every fourth at twice: the same canopy cover in a half, a quarter of the work
+    const hs = (i) => Math.abs(Math.sin(i * 78.233) * 12543.17 % 1);
+    const lv = [1, 0.5, 0.25].map((f) => [...cellsOf(1e7)].map(({ kind, ids }) => { ids = f < 1 ? ids.filter((i) => hs(i) < f) : ids; const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, Math.max(1, ids.length)); place([a], K, ids, 1 / Math.sqrt(f)); a.count = ids.length; fin(a).castShadow = false; a.visible = false; return a; }));
+    const agg = lv[0];
     const b = new THREE.Box3(); for (const a of agg) b.union(new THREE.Box3().setFromCenterAndSize(a.boundingSphere.center, new THREE.Vector3().setScalar(a.boundingSphere.radius * 2)));
     const sph = b.getBoundingSphere(new THREE.Sphere());
-    const A = { agg, chunks, c: sph.center, r: sph.radius, far: false }; for (const t of chunks) t.area = A; treeAreas.push(A);
+    const A = { lv, chunks, c: sph.center, r: sph.radius, far: false, at: -1 }; for (const t of chunks) t.area = A; treeAreas.push(A);
   }
   treeChunks.push(...chunks);
   for (const { kind, ids } of cellsOf(160)) {
@@ -882,7 +885,11 @@ renderer.setAnimationLoop((now) => {
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
   const tinyD = Math.max(1100, 1.8 * px.f) * lodK;
-  for (const A of treeAreas) { const far = camera.position.distanceTo(A.c) - A.r > tinyD; if (far !== A.far) { A.far = far; for (const a of A.agg) a.visible = far; if (far) for (const t of A.chunks) t.near.visible = t.lo.visible = t.min.visible = false; } }
+  for (const A of treeAreas) {
+    const dA = camera.position.distanceTo(A.c) - A.r, far = dA > tinyD, at = !far ? -1 : dA > 4 * tinyD ? 2 : dA > 2 * tinyD ? 1 : 0;
+    if (at !== A.at) { A.at = at; A.lv.forEach((L, k) => { for (const a of L) a.visible = k === at; }); }
+    if (far !== A.far) { A.far = far; if (far) for (const t of A.chunks) t.near.visible = t.lo.visible = t.min.visible = false; }
+  }
   for (const t of treeChunks) { if (t.area?.far) continue; const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
