@@ -26,7 +26,8 @@ const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 // ─── renderer ───────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-let pixelRatio = Math.min(devicePixelRatio, isMobile ? 1.5 : 2);   // phones: 1.5 is sharp at arm's length and costs half the pixels of 2
+const MAX_PR = Math.min(devicePixelRatio, isMobile ? 1.5 : 2);
+let pixelRatio = MAX_PR;   // phones: 1.5 is sharp at arm's length and costs half the pixels of 2
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -385,7 +386,7 @@ const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (is
 // the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
 // ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
 // exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
-const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2', LEGACY = Q.get('lodv') === '1';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default; ?lodv=1 = all as before 2026-11-27)
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') === '0' || Q.get('lodv') === '1', LEGACY = Q.get('lodv') === '1';   // (A/B: ?lodv=0 = distance LOD only, ?lodv=1 = all as before 2026-11-27)
 const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
 const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
@@ -822,7 +823,7 @@ window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera
 const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
-let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio;
+let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio, fast = 0, upT = -1e9, upWait = 8000;
 const setFocal = () => { px.f = (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
 setFocal();
 renderer.setAnimationLoop((now) => {
@@ -890,6 +891,15 @@ renderer.setAnimationLoop((now) => {
       if (fps < 52 && pixelRatio > 1) { if (++slow >= 2) { pixelRatio = Math.max(1, pixelRatio - 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); slow = 0; } }
       else if (fps < 45 && lodK > 0.55 && !LOD_PIN) { if (++slow >= 2) { lodK = Math.max(0.55, lodK - 0.15); slow = 0; } }   // still slow at dpr 1: pull the detail distances in
       else slow = 0;
+      // and back up when the view gets lighter (a heavy wide view must not leave the city blurry for good): after 4 s of full
+      // rate, detail first, then sharpness, a step at a time; a step that brings the slowness back waits twice as long next time
+      if (fps < 52 && now - upT < 6000) upWait = Math.min(upWait * 2, 120000);
+      if (fps >= 57) fast++; else fast = 0;
+      if (fast >= 4 && now - upT > upWait && (lodK < 1 && !LOD_PIN || pixelRatio < MAX_PR)) {
+        if (lodK < 1 && !LOD_PIN) lodK = Math.min(1, lodK + 0.15);
+        else { pixelRatio = Math.min(MAX_PR, pixelRatio + 0.25); curRatio = pixelRatio; renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight, false); }
+        fast = 0; upT = now;
+      }
     }
     if (SHOW_STATS) statsEl.textContent = `${fps.toFixed(0)} fps · dpr ${pixelRatio}\n${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris`;
     window.__perf = { fps, dpr: pixelRatio, lod: lodK, calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
