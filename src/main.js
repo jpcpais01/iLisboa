@@ -13,6 +13,7 @@ import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
 import { initLandmarks } from './landmarks.js';
+import { initStations } from './stations/index.js';
 import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
@@ -753,6 +754,8 @@ const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, min
 const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, onCloud: setOvercast, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
+// bus stops + Metro stations: tap one for the next arrivals per line (src/stations); before the landmarks so a stop pin wins the tap
+const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, invalidate }); window.__stations = stations;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
@@ -807,6 +810,7 @@ renderer.setAnimationLoop((now) => {
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   live.update(dt, now);
+  stations.update();
   layers.update(dt, now);
   renderer.render(scene, camera);
 

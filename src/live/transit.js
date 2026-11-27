@@ -234,7 +234,43 @@ export function createTransit(ctx) {
     return { icon: 'Ⓜ', title: `Metro · ${t.l.name}`, sub: `sentido ${dest}`, lines: [t.pos.stop ? `parado em ${t.pos.stop.name}` : 'em circulação'], src: 'estimado · horário típico (o Metro não publica posições)', speedKnown: true };
   }
 
+  // ─── Metro stations and next trains, for the station cards (src/stations): same timetable model as the trains ───
+  function metroStations() {
+    if (!metro) return null;
+    const by = new Map();
+    for (const l of metro) for (const st of l.stops) {
+      const a = pointAt(l, st.s); let g = by.get(st.name);
+      if (!g) by.set(st.name, (g = { name: st.name, x: 0, y: 0, n: 0, lines: [] }));
+      g.x += a.x; g.y += a.y; g.n++; if (!g.lines.some((x) => x.name === l.name)) g.lines.push({ name: l.name, colour: l.colour });
+    }
+    return [...by.values()].map((g) => ({ name: g.name, x: g.x / g.n, y: g.y / g.n, lines: g.lines }));
+  }
+  // next trains at a station, per line and direction: [{ line, colour, dest, inS }] (seconds from now)
+  function metroArrivals(name, per = 3) {
+    if (!metro) return [];
+    const { sec, weekend } = lisbonNow(), out = [];
+    metro.forEach((l, li) => {
+      const n = l.stops.length, i = l.stops.findIndex((s) => s.name === name);
+      if (i < 0) return;
+      for (const dir of [0, 1]) {
+        const k = dir ? n - 1 - i : i;
+        if (k >= n - 1) continue;   // the terminus for this direction: the train ends here
+        const dest = dir ? l.stops[0].name : l.stops[n - 1].name, arr = l.trip.t[k].arr;
+        let dep = 6.5 * 3600 + ((li * 97 + dir * 151) % 240), got = 0;
+        while (got < per) {
+          const t = dep + arr;
+          if (t > sec + 3600) break;
+          if (t >= sec - 15) { out.push({ line: l.name, colour: l.colour, dest, inS: t - sec }); got++; }
+          const hw = headway(l.name, dep / 3600, weekend); if (!hw) break;
+          dep += hw;
+        }
+      }
+    });
+    return out;
+  }
+
   return {
+    metroStations, metroArrivals,
     get on() { return on; },
     set(v) { on = v; group.visible = v; clearTimeout(timer); if (v) poll(); else vehicles.clear(); },
     update,
