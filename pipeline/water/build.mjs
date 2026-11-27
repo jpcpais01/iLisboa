@@ -179,7 +179,7 @@ for (const e of els.values()) {
 }
 const marinas = [], ports = [];
 // published berth counts (Porto de Lisboa / the marinas' own sites): the basin layout alone would fill every dock wall to wall
-const CAP = { 'Doca de Alcântara': 440, 'Doca de Santo Amaro': 331, 'Doca de Belém': 161, 'Doca do Bom Sucesso': 163, 'Marina Parque das Nações': 600 };
+const CAP = { 'Doca de Alcântara': 440, 'Doca de Santo Amaro': 331, 'Doca de Belém': 161, 'Doca do Bom Sucesso': 163, 'Marina Parque das Nações': 600, 'Marina de Cascais': 650, 'Porto de Recreio de Oeiras': 274 };
 for (const e of els.values()) {
   const t = e.tags, r = ringOf(e);
   if (!r || r.length < 3) continue;
