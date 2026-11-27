@@ -1,11 +1,11 @@
 // iLisboa service worker. Emitted at build time by the `sw` plugin in vite.config.js, which fills in
 // VERSION and SHELL (every hashed bundle file). Caches only the app shell: the page, its JS/CSS and icons.
-// Tiles (/tiles, already versioned and HTTP-cached for a year), live feeds (/api) and network data (/live)
+// Tiles (/tiles and the landmark detail /lm, already versioned and HTTP-cached for a year), live feeds (/api) and network data (/live)
 // never touch this worker, so streaming and live layers behave exactly as in a browser tab.
 const VERSION = '__VERSION__';
 const SHELL = __SHELL__;
 const CACHE = `ilisboa-shell-${VERSION}`;
-const BYPASS = /^\/(tiles|api|live)\//;
+const BYPASS = /^\/(tiles|api|live|lm)\//;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', ...SHELL])).then(() => self.skipWaiting()));
