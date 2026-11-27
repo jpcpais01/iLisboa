@@ -48,7 +48,7 @@ export function createCars(ctx) {
   let net = null, info = null;   // per edge: { cls, nl (lanes per direction), mid, rad, sens, seed, r: [fwd, back] live relative speed or NaN }
   let liveK = 1, source = '', flowT = 0, matching = false;
   const lanes = new Map();       // key edge*16 + dir*8 + lane → lane
-  let names = null, dbg = {}, total = 0, lastActive = -1e9, lastCam = new THREE.Vector3(1e9, 0, 0), demand = 0.5, pModel = 0.3;
+  let names = null, dbg = {}, total = 0, lastActive = -1e9, lastCam = new THREE.Vector3(1e9, 0, 0), lastQ = new THREE.Quaternion(), demand = 0.5, pModel = 0.3;
   const hot = HOT.map(([lon, lat, r, k]) => { const v = ll(lat, lon); return [v.x, -v.z, r, k]; });
 
   // the street graph (1.5 MB) downloads once the city around the camera has drawn its ground, not before
@@ -152,7 +152,7 @@ export function createCars(ctx) {
   // which streets to simulate: in front of the camera, out to where a car is still worth a couple of pixels
   const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), sph = new THREE.Sphere(), cp = new THREE.Vector3();
   function activate(now) {
-    lastActive = now; lastCam.copy(camera.position);
+    lastActive = now; lastCam.copy(camera.position); lastQ.copy(camera.quaternion);
     const { h, weekend } = lisbonNow(), hh = h % 24, i0 = Math.floor(hh), f = hh - i0, T = weekend ? END : DAY;
     demand = T[i0] * (1 - f) + T[(i0 + 1) % 24] * f; pModel = pressure();
     camera.updateMatrixWorld(); pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm);
@@ -313,6 +313,10 @@ export function createCars(ctx) {
     let nn = 0, nf = 0;
     for (const l of lanes.values()) {
       if (l.tunnel) continue;
+      // a far lane between steps whose cars sit in the same slots as last frame: they are already in the buffer
+      const nc = l.cars.length;
+      if (!l.stepped && l.allFar && l.at === nf && l.nc === nc && nf + nc <= BUDGET) { nf += nc; continue; }
+      const nn0 = nn; l.at = nf; l.nc = nc;
       for (const c of l.cars) {
         if (nf >= BUDGET) break;
         if (!l.stepped && c.pose) {   // (a far lane between its steps: the car stands where it was drawn)
@@ -341,6 +345,7 @@ export function createCars(ctx) {
         X[n * 4] = pitch; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
         if (l.k > 1) { const q = c.pose || (c.pose = new Float32Array(7)); q[0] = x; q[1] = z + 0.05; q[2] = -y; q[3] = P[n * 4 + 3]; q[4] = pitch; q[6] = T === near ? 1 : 0; } else c.pose = null;
       }
+      l.allFar = nn === nn0 && l.k > 1;
     }
     for (const [T, n] of [[near, nn], [far, nf]]) {
       T.g.instanceCount = n;
@@ -355,7 +360,9 @@ export function createCars(ctx) {
       if (!booted) { if (ground.version > 0) { booted = true; boot(); } return; }
       if (!net || !info) return;
       // re-pick the streets in view twice a second, or at once after a big camera move
-      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { const ta = performance.now(); const keep = { stepMs: dbg.stepMs, drawMs: dbg.drawMs }; activate(now); cadence(); Object.assign(dbg, keep, { activateMs: +(performance.now() - ta).toFixed(1) }); }
+      // (a still camera re-picks every 4 s: the streets in view are the same, only demand drifts; a whole-city pick costs ~30 ms)
+      const still = camera.position.distanceToSquared(lastCam) < 1 && camera.quaternion.angleTo(lastQ) < 1e-3;
+      if (now - lastActive > (still ? 4000 : 500) || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { const ta = performance.now(); const keep = { stepMs: dbg.stepMs, drawMs: dbg.drawMs }; activate(now); cadence(); Object.assign(dbg, keep, { activateMs: +(performance.now() - ta).toFixed(1) }); }
       const t0 = performance.now(); step(dt); const t1 = performance.now();
       shown = draw(); const t2 = performance.now();
       dbg.stepMs = +(0.9 * (dbg.stepMs || 0) + 0.1 * (t1 - t0)).toFixed(2); dbg.drawMs = +(0.9 * (dbg.drawMs || 0) + 0.1 * (t2 - t1)).toFixed(2);   // (smoothed, for window.__live.cars.stats)
