@@ -2,11 +2,15 @@
 // already-summarised JSON so a small model can't get lost in raw data. Tools that change the view (show_on_map,
 // set_layer, follow_vehicle) don't run here: they are queued as actions and the browser performs them.
 import { city, whereIs, nearName, score, norm, fwd, inv, ll } from './data.js';
+import { createEta, prepRoute } from '../eta.js';
 
-const CM = 'https://api.carrismetropolitana.pt/v2';
+const ETA = createEta();   // keeps each bus's recent heading between calls (per warm instance)
+
 const LIS = fwd(38.7813, -9.1359);   // Humberto Delgado airport
 const KIND = { bus: 'Carris bus', tram: 'Carris tram (elétrico)', lift: 'Carris funicular/lift (elevador)', cm: 'Carris Metropolitana bus' };
 const LAYERS = ['traffic', 'transit', 'planes', 'temperatura', 'vento', 'chuva', 'freguesias', 'densidade'];
+const WD = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const dayName = (ymd, k) => (k === 0 ? 'today, ' : k === 1 ? 'tomorrow, ' : '') + WD[new Date(ymd + 'T12:00:00Z').getUTCDay()];
 const dist = (a, b) => Math.round(Math.hypot(a[0] - b[0], a[1] - b[1]));
 const pt = (p) => (p && isFinite(p.lat) && isFinite(p.lon) ? fwd(+p.lat, +p.lon) : null);
 
@@ -42,7 +46,7 @@ export const TOOL_DEFS = [
   },
   {
     name: 'stop_arrivals',
-    description: 'Next arrivals at a bus/tram stop (Carris or Carris Metropolitana). Carris Metropolitana: real-time estimates where available, else timetable. Carris: timetable. Get stop_id from find_place (kind "stop"). Several stops can share a name (one per direction): pass each id you care about.',
+    description: 'Next arrivals at a bus/tram stop (Carris or Carris Metropolitana), both directions of the street. Same estimate as the app\'s stop cards: realtime rows are GPS-tracked buses (timetable + their measured delay), the rest are timetable. Get stop_id from find_place (kind "stop").',
     input_schema: { type: 'object', properties: { stop_id: { type: 'string', description: 'e.g. "c:12345" or "m:060001"' }, line: { type: 'string', description: 'Only this line (optional)' }, minutes: { type: 'integer', description: 'Look ahead window, default 60' } }, required: ['stop_id'] },
   },
   {
@@ -57,7 +61,7 @@ export const TOOL_DEFS = [
   },
   {
     name: 'traffic',
-    description: 'LIVE road traffic (TomTom flow): city-wide congestion on main roads and the slowest areas, or around a point (speed as % of free flow).',
+    description: 'LIVE road traffic (TomTom flow), speed as % of free flow. Without a point: city-wide congestion and the slowest parishes. With lat/lon (e.g. a road or place from find_place): only that area. For a long road (Segunda Circular, IC19, 2ª Circular, Eixo Norte-Sul) call it at 2–3 points along it.',
     input_schema: { type: 'object', properties: { lat: { type: 'number' }, lon: { type: 'number' }, radius_m: { type: 'integer', description: 'Default 1200' } } },
   },
   {
@@ -159,8 +163,8 @@ const IMPL = {
     if (om.status !== 'fulfilled') throw new Error('weather service unavailable');
     const v = om.value, c = v.current, i0 = Math.max(0, v.hourly.time.indexOf(c.time.slice(0, 13) + ':00'));
     const hours = [];
-    for (let i = i0 + 1; i < Math.min(v.hourly.time.length, i0 + 25); i += 3) hours.push({ time: v.hourly.time[i].slice(11), temp_c: v.hourly.temperature_2m[i], feels_c: v.hourly.apparent_temperature[i], sky: wmo(v.hourly.weather_code[i]), rain_prob: v.hourly.precipitation_probability[i], rain_mm: v.hourly.precipitation[i], wind_kmh: v.hourly.wind_speed_10m[i], gust_kmh: v.hourly.wind_gusts_10m[i] });
-    const D = v.daily, days = D.time.map((t, k) => ({ date: t, sky: wmo(D.weather_code[k]), min_c: D.temperature_2m_min[k], max_c: D.temperature_2m_max[k], rain_mm: D.precipitation_sum[k], rain_prob: D.precipitation_probability_max[k], wind_max_kmh: D.wind_speed_10m_max[k], uv_max: D.uv_index_max[k] }));
+    for (let i = i0 + 1; i < Math.min(v.hourly.time.length, i0 + 25); i += 3) hours.push({ time: v.hourly.time[i].slice(11), day: v.hourly.time[i].slice(0, 10) === v.daily.time[0] ? 'today' : 'tomorrow', temp_c: v.hourly.temperature_2m[i], feels_c: v.hourly.apparent_temperature[i], sky: wmo(v.hourly.weather_code[i]), rain_prob: v.hourly.precipitation_probability[i], rain_mm: v.hourly.precipitation[i], wind_kmh: v.hourly.wind_speed_10m[i], gust_kmh: v.hourly.wind_gusts_10m[i] });
+    const D = v.daily, days = D.time.map((t, k) => ({ date: t, day: dayName(t, k), sky: wmo(D.weather_code[k]), min_c: D.temperature_2m_min[k], max_c: D.temperature_2m_max[k], rain_mm: D.precipitation_sum[k], rain_prob: D.precipitation_probability_max[k], wind_max_kmh: D.wind_speed_10m_max[k], uv_max: D.uv_index_max[k] }));
     let station;
     if (city.status === 'fulfilled' && city.value.stations?.length) {
       const p = fwd(+lat, +lon), st = city.value.stations.map((s) => [dist(p, [s.x, s.y]), s]).sort((a, b) => a[0] - b[0])[0];
@@ -200,33 +204,34 @@ const IMPL = {
     const C = await city(ctx.get, ctx.origin);
     const stop = C.stops.find((s) => s[0] === stop_id) || C.stops.find((s) => s[0].split(':')[1] === String(stop_id));
     if (!stop) return { error: `Unknown stop_id ${stop_id}. Use find_place with kind "stop" first.` };
-    const [op, sid] = stop[0].split(':'), win = Math.max(10, Math.min(180, minutes)) * 60, clock = lisbonClock(ctx.now());
+    const op = stop[0][0], win = Math.max(10, Math.min(95, minutes)) * 60, clock = lisbonClock(ctx.now()), nowS = ctx.now().getTime() / 1000;
     const lineOk = (l) => !line || norm(l).replace(/\s/g, '') === norm(line).replace(/\s/g, '') || norm(l).replace(/e$/, '') === norm(line).replace(/e$/, '');
-    let rows = [], source;
-    if (op === 'm') {
-      try {
-        const a = await ctx.get(`${CM}/arrivals/by_stop/${encodeURIComponent(sid)}`, 20);
-        const nowU = ctx.now().getTime() / 1000;
-        for (const r of a) {
-          const est = r.estimated_arrival_unix, sch = r.scheduled_arrival_unix, t = est ?? sch;
-          if (t == null || t < nowU - 60 || t > nowU + win || r.observed_arrival_unix) continue;
-          const ln = String(r.line_id || '').replace(/^\[[^\]]*\]/, '');
-          if (!lineOk(ln)) continue;
-          rows.push({ line: ln, to: r.headsign, in_min: Math.max(0, Math.round((t - nowU) / 60)), at: hm((t - nowU) + clock.sec), realtime: est != null, vehicle_id: r.vehicle_id ? 'm' + r.vehicle_id : undefined });
-        }
-        source = 'Carris Metropolitana API (real-time estimates where a bus is tracked, else timetable)';
-      } catch (e) { source = 'Carris Metropolitana real-time unavailable (' + e.message + '); timetable'; }
-    }
-    if (!rows.length) {
-      rows = await scheduled(ctx, C, stop, sid, op, clock, win, lineOk);
-      source = source && op === 'm' ? source : op === 'c' ? 'Carris timetable (GTFS; Carris does not publish real-time arrival estimates)' : 'timetable (GTFS)';
-    }
-    rows.sort((a, b) => a.in_min - b.in_min);
+    // the other side of the street shares the name: include it (within 250 m), so both directions are covered
+    const sides = C.stops.filter((s) => s[0] === stop[0] || (s[0][0] === op && s[1] === stop[1] && Math.hypot(s[2] - stop[2], s[3] - stop[3]) < 250)).slice(0, 4);
+    // the same estimator the station cards use (api/_lib/eta.js): timetable corrected by the GPS-tracked buses
+    const [cal, feed, routes] = await Promise.all([
+      ctx.get(`${ctx.origin}/transit/cal.json`, 3600),
+      ctx.get(`${ctx.origin}/api/transit`, 15).catch(() => null),
+      Promise.all([...new Set(sides.flatMap((s) => s[4]))].filter((k) => lineOk(C.routes[k]?.[0] || '')).slice(0, 30)
+        .map((k) => ctx.get(`${ctx.origin}/transit/r/${k}.json`, 3600).then((R) => (R.patterns[0]?.seg ? R : prepRoute(R))).catch(() => null))),
+    ]);
+    const vehicles = (feed?.v || []).map((a) => ({ op: a[0] === 'cm' ? 'm' : 'c', id: a[1], line: a[2], x: a[3], y: a[4], bearing: a[5], ts: feed.t - a[7], pattern: (a[9] || '').replace(/^\[[^\]]+\](?=\[)/, ''), trip: a[10] || '', stop: a[11] || '', status: a[12], route: a[13] || '', dir: a[14] >= 0 ? a[14] : null })).filter((v) => v.op === op);
+    let rows = [];
+    for (const s of sides) rows.push(...ETA.arrivals(s[0].slice(2), routes.filter((R) => R && R.op === op), cal, vehicles, nowS));
+    const seenK = new Set();
+    rows = rows.filter((r) => lineOk(r.line) && r.t <= nowS + win && !seenK.has(r.key) && seenK.add(r.key)).sort((a, b) => a.t - b.t);
+    const out = rows.map((r) => ({ line: r.line, to: r.head, in_min: Math.max(0, Math.round((r.t - nowS) / 60)), at: hm(clock.sec + (r.t - nowS)), realtime: r.live,
+      ...(r.live ? { late_min: Math.round(r.delay / 60), bus_m_away: Math.round(r.away), bus_at_stop: r.here || undefined } : {}) }));
     // the next one per line and direction first, then the rest: a stop with 15 lines shouldn't show only one line
     const seen = new Set(), first = [], rest = [];
-    for (const r of rows) { const k = r.line + '|' + r.to; (seen.has(k) ? rest : first).push(r); seen.add(k); }
+    for (const r of out) { const k = r.line + '|' + r.to; (seen.has(k) ? rest : first).push(r); seen.add(k); }
     const list = [...first, ...rest].slice(0, 14).sort((a, b) => a.in_min - b.in_min);
-    return { stop: stop[1], stop_id: stop[0], ...ll(inv(stop[2], stop[3])), local_time: clock.hm, lines_here: [...new Set(stop[4].map((k) => C.routes[k]?.[0]).filter(Boolean))], arrivals: list, source, note: list.length ? undefined : `No departures in the next ${Math.round(win / 60)} min${line ? ' for line ' + line : ''}.` };
+    return {
+      stop: stop[1], stop_id: stop[0], stops_included: sides.map((s) => s[0]), ...ll(inv(stop[2], stop[3])), local_time: clock.hm,
+      lines_here: [...new Set(sides.flatMap((s) => s[4]).map((k) => C.routes[k]?.[0]).filter(Boolean))], arrivals: list,
+      source: feed ? 'realtime = a GPS-tracked bus matched to its trip (timetable + its measured delay); otherwise the GTFS timetable' : 'live feed unavailable: timetable (GTFS) only',
+      note: list.length ? undefined : `No departures in the next ${Math.round(win / 60)} min${line ? ' for line ' + line : ''}.`,
+    };
   },
 
   async metro({ station, line }, ctx) {
@@ -290,7 +295,10 @@ const IMPL = {
       const worst = loc.filter((s) => s.cls <= 3 && s.lvl < 50).sort((a, b) => a.lvl - b.lvl).slice(0, 5).map((s) => ({ speed_pct: s.lvl, road_class: ['motorway', 'major road', 'secondary road', 'connecting road', 'local road', 'local road'][s.cls], near: nearName(C, s.x, s.y, 600) || whereIs(C, s.x, s.y).parish, ...ll(inv(s.x, s.y)) }));
       around = { ...ll([+lat, +lon]), radius_m: r, all_roads: stats(loc), main_roads: stats(loc.filter((s) => s.cls <= 2)), slowest_spots: worst };
     }
-    return { live: true, source: 'TomTom traffic flow', age_s: Math.max(0, Math.round(ctx.now().getTime() / 1000 - d.t)), citywide_main_roads: stats(main), slowest_parishes_main_roads: slowest, around, scale: '100 = free flow; <60 slow; <30 jammed' };
+    const base = { live: true, source: 'TomTom traffic flow', age_s: Math.max(0, Math.round(ctx.now().getTime() / 1000 - d.t)), scale: '100 = free flow; <60 slow; <30 jammed' };
+    // asked about a place: answer about that place only (city-wide figures there just get mixed into the answer)
+    if (around) return { ...base, around, whole_city_main_roads_for_comparison: stats(main), note: 'Segments carry no road names: "around" covers every road in the radius, not one road alone.' };
+    return { ...base, whole_city_main_roads: stats(main), slowest_parishes_main_roads: slowest };
   },
 
   async landmark_info({ name, qid, lang = 'pt' }, ctx) {
@@ -365,27 +373,3 @@ function headway(line, h, weekend) {
 }
 function tripTime(stops) { let t = 0; for (let i = 1; i < stops.length; i++) t += (stops[i].s - stops[i - 1].s) / 14 + 18 + 25; return t; }
 
-// timetable departures at one stop from the route files (public/transit/r, built by pipeline/transit/build.mjs)
-async function scheduled(ctx, C, stop, sid, op, clock, win, lineOk) {
-  const cal = await ctx.get(`${ctx.origin}/transit/cal.json`, 3600);
-  const start = Date.UTC(+cal.start.slice(0, 4), +cal.start.slice(4, 6) - 1, +cal.start.slice(6, 8));
-  const today = Math.round((Date.UTC(+clock.ymd.slice(0, 4), +clock.ymd.slice(4, 6) - 1, +clock.ymd.slice(6, 8)) - start) / 864e5);
-  const svc = cal.svc[op] || [];
-  const runs = (s, day) => day >= 0 && svc[s]?.[day] === '1';
-  const rows = [];
-  await Promise.all(stop[4].filter((k) => lineOk(C.routes[k]?.[0] || '')).slice(0, 24).map(async (key) => {
-    let R; try { R = await ctx.get(`${ctx.origin}/transit/r/${key}.json`, 3600); } catch { return; }
-    for (const p of R.patterns) {
-      const i = p.stops.indexOf(sid); if (i < 0 || i === p.stops.length - 1) continue;   // the last stop is an arrival, not a departure
-      const to = p.head || (C.stops.find((s) => s[0] === `${op}:${p.stops[p.stops.length - 1]}`)?.[1]) || '';
-      for (const [, s, t0, pi] of p.trips) {
-        for (const [day, shift] of [[today, 0], [today - 1, 86400]]) {
-          if (!runs(s, day)) continue;
-          const t = t0 + p.prof[pi][i] - shift, dt = t - clock.sec;
-          if (dt >= -30 && dt <= win) rows.push({ line: R.line, to, in_min: Math.max(0, Math.round(dt / 60)), at: hm(t), realtime: false });
-        }
-      }
-    }
-  }));
-  return rows;
-}

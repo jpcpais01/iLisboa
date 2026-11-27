@@ -1,0 +1,1027 @@
+{
+ "at": 1795801641,
+ "models": [
+  "claude-haiku-5-5"
+ ],
+ "effort": "low",
+ "judge": "claude-opus-5-5",
+ "summary": {
+  "claude-haiku-5-5": {
+   "n": 20,
+   "pass": 19,
+   "ms": [
+    1198,
+    1321,
+    1593,
+    1809,
+    1968,
+    2037,
+    2211,
+    2353,
+    2640,
+    2717,
+    3102,
+    3117,
+    3288,
+    3394,
+    3497,
+    3508,
+    3850,
+    4456,
+    5289,
+    8424
+   ],
+   "cost": 0.04773
+  }
+ },
+ "rows": [
+  {
+   "model": "claude-haiku-5-5",
+   "id": "bus-eta",
+   "run": 0,
+   "q": "Quando passa o próximo 728 no Cais do Sodré?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "All times, delays and directions match stop_arrivals, and the answer correctly labels most trips as live, since the data is realtime, rather than following the rubric's timetable-only assumption. It names both directions, though the 'por ordem' list skips the 18:30 Restelo departure, a minor omission.",
+   "ms": 3102,
+   "first_text_ms": 2263,
+   "cost": 0.00064,
+   "usage": {
+    "input": 3179,
+    "output": 650,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Cais do Sodré",
+       "kind": "stop",
+       "line": "728"
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "c:3802",
+       "line": "728"
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "c:3803",
+       "line": "728"
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "c:3804",
+       "line": "728"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "O próximo 728 no Cais do Sodré chega por volta das **17:49**, daqui a 1 minuto, **ao vivo** e com 1 minuto de atraso. Segue para Restelo - Portela.\n\nDepois, por ordem:\n- **18:01** (ao vivo, a horas), para Restelo - Portela\n- **18:16** (ao vivo, 2 min de atraso), para Restelo - Portela\n- **18:33** (estimado, pelo horário), para Pç. Comércio - Alfândega\n\nOs três postos \"Cais Sodré\" mostram os mesmos horários, por isso a resposta vale para qualquer um deles.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Cais do Sodré",
+      "kind": "stop",
+      "line": "728"
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "c:3802",
+      "line": "728"
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "c:3803",
+      "line": "728"
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "c:3804",
+      "line": "728"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "tram-live",
+   "run": 0,
+   "q": "Onde está agora o elétrico 28?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "All 12 trams from the transit_vehicles result are listed, with their locations and parishes correctly grouped, and the data age (<90s) is accurate. The answer is in natural European Portuguese and is concise, with nothing invented.",
+   "ms": 2717,
+   "first_text_ms": 1162,
+   "cost": 0.00042,
+   "usage": {
+    "input": 1797,
+    "output": 483,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "transit_vehicles",
+      "input": {
+       "line": "28E"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Há **12 elétricos do 28E** em circulação, ao vivo (dados com menos de 90 segundos):\n\n- **Perto do Martim Moniz e da Sé:** c556 no Martim Moniz e c555 na Sé.\n- **Chiado e Baixa:** c545 e c562 no Chiado, e c557 junto ao MUDE.\n- **Bica e Calhariz:** c416 perto do Calhariz.\n- **Graça:** c572 junto à Arte Graça.\n- **Estrela e Campo de Ourique:** cinco elétricos (c558, c542, c551, c548 e c567) entre a Estrela, o Campo de Ourique e o Prazeres, sendo que três estão quase no terminal do Prazeres.\n\nNão tenho a direção de cada um, só o trajeto completo, Martim Moniz – Campo de Ourique (Prazeres). Se queres apanhar um, diz-me a paragem e vejo as próximas chegadas.",
+   "trace": [
+    {
+     "name": "transit_vehicles",
+     "input": {
+      "line": "28E"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "densest",
+   "run": 0,
+   "q": "Qual é a freguesia mais densa de Lisboa?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Correctly names Arroios at 15,636/km² with population and area matching the tool data, and the runners-up are also accurate. It is written in concise Portuguese and does not mention Águas Livres.",
+   "ms": 1321,
+   "first_text_ms": 874,
+   "cost": 0.00025,
+   "usage": {
+    "input": 1356,
+    "output": 223,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "parish_stats",
+      "input": {
+       "sort": "density",
+       "municipality": "Lisboa",
+       "limit": 3
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "A freguesia mais densa do concelho de Lisboa é a **Arroios**, com cerca de 15.636 habitantes por km² (33.302 pessoas numa área de 2,13 km²), segundo os dados do INE Censos 2021. Logo a seguir vêm Campo de Ourique (13.399/km²) e Penha de França (12.920/km²).",
+   "trace": [
+    {
+     "name": "parish_stats",
+     "input": {
+      "sort": "density",
+      "municipality": "Lisboa",
+      "limit": 3
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "pop-alvalade",
+   "run": 0,
+   "q": "Quantas pessoas vivem em Alvalade?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Population, area, density and the 5/24 population rank all match the tool output (INE 2021). The answer is concise and in European Portuguese.",
+   "ms": 1198,
+   "first_text_ms": 690,
+   "cost": 0.00013,
+   "usage": {
+    "input": 474,
+    "output": 174,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "parish_stats",
+      "input": {
+       "name": "Alvalade"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Segundo os Censos 2021 do INE, a freguesia de Alvalade tem 33309 habitantes, numa área de 5,34 km², o que dá uma densidade de cerca de 6 242 habitantes por km². É a 5.ª freguesia mais populosa de Lisboa.",
+   "trace": [
+    {
+     "name": "parish_stats",
+     "input": {
+      "name": "Alvalade"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "rain-belem",
+   "run": 0,
+   "q": "Vai chover amanhã em Belém?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "The answer correctly says no rain tomorrow (Saturday 28/11): 0% probability, fog/overcast, 12.5–17.6 °C, all matching the weather tool. The Sunday note (showers, 10%) is also accurate, and the reply is concise European Portuguese.",
+   "ms": 1809,
+   "first_text_ms": 1066,
+   "cost": 0.00038,
+   "usage": {
+    "input": 2182,
+    "output": 315,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Belém",
+       "kind": "parish"
+      }
+     },
+     {
+      "name": "weather",
+      "input": {
+       "label": "Belém",
+       "lat": 38.6916,
+       "lon": -9.216
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Amanhã (sábado) em Belém não deve chover: a previsão dá probabilidade de chuva de 0% e céu entre nevoeiro e nublado, com máxima de cerca de 17,6 °C e mínima de 12,5 °C (previsão do modelo, estimado). Se quiseres guarda-chuva, o domingo é o dia a vigiar, com aguaceiros fracos e probabilidade de 10%.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Belém",
+      "kind": "parish"
+     }
+    },
+    {
+     "name": "weather",
+     "input": {
+      "label": "Belém",
+      "lat": 38.6916,
+      "lon": -9.216
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "temp-benfica",
+   "run": 0,
+   "q": "What's the temperature in Benfica right now?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "The 15.5 °C model reading, the 15.3 °C feels-like, the partly cloudy sky, the southerly wind, the 18.2 °C Amoreiras station reading at 17:00 (UTC equals Lisbon time in November) and the ~13 °C midnight forecast all match the tool output. It correctly treats Benfica as the parish and is concise, friendly English.",
+   "ms": 3288,
+   "first_text_ms": 2640,
+   "cost": 0.00041,
+   "usage": {
+    "input": 2588,
+    "output": 299,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Benfica",
+       "kind": "parish"
+      }
+     },
+     {
+      "name": "weather",
+      "input": {
+       "label": "Benfica",
+       "lat": 38.73775,
+       "lon": -9.19636
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "It's about **15.5 °C** in Benfica right now (model reading, 17:45), feeling like 15.3 °C, with partly cloudy skies and light southerly wind. The nearest IPMA station, Amoreiras, is reading 18.2 °C (measured at 17:00), so it's a touch warmer across town. Tonight should cool to around 13 °C by midnight.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Benfica",
+      "kind": "parish"
+     }
+    },
+    {
+     "name": "weather",
+     "input": {
+      "label": "Benfica",
+      "lat": 38.73775,
+      "lon": -9.19636
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "torre-belem",
+   "run": 0,
+   "q": "Conta-me um pouco sobre a Torre de Belém.",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "The answer accurately paraphrases the Wikipedia summary: the fortification on the Tejo, the D. Manuel I architecture and the official name São Vicente. It omits the UNESCO status and an explicit '16th century/Manueline' label, and 'oficialmente classificada' is slightly awkward phrasing, but the summary is otherwise correct and concise.",
+   "ms": 3394,
+   "first_text_ms": 1430,
+   "cost": 0.00046,
+   "usage": {
+    "input": 1891,
+    "output": 549,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "landmark_info",
+      "input": {
+       "name": "Torre de Belém",
+       "lang": "pt"
+      }
+     },
+     {
+      "name": "show_on_map",
+      "input": {
+       "qid": "Q215003",
+       "label": "Torre de Belém",
+       "scale": "street"
+      }
+     }
+    ]
+   },
+   "actions": [
+    {
+     "type": "show",
+     "qid": "Q215003",
+     "scale": "street",
+     "label": "Torre de Belém"
+    }
+   ],
+   "answer": "A Torre de Belém é uma fortificação na freguesia de Belém, em Lisboa, construída à beira do Tejo. Era outrora rodeada pela água, mas com o tempo a praia foi-se acumulando à volta e hoje ela está ligada à terra firme. É um dos ex-líbris da cidade e um ícone da arquitetura do reinado de D. Manuel I, que mistura a torre de menagem medieval com o baluarte moderno, onde se instalavam peças de artilharia. Fica oficialmente classificada como Torre de São Vicente.\n\nPonho-a agora no mapa para veres o sítio, junto ao rio. Se quiseres, posso dizer-te como chegar de autocarro ou elétrico a partir de onde estás.",
+   "trace": [
+    {
+     "name": "landmark_info",
+     "input": {
+      "name": "Torre de Belém",
+      "lang": "pt"
+     }
+    },
+    {
+     "name": "show_on_map",
+     "input": {
+      "qid": "Q215003",
+      "label": "Torre de Belém",
+      "scale": "street"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "panteao",
+   "run": 0,
+   "q": "When was the Panteão Nacional actually finished?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "It correctly gives 1966 as the completion date (inaugurated 7 December 1966), with construction starting in the 17th century (1682), which fits the tool's '17th-century monument' description. Web-based claims are plausible and hedged; the idiom is missing, but that was only a plus.",
+   "ms": 4456,
+   "first_text_ms": 3369,
+   "cost": 0.01038,
+   "usage": {
+    "input": 671,
+    "output": 618,
+    "cache_read": 18885,
+    "web_searches": 1,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "landmark_info",
+      "input": {
+       "name": "Panteão Nacional",
+       "lang": "en"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "The Panteão Nacional was finished in **1966**, though the building's history is messier than that date suggests. Construction is usually dated to 1682, when the first stones were laid, and the works ran for nearly three centuries. One source puts the start at 1632, and the Portuguese Wikipedia infobox gives 1568, so the starting date varies by source. Most accounts agree on the finish. Works on the final phase ran from 1962 to 1966, and the official inauguration as the Panteão Nacional came on 7 December 1966. The app's landmark data doesn't include a completion date, so this comes from web sources.",
+   "trace": [
+    {
+     "name": "landmark_info",
+     "input": {
+      "name": "Panteão Nacional",
+      "lang": "en"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "show-castle",
+   "run": 0,
+   "q": "Mostra-me o Castelo de São Jorge",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "It called show_on_map with the correct qid and briefly confirmed it, adding a fact the tool supports (Santa Maria Maior parish). The answer is concise, in European Portuguese, and \"colina da Alfama\" is a loose but acceptable description of the castle hill.",
+   "ms": 1968,
+   "first_text_ms": 1314,
+   "cost": 0.00024,
+   "usage": {
+    "input": 959,
+    "output": 297,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Castelo de São Jorge",
+       "kind": "landmark"
+      }
+     },
+     {
+      "name": "show_on_map",
+      "input": {
+       "qid": "Q636780",
+       "label": "Castelo de São Jorge",
+       "scale": "street"
+      }
+     }
+    ]
+   },
+   "actions": [
+    {
+     "type": "show",
+     "qid": "Q636780",
+     "scale": "street",
+     "label": "Castelo de São Jorge"
+    }
+   ],
+   "answer": "Aqui está o Castelo de São Jorge, no alto da colina da Alfama, na freguesia de Santa Maria Maior. Já o tenho no mapa, em vista de rua, para veres bem a muralha. Se quiseres saber mais sobre a sua história, posso ir buscar a ficha da Wikipédia.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Castelo de São Jorge",
+      "kind": "landmark"
+     }
+    },
+    {
+     "name": "show_on_map",
+     "input": {
+      "qid": "Q636780",
+      "label": "Castelo de São Jorge",
+      "scale": "street"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "layer-traffic",
+   "run": 0,
+   "q": "Liga a camada do trânsito, por favor",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": false,
+   "why": "set_layer for traffic succeeded and the answer confirms it; the time and Friday are right, and the rush-hour remark is hedged general knowledge. Style fails because it adds unrequested commentary and an offer instead of one short confirming sentence.",
+   "ms": 1593,
+   "first_text_ms": 884,
+   "cost": 0.00013,
+   "usage": {
+    "input": 379,
+    "output": 178,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "set_layer",
+      "input": {
+       "layer": "traffic",
+       "on": true
+      }
+     }
+    ]
+   },
+   "actions": [
+    {
+     "type": "layer",
+     "layer": "traffic",
+     "on": true
+    }
+   ],
+   "answer": "A camada do trânsito já está ligada no mapa. São 17:47 de sexta-feira, por isso é natural que as artérias principais comecem a compor-se, mas ainda não consultei os números de fluidez; se quiseres, posso dizer-te quais as zonas mais lentas da cidade neste momento.",
+   "trace": [
+    {
+     "name": "set_layer",
+     "input": {
+      "layer": "traffic",
+      "on": true
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "traffic-2circ",
+   "run": 0,
+   "q": "Como está o trânsito na Segunda Circular agora?",
+   "pass": false,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": false,
+   "style": true,
+   "why": "The numbers match the live tool data, and Friday is correct, but the answer lists Ajuda, which is nowhere near the Segunda Circular, as part of its reading. It also omits the most relevant local aggregate (48% of free flow, 65% slow, 36% jammed around the point), so the summary is geographically misleading.",
+   "ms": 5289,
+   "first_text_ms": 3716,
+   "cost": 0.00074,
+   "usage": {
+    "input": 2838,
+    "output": 918,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "traffic",
+      "input": {}
+     },
+     {
+      "name": "traffic",
+      "input": {
+       "lat": 38.753,
+       "lon": -9.17,
+       "radius_m": 1500
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Agora, às 17:47 de sexta-feira, a Segunda Circular está **muito congestionada**, sobretudo no troço de Benfica e Alvalade. Os dados são TomTom ao vivo, mas não isolam a via, por isso é uma leitura da zona.\n\n- **São Domingos de Benfica:** a 24% da velocidade normal, com cerca de 68% da extensão medida em congestionamento.\n- **Alvalade:** a 28%, também com cerca de 68% em congestionamento.\n- **Ajuda:** a 37%, com cerca de 70% em congestionamento.\n- **Zona de Sete Rios, Hipódromo e Galhardas:** as vias mais lentas medidas estão entre 6% e 10% da velocidade livre.\n\nSe puderes, evita esse eixo nas próximas horas. Para uma ideia de quanto tempo demora, posso ver também os autocarros que passam por lá.",
+   "trace": [
+    {
+     "name": "traffic",
+     "input": {}
+    },
+    {
+     "name": "traffic",
+     "input": {
+      "lat": 38.753,
+      "lon": -9.17,
+      "radius_m": 1500
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "planes-landing",
+   "run": 0,
+   "q": "Há algum avião a aterrar em Lisboa agora?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Correctly names IBE05HB (A320) from landing_soon with accurate altitude, speed and distance, and the counts of 12 on the ground and 7 airborne match the tool data. It is written in concise European Portuguese, and the Iberia attribution is a plausible reading of the IBE callsign.",
+   "ms": 2211,
+   "first_text_ms": 1446,
+   "cost": 0.00016,
+   "usage": {
+    "input": 833,
+    "output": 163,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "planes",
+      "input": {}
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Sim, há pelo menos um: o voo **IBE05HB** (Iberia, Airbus A320) está em descida a cerca de 12 km do aeroporto, a 699 m de altitude e 291 km/h. Os dados são ao vivo (ADS-B), por isso a chegada deve estar iminente. Há ainda 12 aviões em terra no aeroporto e 7 no ar na zona.",
+   "trace": [
+    {
+     "name": "planes",
+     "input": {}
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "flight-route",
+   "run": 0,
+   "q": "De onde vem o voo TAP38KJ?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Correctly states the route is unknown per the tool and reports the live position, altitude, speed, heading and climb accurately. The departure-from-Lisbon inference is hedged and plausible given the climb, and the reply is in friendly European Portuguese.",
+   "ms": 3497,
+   "first_text_ms": 2332,
+   "cost": 0.00025,
+   "usage": {
+    "input": 484,
+    "output": 396,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "planes",
+      "input": {
+       "callsign": "TAP38KJ"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "O voo **TAP38KJ** (Embraer E195, CS-TAX) está no ar, mas a rota de origem e destino não aparece nos meus dados, por isso não consigo dizer de onde vem.\n\nAo vivo, o avião está a cerca de 36 km do aeroporto, a 4 875 m de altitude e a 699 km/h, em subida e com rumo a nordeste. Essa trajetória sugere que acabou de descolar de Lisboa, mas é só uma leitura do movimento, não uma confirmação. Se quiseres, posso procurar o trajeto noutras fontes.",
+   "trace": [
+    {
+     "name": "planes",
+     "input": {
+      "callsign": "TAP38KJ"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "metro-freq",
+   "run": 0,
+   "q": "De quanto em quanto tempo passa o metro na linha verde a esta hora?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "The answer gives ~5 min from the tool, notes it's an estimate from the typical timetable with no real-time data, and adds grounded details. It is in European Portuguese and concise (\"comboios\" is fine).",
+   "ms": 2037,
+   "first_text_ms": 1295,
+   "cost": 0.00017,
+   "usage": {
+    "input": 627,
+    "output": 208,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "metro",
+      "input": {
+       "line": "Verde"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Na linha verde, a esta hora (sexta-feira, 17:47), os comboios passam **de cerca de 5 em 5 minutos**. Este valor é estimado a partir do horário típico, porque o Metro não publica posições em tempo real. A linha liga Cais do Sodré a Telheiras, e o serviço vai das 06:30 à 01:00.\n\nSe quiseres saber de perturbações ou greves, convém confirmar em metrolisboa.pt.",
+   "trace": [
+    {
+     "name": "metro",
+     "input": {
+      "line": "Verde"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "metro-trip",
+   "run": 0,
+   "q": "Quanto tempo demora de metro do Rato a Odivelas?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "The answer says about 22 min on the Linha Amarela end to end with no transfer, presented as an estimate, and the ~5 min frequency and 01:00 close match the tool. It is in European Portuguese and concise.",
+   "ms": 2640,
+   "first_text_ms": 1727,
+   "cost": 0.00037,
+   "usage": {
+    "input": 1193,
+    "output": 494,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "metro",
+      "input": {
+       "line": "Amarela",
+       "station": "Rato"
+      }
+     },
+     {
+      "name": "metro",
+      "input": {
+       "line": "Amarela",
+       "station": "Odivelas"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "De metro são cerca de **22 minutos** do Rato até Odivelas, sem mudar de linha, porque o Rato é um dos terminais da Linha Amarela e Odivelas é o outro.\n\nPelo horário típico, há um comboio a cada ~5 minutos agora (17:47), e o serviço decorre até à 01:00. Este tempo é estimado, pois o Metro não publica posições dos comboios em tempo real. Se houver perturbações ou greves, convém confirmar em metrolisboa.pt.",
+   "trace": [
+    {
+     "name": "metro",
+     "input": {
+      "line": "Amarela",
+      "station": "Rato"
+     }
+    },
+    {
+     "name": "metro",
+     "input": {
+      "line": "Amarela",
+      "station": "Odivelas"
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "near-me",
+   "run": 0,
+   "q": "Que autocarros ou elétricos estão aqui perto agora?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Calls transit_vehicles at the Baixa camera spot and accurately lists the nearby trams and buses with line, route, distance and location from the tool. There are minor slips: it mentions 'outros dois' 28E trams when the tool shows three more, and it writes 'na Largo das Caldas' instead of 'no Largo das Caldas'.",
+   "ms": 3117,
+   "first_text_ms": 1115,
+   "cost": 0.00055,
+   "usage": {
+    "input": 2030,
+    "output": 692,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "transit_vehicles",
+      "input": {
+       "lat": 38.7105,
+       "lon": -9.1372
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Estão 24 veículos num raio de 700 m, ao vivo (posições com cerca de 1 minuto de atraso no GPS). Os mais próximos:\n\n- **Elétrico 28E** (Martim Moniz – Campo de Ourique): a 120 m, perto do MUDE, e outros dois mais adiante, na Sé e no Chiado.\n- **Elétrico 12E** (Martim Moniz – circulação Castelo): a 176 m, perto da Igreja de Santa Maria Madalena.\n- **Elétrico 15E** (Praça do Comércio – Algés): a 207 m, na Largo das Caldas.\n- **Elétrico 25E** (Praça do Comércio – Campo de Ourique): a 263 m, junto à Praça do Comércio.\n- **Autocarro 711** (Sul e Sueste – Alto Damaia): a 197 m, junto aos Armazéns Grandella.\n- **Autocarro 728** (Mosteiro dos Jerónimos – Santa Apolónia): a 244 m, no Arco da Rua Augusta.\n- **Autocarro 781** (Cais do Sodré – Prior Velho): a 246 m, junto ao Martinho da Arcada.\n- **Autocarro 735** (Cais do Sodré – Hospital de Santa Maria): a 292 m.\n- **Autocarro 736** (Cais do Sodré – Odivelas): a 448 m, no Rossio.\n\nSe quiseres saber o que passa numa paragem concreta, diz-me qual e eu vejo os próximos horários.",
+   "trace": [
+    {
+     "name": "transit_vehicles",
+     "input": {
+      "lat": 38.7105,
+      "lon": -9.1372
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "web-strike",
+   "run": 0,
+   "q": "Há greve do Metro de Lisboa esta semana?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "It answers from the web search with appropriate hedging: no strike found, sources only up to about 20 Nov, and advice to confirm with Metro de Lisboa. One minor slip is that it describes the Rato works (21–25 Nov) in the present tense, although they had already ended by the 27 Nov snapshot.",
+   "ms": 3508,
+   "first_text_ms": 2088,
+   "cost": 0.0103,
+   "usage": {
+    "input": 147,
+    "output": 567,
+    "cache_read": 12590,
+    "web_searches": 1,
+    "steps": 1,
+    "tools": []
+   },
+   "actions": [],
+   "answer": "Não encontrei nenhuma greve marcada para esta semana no Metro de Lisboa. Pelo que consegui ver, as últimas paralisações foram de outubro: a de 14 de outubro, de 24 horas, convocada por seis sindicatos, e as parciais previstas para 28 e 30 de outubro, que foram desconvocadas.\n\nHá também uma obra que pode afetar a circulação: entre 21 e 25 de novembro, com alterações temporárias no acesso aos comboios, decorre a intervenção na estação Rato, em preparação para a futura linha Circular.\n\nEsta informação vem de notícias e comunicados até cerca de 20 de novembro, e não de um aviso em tempo real. Para confirmar, vale a pena consultar o site ou as redes do Metro de Lisboa antes de sair.",
+   "trace": []
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "web-football",
+   "run": 0,
+   "q": "Who won the last Benfica match?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": false,
+   "why": "It reports found results with opponents and scores and hedges sensibly, so the rubric is broadly met, though it never clearly states the latest men's football result. Style suffers: it is long and drops untranslated Portuguese snippets ('Resultado', 'venceu o…', 'com o Sporting') into an English answer.",
+   "ms": 8424,
+   "first_text_ms": 6681,
+   "cost": 0.02072,
+   "usage": {
+    "input": 140,
+    "output": 1415,
+    "cache_read": 25921,
+    "web_searches": 2,
+    "steps": 1,
+    "tools": []
+   },
+   "actions": [],
+   "answer": "I can't say with certainty which Benfica match was the last one, because my sources disagree and the most recent results I found are from different sports and squads.\n\n- **Football, most recent I found:** the club's own agenda lists Benfica-Áustria de Viena · Resultado 3-1, from the week of 9 to 15 November. Benfica's men's league games from early November are less clear, and one results page lists Estrela 2 - 3 Benfica on 8 November.\n- **Other sports, more recent:** the handball, basketball and volleyball teams played on 21 and 22 November. For example, the volleyball side venceu o Castêlo da Maia GC, por 1-3 on 22 November, and the roller hockey team drew 6-6 com o Sporting that same day.\n- **Next up:** the club's agenda gives FC Porto-Benfica · Data e hora 28 de novembro (sábado), 18h00, so the next big football derby is tomorrow.\n\nIf you tell me which sport you mean, I can narrow it down, or I can search again for the latest men's football result.",
+   "trace": []
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "cm-cacilhas",
+   "run": 0,
+   "q": "Próximos autocarros a sair de Cacilhas?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "Every departure (line, destination, time) matches the stop_arrivals data for bays P5, P9 and P2, and the answer says these are timetable times, not live. It gives clock times rather than minutes-away and doesn't explicitly say only some bays are covered, but these are minor gaps.",
+   "ms": 3850,
+   "first_text_ms": 2464,
+   "cost": 0.00087,
+   "usage": {
+    "input": 4521,
+    "output": 828,
+    "cache_read": 18885,
+    "web_searches": 0,
+    "steps": 3,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Cacilhas",
+       "kind": "stop"
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "m:320037",
+       "minutes": 60
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "m:320113",
+       "minutes": 60
+      }
+     },
+     {
+      "name": "stop_arrivals",
+      "input": {
+       "stop_id": "m:320403",
+       "minutes": 60
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "Estes são os próximos autocarros no terminal rodoviário de Cacilhas, às 17:47. Os horários são **pelo horário**, não ao vivo, por isso podem variar um pouco.\n\n**Terminal P9 (Carris Metropolitana)**\n- 18:00: 3003 para Almada Fórum, e 3506 para Corroios (Estação)\n- 18:15: 3007 para Bairro Fundo Fomento\n- 18:25: 3506 para Corroios\n- 18:30: 3003 para Almada Fórum\n\n**Terminal P2**\n- 18:05: 3012 para Charneca da Caparica (Tremoceira)\n- 18:15: 3040 para Quinta do Texugo\n\n**Terminal P5**\n- 17:55: 3001 para Almada (Cristo Rei)\n- 18:15: 3001 para Almada (Cristo Rei)\n\nSe estiveres perto da Avenida 25 de Abril, há outras paragens da mesma zona com as mesmas linhas, se o terminal ficar longe.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Cacilhas",
+      "kind": "stop"
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "m:320037",
+      "minutes": 60
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "m:320113",
+      "minutes": 60
+     }
+    },
+    {
+     "name": "stop_arrivals",
+     "input": {
+      "stop_id": "m:320403",
+      "minutes": 60
+     }
+    }
+   ]
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "id": "which-parish",
+   "run": 0,
+   "q": "Em que freguesia fica o Palácio de São Bento?",
+   "pass": true,
+   "toolsOk": true,
+   "grounded": true,
+   "correct": true,
+   "style": true,
+   "why": "It correctly gives Estrela, as the tool returned. The extra remark about nearby stops is only partly accurate: one 'Palácio S. Bento (Jardim)' stop is in Estrela, not Misericórdia. There is also a small grammar slip ('Os paragens' should be 'As paragens'), but neither affects the core answer.",
+   "ms": 2353,
+   "first_text_ms": 1532,
+   "cost": 0.00016,
+   "usage": {
+    "input": 769,
+    "output": 157,
+    "cache_read": 12590,
+    "web_searches": 0,
+    "steps": 2,
+    "tools": [
+     {
+      "name": "find_place",
+      "input": {
+       "query": "Palácio de São Bento"
+      }
+     }
+    ]
+   },
+   "actions": [],
+   "answer": "O Palácio de São Bento fica na freguesia da **Estrela**, em Lisboa. Os paragens mais próximas, como \"Palácio S. Bento (Jardim)\", já ficam do lado da Misericórdia, por isso a fronteira entre as duas freguesias passa ali perto.",
+   "trace": [
+    {
+     "name": "find_place",
+     "input": {
+      "query": "Palácio de São Bento"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -3,7 +3,7 @@
 // state = what the viewer would send (camera spot, layers).
 const BAIXA = { view: { lat: 38.7105, lon: -9.1372, range: 900 } };
 export const CASES = [
-  { id: 'bus-eta', q: 'Quando passa o próximo 728 no Cais do Sodré?', tools: [['stop_arrivals']], rubric: 'Gives the next 728 departure(s) from a Cais do Sodré stop with minutes/times taken from stop_arrivals, says it is from the timetable (not live), and names the direction. Mentions the other direction or stop if relevant.' },
+  { id: 'bus-eta', q: 'Quando passa o próximo 728 no Cais do Sodré?', tools: [['stop_arrivals']], rubric: 'Gives the next 728 departure(s) from a Cais do Sodré stop with minutes/times taken from stop_arrivals, labels each time correctly as live (a GPS-tracked bus, realtime: true) or timetable (realtime: false), and names the direction. Mentions the other direction or stop if relevant.' },
   { id: 'tram-live', q: 'Onde está agora o elétrico 28?', tools: [['transit_vehicles']], rubric: "Uses transit_vehicles for line 28E and says where the 28E trams are right now (places/parishes from the tool), or clearly says none are reporting if the tool found none. No invented positions." },
   { id: 'densest', q: 'Qual é a freguesia mais densa de Lisboa?', tools: [['parish_stats']], rubric: 'Answers Arroios (the densest parish of the Lisboa municipality) with its density (~15,600 inhab/km²) from the tool. Must NOT answer Águas Livres (that is Amadora, not Lisboa) as the answer for Lisboa, although mentioning it as densest in the wider area is fine.' },
   { id: 'pop-alvalade', q: 'Quantas pessoas vivem em Alvalade?', tools: [['parish_stats']], rubric: 'Gives the population of the parish of Alvalade from the tool (INE 2021 figure), optionally area/density.' },

@@ -17,6 +17,7 @@ import { initStations } from './stations/index.js';
 import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
+import { initAssistant } from './ui/assistant.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -758,6 +759,8 @@ const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: 
 const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, invalidate }); window.__stations = stations;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
+// Alfacinha, the Lisbon guide: a swallow in the corner that opens a chat (src/ui/assistant.js → /api/assistant)
+window.__alf = initAssistant({ camera, controls, marks, live, hud, ll, mobile: isMobile });
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
