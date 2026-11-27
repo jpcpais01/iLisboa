@@ -13,7 +13,12 @@ const PROMPT = (v) => `A real aerial photograph of ${v.place}, Lisbon, Portugal,
   `Keep the exact composition: every building, roof, street, square, quay, the Tagus shoreline${v.id === 'ponte' ? ' and the suspension bridge' : ''} stay exactly where they are with the same shapes and sizes. Do not add, remove, move or resize any building. ` +
   `Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster façades with real windows and shutters, Portuguese calçada pavement, real trees, real cars, the river with natural reflections, natural sunlight and soft shadows, light atmospheric haze. Photorealistic, sharp, DSLR photo.`;
 
+const LOCK = ' Hard constraints: same camera, same framing, same field of view and same horizon line as the first image; it is a pixel-aligned retouch, not a new photo. Do not zoom, crop, rotate or extend the view. Do not enlarge or shrink any landmark. Only change materials, lighting and small surface detail.';
+const nb = (v, seed, depth) => ['fal-ai/nano-banana-2/edit', { prompt: PROMPT(v) + LOCK + (depth ? ' The second image is the exact depth map of the first: the geometry must match it.' : ''), image_urls: depth ? [uri(`${v.id}_render.jpg`), uri(`${v.id}_depth.png`)] : [uri(`${v.id}_render.jpg`)], aspect_ratio: '16:9', resolution: '2K', output_format: 'jpeg', num_images: 1, seed }, 0.12];
 const A = {
+  nano2lock_s1: (v) => nb(v, 1, true),
+  nano2lock_s2: (v) => nb(v, 2, true),
+  nano2lock_nodepth: (v) => nb(v, 1, false),
   // FLUX dev + Control-LoRA depth, img2img from our render: geometry pinned twice (init image + exact depth)
   flux_depth_045: (v) => ['fal-ai/flux-control-lora-depth/image-to-image', { prompt: PROMPT(v), image_url: uri(`${v.id}_render.jpg`), control_lora_image_url: uri(`${v.id}_depth.png`), control_lora_strength: 1, strength: 0.45, image_size: { width: 1920, height: 1088 }, num_inference_steps: 30, guidance_scale: 3.5, output_format: 'jpeg', seed: 7 }, 0.08],
   flux_depth_065: (v) => ['fal-ai/flux-control-lora-depth/image-to-image', { prompt: PROMPT(v), image_url: uri(`${v.id}_render.jpg`), control_lora_image_url: uri(`${v.id}_depth.png`), control_lora_strength: 1, strength: 0.65, image_size: { width: 1920, height: 1088 }, num_inference_steps: 30, guidance_scale: 3.5, output_format: 'jpeg', seed: 7 }, 0.08],
