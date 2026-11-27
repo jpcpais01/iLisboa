@@ -355,9 +355,10 @@ export function createCars(ctx) {
       if (!booted) { if (ground.version > 0) { booted = true; boot(); } return; }
       if (!net || !info) return;
       // re-pick the streets in view twice a second, or at once after a big camera move
-      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { activate(now); cadence(); }
-      step(dt);
-      shown = draw();
+      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { const ta = performance.now(); const keep = { stepMs: dbg.stepMs, drawMs: dbg.drawMs }; activate(now); cadence(); Object.assign(dbg, keep, { activateMs: +(performance.now() - ta).toFixed(1) }); }
+      const t0 = performance.now(); step(dt); const t1 = performance.now();
+      shown = draw(); const t2 = performance.now();
+      dbg.stepMs = +(0.9 * (dbg.stepMs || 0) + 0.1 * (t1 - t0)).toFixed(2); dbg.drawMs = +(0.9 * (dbg.drawMs || 0) + 0.1 * (t2 - t1)).toFixed(2);   // (smoothed, for window.__live.cars.stats)
     },
     get count() { return shown; },
     get total() { return total; },
