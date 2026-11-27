@@ -155,6 +155,7 @@ function wetGrid(a) {
 }
 const _wv = new THREE.Vector3();
 function splitWet(geo, a, mw) {   // → [dry, wet] triangle counts; the index is reordered in place (dry first) and two groups set
+  if (LEGACY) { geo.clearGroups(); geo.addGroup(0, Infinity, 1); return; }
   const G = wetGrid(a), P = geo.attributes.position, n = P.count, idx = geo.index ? geo.index.array : Uint32Array.from({ length: n }, (_, i) => i);
   const cx = new Float32Array(n), cy = new Float32Array(n);
   for (let i = 0; i < n; i++) { _wv.fromBufferAttribute(P, i); if (mw) _wv.applyMatrix4(mw); cx[i] = (_wv.x - a.bounds.minX) * G.sx; cy[i] = (-_wv.z - a.bounds.minY) * G.sy; }
@@ -242,7 +243,7 @@ function mergeFar(a, root) {
     tex.userData.px = W * Hh; tex.onUpdate = () => { cv.width = cv.height = 1; };   // uploaded: let the canvas go
     const fg = mergeGeometries(geos); splitWet(fg, a);
     const ftm = add(fg, [hideable(terrainMaterial(tex, a.mask, a.bounds, false, false), H.t), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t)], `ft_${a.area}`, H.t);
-    ftm.renderOrder = 1;   // ground after the buildings: whatever they cover is rejected by the depth test before it is shaded
+    ftm.renderOrder = LEGACY ? 0 : 1;   // ground after the buildings: whatever they cover is rejected by the depth test before it is shaded
     free(parts.t);
   }
   if (parts.b.length) { add(mergeGeometries(parts.b.map((p) => bake(p, ['position', 'color']))), hideable(farBuildingMaterial(), H.b), `fb_${a.area}`, H.b); free(parts.b); }
@@ -306,7 +307,7 @@ function adopt(tile, gltf, mode) {
       const map = o.material.map;
       map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
       o.updateWorldMatrix(true, false); splitWet(o.geometry, a, o.matrixWorld);
-      o.material = [terrainMaterial(map, a.mask, a.bounds, !!a.surf, false), terrainMaterial(map, a.mask, a.bounds, !!a.surf)]; o.renderOrder = 1;
+      o.material = [terrainMaterial(map, a.mask, a.bounds, !!a.surf, false), terrainMaterial(map, a.mask, a.bounds, !!a.surf)]; o.renderOrder = LEGACY ? 0 : 1;
       o.receiveShadow = true; o.castShadow = true; bigCaster(o);   // hills shade the valleys at a low sun (back faces only: no acne)
     }
   });
@@ -382,7 +383,7 @@ const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (is
 // the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
 // ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
 // exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
-const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default)
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2', LEGACY = Q.get('lodv') === '1';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default; ?lodv=1 = all as before 2026-11-27)
 const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
 const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
