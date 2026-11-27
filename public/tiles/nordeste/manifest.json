@@ -44,7 +44,7 @@
     2891.6941382635796,
     1915.377469864526
    ],
-   "bytes": 327640,
+   "bytes": 327608,
    "balconies": "bal_1_0.bin",
    "detail": "d_1_0.glb"
   },
@@ -142,7 +142,7 @@
     2391.6941382635796,
     2415.3774698645257
    ],
-   "bytes": 409820,
+   "bytes": 410392,
    "balconies": "bal_0_1.bin",
    "detail": "d_0_1.glb"
   },
@@ -268,7 +268,7 @@
     2891.6941382635796,
     2915.3774698645257
    ],
-   "bytes": 193520,
+   "bytes": 193848,
    "balconies": "bal_1_2.bin",
    "detail": "d_1_2.glb"
   },
@@ -394,7 +394,7 @@
     3391.6941382635796,
     3415.3774698645257
    ],
-   "bytes": 276872,
+   "bytes": 277116,
    "balconies": "bal_2_3.bin",
    "detail": "d_2_3.glb"
   },
@@ -492,7 +492,7 @@
     2891.6941382635796,
     3915.3774698645257
    ],
-   "bytes": 316388,
+   "bytes": 316168,
    "balconies": "bal_1_4.bin",
    "detail": "d_1_4.glb"
   },
@@ -506,7 +506,7 @@
     3391.6941382635796,
     3915.3774698645257
    ],
-   "bytes": 332188,
+   "bytes": 334084,
    "balconies": "bal_2_4.bin",
    "detail": "d_2_4.glb"
   },
@@ -706,8 +706,8 @@
   "skeletonFail": 5,
   "parts": 224,
   "skippedOutlines": 7,
-  "partyEdges": 2324,
-  "balconies": 11429,
+  "partyEdges": 2322,
+  "balconies": 11443,
   "statues": 13,
   "wallsM": 11483.220390459495,
   "pillars": 0,
@@ -715,12 +715,12 @@
   "thinParts": 21,
   "remainders": 4,
   "massed": 1580,
-  "boxEdge": 422,
+  "boxEdge": 426,
   "massSplit": 85,
   "boxThin": 147,
   "massCut": 52,
   "rims": 377,
-  "roofBoxes": 190,
+  "roofBoxes": 185,
   "sawtooth": 6,
   "dormers": 2,
   "churches": 1,
@@ -749,14 +749,14 @@
   "lamps": 2428,
   "cars": 4935,
   "water": 0.5871,
-  "bytes": 9981848,
-  "detailTris": 186140,
-  "triangles": 645689
+  "bytes": 9986836,
+  "detailTris": 186238,
+  "triangles": 646033
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-27T00:15:25.501Z",
+ "built": "2026-11-27T01:29:42.974Z",
  "far": {
-  "bytes": 614184,
-  "tris": 73887
+  "bytes": 614932,
+  "tris": 74027
  }
 }
