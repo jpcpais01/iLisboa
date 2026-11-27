@@ -23,7 +23,7 @@ const tone = (c, sat = 1.18) => {
 // class mean plus k × how far its photo read sits from the photo mean. Leave-one-out error (sRGB distance): tiles 13.3 at
 // k 0.25 (old tone() 61), flat roofs 41 at k 0.5 (tone() 49). Walls: the aerial reads do not predict the wall colour at all
 // (hue correlation 0.1–0.26, every k worse than the mean), so walls are not taken from the photos.
-const CAL = { tile: { mX: [-0.4312, -1.2919, -1.6889], mY: [-0.4209, -1.6917, -2.191], k: 0.25 }, flat: { mX: [-0.6428, -0.8915, -1.0887], mY: [-0.6245, -0.7542, -0.748], k: 0.5 } };
+const CAL = { tile: { mX: [-0.4312, -1.2919, -1.6889], mY: [-0.4209, -1.6917, -2.191], k: 0.25 }, flat: { mX: [-0.6428, -0.8915, -1.0887], mY: [-0.6245, -0.7542, -0.748], k: 0.75 } };   // flat k .75 (LOO 43 vs 41 at .5): less pull to Telheiras' pinkish membranes
 const calib = (c, C, k = C.k) => c.map((v, i) => 255 * Math.pow(clamp(Math.exp(C.mY[i] + k * (Math.log(Math.pow(clamp(v, 0, 255) / 255, 2.2) + 1e-3) - C.mX[i])), 0, 1), 1 / 2.2));
 const median3 = (arr) => { if (!arr.length) return null; const m = [0, 1, 2].map((k) => arr.map((c) => c[k]).sort((a, b) => a - b)[arr.length >> 1]); return m; };
 const isTile = ([r, g, b]) => r > g * 1.1 && r > b * 1.25 && r - b > 32;   // fired clay: orange to salmon to brown-red
@@ -416,7 +416,7 @@ export async function loadDetail({ ROOT, proj, minX, minY, maxX, maxY, log, poin
     return { cov, edgeD, mpp };
   };
 
-  return { photos, covers, fineCovers, leanAt, read, trees, ground, tone, rgb, calFlat: (c) => calib(c.map((v, k) => v * wb(P)[k]), CAL.flat), shadowAt, fine, isTile, L3 };
+  return { photos, covers, fineCovers, leanAt, read, trees, ground, tone, rgb, calFlat: (c) => calib(c.map((v, k) => v * wb(P)[k]), CAL.flat, 1), shadowAt, fine, isTile, L3 };
 }
 
 function boxBlur1(a, w, h, r) {
