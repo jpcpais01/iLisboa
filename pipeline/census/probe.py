@@ -21,4 +21,13 @@ for yr, codes in [('2021', ['1106']), ('2011', ['1106'])]:
                     f'https://mapas.ine.pt/download/filesGPG/{yr}/BGRI{yr}_{c}.zip', f'http://mapas.ine.pt/download/filesGPG/{yr}/concelhos/BGRI{yr}_{c}.zip']:
             try: r, b = get(pat, 2048, True); out.write(f'OK {pat} {r.status} {r.headers.get("Content-Range")} {r.headers.get("Content-Type")} {b[:4]}\n')
             except Exception as e: out.write(f'NO {pat} {e}\n')
+for u in ['https://dados.gov.pt/api/1/datasets/?q=BGRI&page_size=100', 'https://dados.gov.pt/api/1/datasets/?q=subseccao%20censos%202021&page_size=50',
+          'https://dados.cm-lisboa.pt/api/3/action/package_search?q=bgri&rows=50', 'https://dados.cm-lisboa.pt/api/3/action/package_search?q=censos&rows=50',
+          'https://dadosabertos.cascais.pt/api/3/action/package_search?q=subseccao&rows=20', 'https://mapas.ine.pt/download/index2021.phtml', 'https://inspire.ine.pt/SU/atom/downloadservice_en.html']:
+    try:
+        r, b = get(u, 400000); import json, re
+        t = b.decode('utf-8', 'replace'); out.write(f'## {u} {r.status} {len(t)}\n')
+        for l in sorted(set(re.findall(r'https?://[^"\s<>]+?\.(?:zip|gpkg|csv|json|geojson|shp)\b', t)))[:300]: out.write(l + '\n')
+        for l in sorted(set(re.findall(r'"title":\s*"([^"]+)"', t)))[:200]: out.write('T ' + l + '\n')
+    except Exception as e: out.write(f'## {u} ERR {e}\n')
 out.close()
