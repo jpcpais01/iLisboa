@@ -242,8 +242,21 @@ export function createCars(ctx) {
     return opts[opts.length - 2];
   }
 
-  function step(dt) {
+  // Far streets are stepped less often: a lane advances when its fastest car would have moved ~0.35 px on screen since its
+  // last step (at most every 8th frame), so a city-wide view of 30k sub-pixel cars costs a fraction of the CPU with no
+  // visible difference; near streets step every frame as before. Their cars keep the pose drawn at their last step.
+  let frame = 0;
+  function cadence() {
+    const f = canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    for (const l of lanes.values()) { const pxPerFrame = (l.v * 1.3 * f) / Math.max(1, l.d) / 60; l.k = Math.max(1, Math.min(8, Math.floor(0.35 / Math.max(1e-6, pxPerFrame)))); l.tiny = (CAR_L * f) / Math.max(1, l.d) < 2.5; }
+  }
+  function step(dtF) {
+    frame++;
     for (const l of lanes.values()) {
+      l.acc = (l.acc || 0) + dtF;
+      l.stepped = l.k <= 1 || (frame + (l.key & 7)) % l.k === 0;
+      if (!l.stepped) continue;
+      const dt = Math.min(0.25, l.acc); l.acc = 0;
       const cars = l.cars;
       // keep the lane near its target: top up gently (all at once when it first comes into view), thin the excess
       const deficit = l.target - cars.length;
@@ -302,6 +315,12 @@ export function createCars(ctx) {
       if (l.tunnel) continue;
       for (const c of l.cars) {
         if (nf >= BUDGET) break;
+        if (!l.stepped && c.pose) {   // (a far lane between its steps: the car stands where it was drawn)
+          const q = c.pose, T = q[6] && nn < NEAR_MAX ? near : far, n = T === near ? nn++ : nf++, P = T.pose.array, X = T.ext.array;
+          P[n * 4] = q[0]; P[n * 4 + 1] = q[1]; P[n * 4 + 2] = q[2]; P[n * 4 + 3] = q[3];
+          X[n * 4] = q[4]; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
+          continue;
+        }
         const a = at(l, c);
         let x = a.x, y = a.y;
         if (c.jx || c.jy) {
@@ -315,11 +334,12 @@ export function createCars(ctx) {
           if (Number.isFinite(dz)) { const f = net.deckAt(l.e, es + 2.5), b = net.deckAt(l.e, es - 2.5); if (Number.isFinite(f) && Number.isFinite(b)) pitch = Math.atan2((f - b) * (l.dir ? -1 : 1), 5); }
         } else z = ground.at(x, y);
         // pitch along the slope (Lisbon's hills), looked up 2.5 m ahead and behind
-        if (!Number.isFinite(pitch)) pitch = l.deck && l.vg ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
+        if (!Number.isFinite(pitch)) pitch = (l.deck && l.vg) || l.tiny ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
         const d = Math.hypot(x - cx, z - cy, -y - cz);
         const T = d < NEAR && nn < NEAR_MAX ? near : far, n = T === near ? nn++ : nf++, P = T.pose.array, X = T.ext.array;
         P[n * 4] = x; P[n * 4 + 1] = z + 0.05; P[n * 4 + 2] = -y; P[n * 4 + 3] = Math.atan2(a.hx, a.hy);
         X[n * 4] = pitch; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
+        if (l.k > 1) { const q = c.pose || (c.pose = new Float32Array(7)); q[0] = x; q[1] = z + 0.05; q[2] = -y; q[3] = P[n * 4 + 3]; q[4] = pitch; q[6] = T === near ? 1 : 0; } else c.pose = null;
       }
     }
     for (const [T, n] of [[near, nn], [far, nf]]) {
@@ -335,8 +355,8 @@ export function createCars(ctx) {
       if (!booted) { if (ground.version > 0) { booted = true; boot(); } return; }
       if (!net || !info) return;
       // re-pick the streets in view twice a second, or at once after a big camera move
-      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) activate(now);
-      step(Math.min(0.25, dt));
+      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { activate(now); cadence(); }
+      step(dt);
       shown = draw();
     },
     get count() { return shown; },
