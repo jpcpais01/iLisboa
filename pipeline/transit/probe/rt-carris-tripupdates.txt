@@ -1,4 +1,4 @@
-404 text/plain 34 bytes @ 2026-11-27T17:35:05.745Z
+404 text/plain 34 bytes @ 2026-11-27T17:36:28.509Z
 https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/tripupdates
 
 Status code page, status code: 404

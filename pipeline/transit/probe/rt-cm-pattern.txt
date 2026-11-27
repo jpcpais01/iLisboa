@@ -1,4 +1,4 @@
-404 application/json; charset=utf-8 2 bytes @ 2026-11-27T17:35:10.052Z
-https://api.carrismetropolitana.pt/v2/patterns/[7DQC0][LA77N]1722_0_2
+404 application/json; charset=utf-8 2 bytes @ 2026-11-27T17:36:32.339Z
+https://api.carrismetropolitana.pt/v2/patterns/[7DQC0][LA77N]1638_0_2
 
 {}
