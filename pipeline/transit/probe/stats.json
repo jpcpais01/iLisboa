@@ -1,0 +1,18 @@
+{
+ "c": {
+  "stops": 2346,
+  "routes": 177,
+  "patterns": 314,
+  "trips": 87079,
+  "droppedTrips": 0,
+  "routeBytes": 5021708
+ },
+ "m": {
+  "stops": 3565,
+  "routes": 501,
+  "patterns": 885,
+  "trips": 226999,
+  "droppedTrips": 152130,
+  "routeBytes": 14909709
+ }
+}

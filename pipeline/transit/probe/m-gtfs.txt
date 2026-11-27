@@ -1,0 +1,71 @@
+## agency
+agency_email,agency_fare_url,agency_id,agency_lang,agency_name,agency_phone,agency_timezone,agency_url,cemv_support,agency_code
+contacto@carrismetropolitana.pt,https://carrismetropolitana.pt/tarifarios,A2L1N,pt,Carris Metropolitana,+351210410400,Europe/Lisbon,https://carrismetropolitana.pt,0,44
+contacto@carrismetropolitana.pt,https://carrismetropolitana.pt/tarifarios,BNA17,pt,Carris Metropolitana,+351210410400,Europe/Lisbon,https://carrismetropolitana.pt,0,42
+contacto@carrismetropolitana.pt,https://carrismetropolitana.pt/tarifarios,LA77N,pt,Carris Metropolitana,+351210410400,Europe/Lisbon,https://carrismetropolitana.pt,0,41
+contacto@carrismetropolitana.pt,https://carrismetropolitana.pt/tarifarios,YA15B,pt,Carris Metropolitana,+351210410400,Europe/Lisbon,https://carrismetropolitana.pt,0,43
+
+(0.0 MB)
+
+## routes
+agency_id,cemv_support,continuous_drop_off,continuous_pickup,route_color,route_desc,route_id,route_long_name,route_short_name,route_text_color,route_type,route_url
+LA77N,0,1,1,C61D23,,[LA77N]1001_0,Alfragide (Estr Seminario) - Reboleira (Estação),1001,FFFFFF,3,
+LA77N,0,1,1,C61D23,,[LA77N]1002_0,Reboleira (Estação) | Circular via Alfragide (Centro comercial ) e Amadora (Estação Sul),1002,FFFFFF,3,
+LA77N,0,1,1,C61D23,,[LA77N]1003_0,Amadora (Estação Norte) - Amadora Este (Metro),1003,FFFFFF,3,
+LA77N,0,1,1,C61D23,,[LA77N]1004_0,Amadora (Estação Norte) via Moinhos da Funcheira | Circular,1004,FFFFFF,3,
+LA77N,0,1,1,C61D23,,[LA77N]1005_0,Amadora (Estação Norte) - UBBO,1005,FFFFFF,3,
+(0.1 MB)
+
+## trips
+bikes_allowed,block_id,cars_allowed,direction_id,pattern_id,route_id,service_id,shape_id,trip_headsign,trip_id,trip_short_name,wheelchair_accessible
+0,[A2L1N]20261110-64010106-121600234560,0,0,[A2L1N]4001_0_3,[A2L1N]4001_0,[FBZQZ][A2L1N]1000,[FBZQZ][A2L1N]4001_0_3,Alcochete | Circular,[FBZQZ][A2L1N]4001_0_3|1000|0710,,0
+0,[A2L1N]20261110-64010106-121600234560,0,0,[A2L1N]4001_0_3,[A2L1N]4001_0,[FBZQZ][A2L1N]1000,[FBZQZ][A2L1N]4001_0_3,Alcochete | Circular,[FBZQZ][A2L1N]4001_0_3|1000|0750,,0
+0,[A2L1N]20261110-64010106-121600234560,0,0,[A2L1N]4001_0_3,[A2L1N]4001_0,[FBZQZ][A2L1N]1000,[FBZQZ][A2L1N]4001_0_3,Alcochete | Circular,[FBZQZ][A2L1N]4001_0_3|1000|0830,,0
+0,[A2L1N]20261110-64010106-121600234560,0,0,[A2L1N]4001_0_3,[A2L1N]4001_0,[FBZQZ][A2L1N]1000,[FBZQZ][A2L1N]4001_0_3,Alcochete | Circular,[FBZQZ][A2L1N]4001_0_3|1000|0930,,0
+0,[A2L1N]20261110-64010106-121600234560,0,0,[A2L1N]4001_0_3,[A2L1N]4001_0,[FBZQZ][A2L1N]1000,[FBZQZ][A2L1N]4001_0_3,Alcochete | Circular,[FBZQZ][A2L1N]4001_0_3|1000|1030,,0
+(61.2 MB)
+
+## stops
+level_id,location_type,parent_station,platform_code,stop_code,stop_desc,stop_id,stop_lat,stop_lon,stop_name,stop_timezone,stop_url,tts_stop_name,wheelchair_boarding,zone_id,district_id,district_name,flags,legacy_ids,lifecycle_status,locality_id,locality_name,municipality_id,municipality_name,parish_id,parish_name
+,0,,,100001,,100001,38.700532,-8.954064,Rua Dom João de Castro 4,Europe/Lisbon,,Rua Dom João De Castro 4,0,,5143590,Setúbal,LA77N-100001|BNA17-100001|YA15B-100001|A2L1N-100001,100001,active,5073831770,Bairro da Bela Vista,5401737,Montijo,6444913,Montijo e Afonsoeiro
+,0,,,100002,,100002,38.700529,-8.953926,BELA VISTA (R AFONSO ALBUQUERQUE 9),Europe/Lisbon,,Bela Vista ( Rua Afonso Albuquerque 9 ),0,,5143590,Setúbal,LA77N-100002|BNA17-100002|YA15B-100002|A2L1N-100002,100002,active,5073831770,Bairro da Bela Vista,5401737,Montijo,6444913,Montijo e Afonsoeiro
+,0,,,100003,,100003,38.699539,-8.955257,BELA VISTA (R FERNÃO MAGALHÃES 61),Europe/Lisbon,,Bela Vista ( Rua Fernão Magalhães 61 ),0,,5143590,Setúbal,LA77N-100003|BNA17-100003|YA15B-100003|A2L1N-100003,100003,active,5073831770,Bairro da Bela Vista,5401737,Montijo,6444913,Montijo e Afonsoeiro
+,0,,,100004,,100004,38.699572,-8.955101,BELA VISTA (R FERNÃO MAGALHÃES 61),Europe/Lisbon,,Bela Vista ( Rua Fernão Magalhães 61 ),0,,5143590,Setúbal,LA77N-100004|BNA17-100004|YA15B-100004|A2L1N-100004,100004,active,5073831770,Bairro da Bela Vista,5401737,Montijo,6444913,Montijo e Afonsoeiro
+,0,,,100005,,100005,38.699393
+(3.6 MB)
+
+## stop_times
+arrival_time,continuous_drop_off,continuous_pickup,departure_time,drop_off_type,pickup_type,shape_dist_traveled,stop_headsign,stop_id,stop_sequence,timepoint,trip_id
+07:10:00,0,0,07:10:00,0,0,0,,310041,1,1,[FBZQZ][A2L1N]4001_0_3|1000|0710
+07:20:00,0,0,07:20:00,0,0,3.848,,310028,10,1,[FBZQZ][A2L1N]4001_0_3|1000|0710
+07:20:00,0,0,07:20:00,0,0,4.059,,310002,11,1,[FBZQZ][A2L1N]4001_0_3|1000|0710
+07:22:00,0,0,07:22:00,0,0,4.517,,310161,12,1,[FBZQZ][A2L1N]4001_0_3|1000|0710
+07:22:00,0,0,07:22:00,0,0,4.804,,310001,13,1,[FBZQZ][A2L1N]4001_0_3|1000|0710
+(1001.3 MB)
+
+## shapes
+shape_dist_traveled,shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence
+0,[FBZQZ][A2L1N]4001_0_3,38.7516,-8.94455,1
+0.191,[FBZQZ][A2L1N]4001_0_3,38.75141,-8.94641,10
+2.096,[FBZQZ][A2L1N]4001_0_3,38.74813,-8.95132,100
+2.117,[FBZQZ][A2L1N]4001_0_3,38.74821,-8.95148,101
+2.138,[FBZQZ][A2L1N]4001_0_3,38.74826,-8.95153,102
+(178.2 MB)
+
+## calendar: missing
+
+## calendar_dates
+date,exception_type,service_id
+20261101,1,[FBZQZ][A2L1N]100
+20261102,1,[FBZQZ][A2L1N]200
+20261103,1,[FBZQZ][A2L1N]300
+20261104,1,[FBZQZ][A2L1N]400
+20261105,1,[FBZQZ][A2L1N]500
+(0.1 MB)
+
+## feed_info
+default_lang,feed_contact_email,feed_contact_url,feed_end_date,feed_lang,feed_publisher_name,feed_publisher_url,feed_start_date,feed_version
+pt,go@tmlmobilidade.pt,https://go.tmlmobilidade.pt,20270630,pt,TML - Transportes Metropolitanos de Lisboa,https://tmlmobilidade.pt,20261127,20261127-1626-00
+
+(0.0 MB)
+

@@ -26,7 +26,7 @@ export function decodeVehicles(buf) {
     let veh = null;
     walk(v[0], v[1], (f2, w2, v2) => { if (f2 === 4 && w2 === 2) veh = v2; });
     if (!veh) return;
-    const o = { route: '', trip: '', dir: 0, id: '', label: '', lat: NaN, lon: NaN, bearing: 0, speed: -1, status: 2, ts: 0, stop: '' };
+    const o = { route: '', trip: '', dir: -1, id: '', label: '', lat: NaN, lon: NaN, bearing: 0, speed: -1, status: 2, ts: 0, stop: '' };
     walk(veh[0], veh[1], (f3, w3, v3) => {
       if (f3 === 1 && w3 === 2) walk(v3[0], v3[1], (f4, w4, v4) => { if (f4 === 1) o.trip = str(v4); else if (f4 === 5) o.route = str(v4); else if (f4 === 6) o.dir = v4; });
       else if (f3 === 8 && w3 === 2) walk(v3[0], v3[1], (f4, w4, v4) => { if (f4 === 1) o.id = str(v4); else if (f4 === 2) o.label = str(v4); });

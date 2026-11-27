@@ -1,0 +1,26 @@
+name: record-assistant
+# One snapshot of the live feeds the assistant's tools read (pipeline/assistant/record.mjs) → pipeline/assistant/fixtures.json,
+# so the assistant eval runs every model on the same data. On demand, or when the recorder changes.
+on:
+  workflow_dispatch:
+  push:
+    paths: [pipeline/assistant/record.mjs, .github/workflows/record-assistant.yml]
+concurrency: record-assistant
+permissions:
+  contents: write
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "pipeline/assistant\n.github", sparse-checkout-cone-mode: true }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node pipeline/assistant/record.mjs
+      - name: Commit
+        run: |
+          ls -la pipeline/assistant/fixtures.json
+          git config user.name "ilisboa-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add pipeline/assistant/fixtures.json
+          git diff --cached --quiet || (git commit -m "data: assistant eval snapshot [skip ci]" && git pull --rebase -q && git push)

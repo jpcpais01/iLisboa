@@ -13,6 +13,7 @@ import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
 import { initLandmarks } from './landmarks.js';
+import { initStations } from './stations/index.js';
 import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
@@ -346,6 +347,13 @@ const nearR = (dist) => isMobile ? THREE.MathUtils.clamp(dist * 0.25 + 500, 700,
 // beyond that, out to ~3× as far, tiles keep their full buildings (window grids, roofs, colours) over the far ground; only past
 // this do the plain far blocks stand in. Phones get 60 % of it.
 const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (isMobile ? 0.6 : 1);
+// Screen-space limits: a tier is worth drawing only while it holds detail a pixel can show. px.f is the focal length in pixels at
+// the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
+// ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
+// exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default)
+const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
+const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
 window.__stream = () => stream(true);   // for checks: stream without waiting for frames
 window.__tileStats = () => tiles.reduce((o, t) => { const k = t.state === 2 ? t.mode : t.state ? 'loading' : 'idle'; o[k] = (o[k] || 0) + 1; return o; }, {});
@@ -359,16 +367,18 @@ function stream(force) {
   const R = nearR(dist) * (0.75 + 0.25 * lodK), M = midR(dist) * (0.5 + 0.5 * lodK);
   DR = THREE.MathUtils.clamp(700 + camera.position.y * 0.9, 900, 2700) * lodK;   // relief and balconies reach further as the view rises
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
+  if (!OLDLOD) DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
+  const FC = fullCap(), MC = midCap();
   const want = [];
   for (const t of tiles) {
-    const d = rectDist(t.b, x, y);
+    const d = rectDist(t.b, x, y), dc = camDist(t.b);
     detail(t, rectDist(t.b, camera.position.x, -camera.position.z));
-    if (t.state === 2 && d > M + 900) { dispose(t); continue; }
-    if (t.state === 1 && d > M + 900) { t.state = 0; t.gen = (t.gen || 0) + 1; t.loading = null; continue; }
-    if (t.state === 2 && t.mode === 'full' && !t.loading && d > R + 900) downgrade(t);
+    if (t.state === 2 && (d > M + 900 || dc > MC * 1.2)) { dispose(t); continue; }
+    if (t.state === 1 && (d > M + 900 || dc > MC * 1.2)) { t.state = 0; t.gen = (t.gen || 0) + 1; t.loading = null; continue; }
+    if (t.state === 2 && t.mode === 'full' && !t.loading && (d > R + 900 || dc > FC * 1.2)) downgrade(t);
     if ((t.failed || 0) >= 3 || t.loading) continue;
-    if (d <= R && (t.state === 0 || (t.state === 2 && t.mode === 'mid'))) want.push([d, t, 'full']);
-    else if (d <= M && t.state === 0 && ((t.b[0] + t.b[2]) / 2 - cx) * fx + ((t.b[1] + t.b[3]) / 2 - cy) * fy > -400) want.push([d + 400, t, 'mid']);   // mid tiles only ahead of the camera
+    if (d <= R && dc <= FC && (t.state === 0 || (t.state === 2 && t.mode === 'mid'))) want.push([d, t, 'full']);
+    else if (d <= M && dc <= MC && t.state === 0 && ((t.b[0] + t.b[2]) / 2 - cx) * fx + ((t.b[1] + t.b[3]) / 2 - cy) * fy > -400) want.push([d + 400, t, 'mid']);   // mid tiles only ahead of the camera
   }
   want.sort((p, q) => p[0] - q[0]);
   for (const [, t, mode] of want) {
@@ -379,7 +389,7 @@ function stream(force) {
 }
 // tiles near the view that are not on screen yet (the loading screen waits for these)
 const pending = () => { const x = controls.target.x, y = -controls.target.z, R = Math.min(nearR(camera.position.distanceTo(controls.target)), 2000);
-  return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R).length; };
+  const FC = fullCap(); return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R && camDist(t.b) <= FC).length; };
 
 // trees: instanced, in chunks with three levels of detail (sculpted near 230 m, lobed to 760 m, a single lobe beyond)
 const treeChunks = [], treeHi = [];
@@ -402,7 +412,9 @@ function addTrees(buf) {
   for (const { kind, ids } of cellsOf(600)) {
     const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
     place([near, lo], K, ids); fin(near); fin(lo);
-    treeChunks.push({ near, lo, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
+    // a few pixels across, a tree is its crown: six vertices instead of 78, on the same instance buffers
+    const min = new THREE.InstancedMesh(K.min, K.mat, ids.length); min.instanceMatrix = lo.instanceMatrix; min.instanceColor = lo.instanceColor; fin(min);
+    treeChunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
   for (const { kind, ids } of cellsOf(160)) {
     const K = KINDS[kind], hi = new THREE.InstancedMesh(K.hi, K.matHi, ids.length);
@@ -481,11 +493,18 @@ function treeKinds() {
   const cypressHi = mergeGeometries([cyTrunk(6), lumpy(1.2, 1, 0, 4.6, 0, 0xcfcfcf, 0.4, 2.6), lumpy(1.05, 1, 0.08, 7.4, 0.05, 0xebebeb, 1.4, 2.6), lumpy(0.75, 1, 0, 10.3, 0, 0xffffff, 2.4, 2.8), lumpy(0.4, 1, 0, 12.4, 0, 0xffffff, 3.3, 2.5)]);
   soften(cypressHi, 0, 7, 0, 0.4);
   const cypressFar = mergeGeometries([cyTrunk(3), spindle(1.2, 6.5, 5, 0xf0f0f0, 0.3)]); cypressFar.computeVertexNormals(); soften(cypressFar, 0, 6.5, 0, 0.35);
+  // the crown alone, as an indexed octahedron the size of the far lobe (normals bent out like soften), for trees a few pixels across
+  const crown = (r, y, ry, shade = 0xf0f0f0) => {
+    const P = [r, y, 0, -r, y, 0, 0, y + ry, 0, 0, y - ry, 0, 0, y, r, 0, y, -r], N = [], C = [], c = new THREE.Color(shade), v = new THREE.Vector3();
+    for (let i = 0; i < 6; i++) { v.set(P[i * 3], (P[i * 3 + 1] - y) * 1.4, P[i * 3 + 2]).normalize(); N.push(v.x, v.y, v.z); C.push(c.r, c.g, c.b); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.setIndex([0, 2, 4, 4, 2, 1, 1, 2, 5, 5, 2, 0, 4, 3, 0, 1, 3, 4, 5, 3, 1, 0, 3, 5]); return g;
+  };
   return [
-    { hi, near: geo, far, mat, matHi, greens: [0x5f8744, 0x6c9450, 0x527a3d, 0x779e58, 0x5c8750] },
-    { hi: palmHi, near: palm, far: palmFar, mat: palmMat, matHi: palmHiMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
-    { hi: pineHi, near: pine, far: pineFar, mat, matHi, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
-    { hi: cypressHi, near: cypress, far: cypressFar, mat, matHi, greens: [0x3d5a30, 0x456337, 0x37512b] },
+    { hi, near: geo, far, min: crown(2.7, 5.9, 2.3), mat, matHi, greens: [0x5f8744, 0x6c9450, 0x527a3d, 0x779e58, 0x5c8750] },
+    { hi: palmHi, near: palm, far: palmFar, min: crown(2.8, 7.0, 0.9), mat: palmMat, matHi: palmHiMat, greens: [0x4f7134, 0x5b7c3b, 0x48682f] },
+    { hi: pineHi, near: pine, far: pineFar, min: crown(3.6, 7.8, 1.6), mat, matHi, greens: [0x4f6f3c, 0x5a7a44, 0x466536] },
+    { hi: cypressHi, near: cypress, far: cypressFar, min: crown(1.2, 6.5, 6.0), mat, matHi, greens: [0x3d5a30, 0x456337, 0x37512b] },
   ];
 }
 // foliage shading: leaf clumps (3D value noise in world space, faded out with distance so it never shimmers).
@@ -647,7 +666,7 @@ const EXPOSURE = +Q.get('exp') || 1.0;
 // re-drawn when its snapped frame, the light, or the scene's contents change. The far map covers ~5 km ahead and is re-drawn
 // only when its frame moves a quarter of its width, when the light moves, or (at most every 2 s) when tiles come in.
 const lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), _sf = new THREE.Vector3(), _fw = new THREE.Vector3(), _lc = new THREE.Vector3();
-let shadowKey = '', farKey = '', shadowDirty = true, farDirty = true, farT = 0, aoKey = '', aoDirty = true, aoT = 0;
+let nearT = -1e9, shadowKey = '', farKey = '', shadowDirty = true, farDirty = true, farT = 0, aoKey = '', aoDirty = true, aoT = 0;
 function frame(light, R, t, step, depth) {
   const ka = Math.round(t.dot(lightRight) / step), kb = Math.round(t.dot(lightUp) / step);
   return { ka, kb, apply() {
@@ -681,7 +700,9 @@ function fitShadow(now) {
   const t = (f ? _sf.set(f.x, f.gy, -f.y) : _sf.copy(controls.target)).addScaledVector(_fw, R * 0.5 * grazing);
   const nf = frame(sun, R, t, (2 * R) / 10, R + 2500);
   const key = `${R.toFixed(2)}|${nf.ka}|${nf.kb}|${dirKey}`;
-  if (key !== shadowKey || shadowDirty) { shadowKey = key; shadowDirty = false; nf.apply(); return; }   // one cascade per frame at most
+  // a moved frame redraws at once; new tiles streaming in redraw it at most every 0.4 s, not on every arrival (a wide view takes
+  // in dozens, and each redraw of a city-wide map costs several frames' worth of GPU time)
+  if (key !== shadowKey || (shadowDirty && (OLDLOD || now - nearT > 400))) { shadowKey = key; shadowDirty = false; nearT = now; nf.apply(); return; }   // one cascade per frame at most
   // far: from just behind the camera out towards the horizon
   const RF = Math.min(lim, Math.max(isMobile ? 2600 : 3600, R * 2.5));
   const tf = _sf.copy(camera.position).setY(controls.target.y).addScaledVector(_fw, RF * 0.75 * grazing);
@@ -733,6 +754,8 @@ const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, min
 const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, onCloud: setOvercast, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
+// bus stops + Metro stations: tap one for the next arrivals per line (src/stations); before the landmarks so a stop pin wins the tap
+const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, invalidate }); window.__stations = stations;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
@@ -742,7 +765,10 @@ const statsEl = document.getElementById('stats');
 if (SHOW_STATS) statsEl.hidden = false;
 const _c = new THREE.Vector3();
 let frames = 0, acc = 0, last = performance.now(), slow = 0, nf = 0, ready = false, idleN = 0, wasActive = false, stillN = 0, curRatio = pixelRatio;
+const setFocal = () => { px.f = (innerHeight * pixelRatio) / (2 * Math.tan((camera.fov * Math.PI) / 360)); };
+setFocal();
 renderer.setAnimationLoop((now) => {
+  setFocal();
   const raw = (now - last) / 1000, dt = Math.min(0.1, raw); last = now;
   if (introT < 1 && ready) {
     introT = Math.min(1, introT + dt / 2.8);
@@ -764,8 +790,10 @@ renderer.setAnimationLoop((now) => {
   if (moving) stillN = 0; else stillN++;
   let resized = false;   // a resized canvas is blank until drawn, so it is drawn this frame
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
-  // a still view renders at a quarter rate, or half (30 fps) while the ambient cars drive
-  if (!active && !resized && curRatio === pixelRatio && idleN % (live.cars.count ? 2 : 4)) { if (++nf % 12 === 0) stream(false); last = now; return; }
+  // a still view renders at a quarter rate, or up to half (30 fps) while the ambient cars drive: as often as a car (~14 m/s)
+  // moves half a pixel, so a city-wide view (cars crawl a pixel or two a second) no longer redraws the whole city 30 times a second
+  const carStep = OLDLOD ? (live.cars.count ? 2 : 4) : live.cars.count ? THREE.MathUtils.clamp(Math.floor(60 / (28 * px.f / Math.max(1, camera.position.distanceTo(controls.target)))), 2, 4) : 4;
+  if (!active && !resized && curRatio === pixelRatio && idleN % carStep) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
@@ -776,12 +804,13 @@ renderer.setAnimationLoop((now) => {
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
-  for (const t of treeChunks) { const nearby = camera.position.distanceTo(t.c) - t.r < 760 * lodK; t.near.visible = nearby; t.lo.visible = !nearby; }
+  for (const t of treeChunks) { const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   live.update(dt, now);
+  stations.update();
   layers.update(dt, now);
   renderer.render(scene, camera);
 

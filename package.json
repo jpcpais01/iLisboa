@@ -10,6 +10,7 @@
     "tiles": "node pipeline/build.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0",
     "three": "^0.170.0",
     "three-mesh-bvh": "^0.9.1"
   },
