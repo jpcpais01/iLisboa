@@ -1,0 +1,6 @@
+emodnet__mean 200 1376656 TIFF image data, big-endian, direntries=16, width=624, height=336, bps=32, compression=none, PhotometricInterpretation=BlackIsZero
+ok emodnet__mean
+emodnet__mean 200 1376656 TIFF image data, big-endian, direntries=16, width=624, height=336, bps=32, compression=none, PhotometricInterpretation=BlackIsZero
+ok emodnet__mean
+emodnet__mean 200 1573264 TIFF image data, big-endian, direntries=16, width=768, height=384, bps=32, compression=none, PhotometricInterpretation=BlackIsZero
+ok emodnet__mean

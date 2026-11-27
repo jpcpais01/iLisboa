@@ -31,6 +31,11 @@ for line in open(ROOT / "pipeline/areas.txt"):
     if line.strip() and not line.startswith("#"):
         n, *b = line.split()
         areas.append((n, *map(float, b)))   # name, south, west, north, east
+# only the areas whose rasters are not in data/lidar yet (LIDAR_ALL=1 redoes every area): new columns don't re-download the city
+if not os.environ.get("LIDAR_ALL"):
+    areas = [a for a in areas if not ((ROOT / f"data/lidar/{a[0]}_ndsm.tif").exists() and (ROOT / f"data/lidar/{a[0]}_dtm.tif").exists())]
+    print("areas to fetch:", " ".join(a[0] for a in areas) or "none", flush=True)
+    if not areas: sys.exit(0)
 S = min(a[1] for a in areas) - M; W = min(a[2] for a in areas) - M
 N = max(a[3] for a in areas) + M; E = max(a[4] for a in areas) + M
 
