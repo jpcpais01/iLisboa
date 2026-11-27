@@ -54,10 +54,10 @@ export function restyle(mesh) {
     for (const q of [a, b, c]) {
       if (done[q]) continue; done[q] = 1;
       const kind = Math.round(S.getX(q) * 8), variant = Math.round(S.getY(q) * 8);
-      if (kind === 1 || kind === 2) {
+      if (kind === 1 || kind === 2 || (kind === 6 && hit.variant === -2)) {
         if (hit.variant >= 0 && (variant === 1 || variant === 2)) S.setY(q, hit.variant / 8);
         if (hit.wall) C.setXYZ(q, hit.wall[0], hit.wall[1], hit.wall[2]);
-      } else if ((kind === 3 || kind === 5) && hit.roof) C.setXYZ(q, hit.roof[0], hit.roof[1], hit.roof[2]);
+      } else if ((kind === 3 || kind === 5 || (kind === 4 && hit.variant === -2)) && hit.roof) C.setXYZ(q, hit.roof[0], hit.roof[1], hit.roof[2]);
       touched++;
     }
   }

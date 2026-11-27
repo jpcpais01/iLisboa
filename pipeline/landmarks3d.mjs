@@ -24,6 +24,8 @@ import { weld, meshopt } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
 import { fromFile } from 'geotiff';
 import { makeProjection } from './lib/osm.mjs';
+import { obb, box as bbox, KIND } from './lib/buildings.mjs';
+import { estrelaFront } from './lib/authored.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 await MeshoptDecoder.ready; await MeshoptEncoder.ready;
@@ -392,6 +394,40 @@ for (const [key, T] of cache) {
 var DOMED = /^(Igreja da Memória|Igreja de Santo António de Lisboa|Igreja do Santíssimo Coração de Jesus)$/;
 var HANDMADE = /^(Sé de Lisboa|Sé Patriarcal|Catedral|Basílica da Estrela|Basílica de Nossa Senhora|Panteão|Igreja de Santa Engrácia|Convento do Carmo|Igreja do Convento do Carmo|Mosteiro dos Jerónimos|Igreja de Santa Maria de Belém)/;
 await crowns();
+await extras();
+
+// ─── famous fronts the rule-built massing lacks, modelled one by one in authored.mjs ───
+// Frame recovered the way build.mjs makes it (OBB of the footprint); the façade end is the one the towers stand at.
+async function extras() {
+  const tileKeyOf = (x, y) => { for (const A of IDX.areas) { if (!(x >= A.bounds.minX && x < A.bounds.maxX && y >= A.bounds.minY && y < A.bounds.maxY)) continue; const t = A.tiles.find((q) => x >= q.bounds[0] && x < q.bounds[2] && y >= q.bounds[1] && y < q.bounds[3]); return t && `${A.area}:${t.i}_${t.j}`; } return null; };
+  for (const [qid, fn, H] of [['Q2657972', estrelaFront, 24]]) {
+    const g = gIndex.find((q) => q.key === qid); if (!g || !g.parts.length) continue;
+    const part = g.parts.reduce((a, b) => (b.area > a.area ? b : a));
+    const o = obb(part.ring); if (!o) continue;
+    let { ux, uy } = o; const hl = o.hl, hw = o.hw, cx = o.cx, cy = o.cy;
+    // the group's vertices: ground = lowest, façade = the end with the tall towers
+    let zmin = Infinity; const hi = [0, 0];
+    for (const [key, T] of cache) { const tg = triGroups.get(key); for (let k = 0; k < tg.length; k++) { if (tg[k] !== gIndex.indexOf(g)) continue; for (let c = 0; c < 3; c++) { const i = T.idx[k * 3 + c], x = T.pos[i * 3], y = -T.pos[i * 3 + 2], z = T.pos[i * 3 + 1]; zmin = Math.min(zmin, z); const u = (x - cx) * ux + (y - cy) * uy; if (Math.abs(u) > hl * 0.6) hi[u > 0 ? 1 : 0] = Math.max(hi[u > 0 ? 1 : 0], z); } } }
+    if (hi[1] > hi[0]) { ux = -ux; uy = -uy; }
+    const tk = tileKeyOf(cx, cy); if (!tk) continue; const S = sinkFor(tk); S.info ||= []; S.style ||= []; S.surf ||= [];   // the authored kit writes tile attributes too; only pos/nrm/col are kept
+    const ground = zmin + 1.5;   // parishChurch sinks its walls 1.5 m below the lowest corner
+    fn(S, { cx, cy, ux, uy, hl, hw, ground, H, lin, srgb });
+    stats.fronts = (stats.fronts || 0) + 1; log('front', g.name, 'hl', hl.toFixed(1), 'hw', hw.toFixed(1), 'ground', ground.toFixed(1), 'towers', hi.map((v) => v.toFixed(1)).join('/'));
+  }
+  // a small block in the Castelejo yard drawn as a plain box with a terracotta flat roof: castle stone and merlons, like the walls round it
+  for (const { ring, top, wall, roof } of [{ ring: [[545.9, 28.9], [547.0, 33.0], [542.4, 34.3], [541.2, 30.2]], top: 109.3, wall: '#c9bfa9', roof: '#a99f8c' }]) {
+    const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length, cy = ring.reduce((a, p) => a + p[1], 0) / ring.length, tk = tileKeyOf(cx, cy); if (!tk) continue;
+    out.restyle.push(['castelejo-block', -2, wall, roof, Math.round(cx), Math.round(cy), ...ring.flatMap(([x, y]) => [Math.round((x - Math.round(cx)) * 2), Math.round((y - Math.round(cy)) * 2)])]);
+    const S = sinkFor(tk); S.info ||= []; S.style ||= []; S.surf ||= [];
+    const ST = [KIND.STONE / 8, 5 / 8, 0.5, 0.9], col = LIN(wall);
+    for (let k = 0; k < ring.length; k++) {
+      const a = ring[k], b = ring[(k + 1) % ring.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, n = Math.max(2, Math.round(L / 1.25));
+      for (let q = 0; q < n; q++) { const t = (q + 0.5) / n; bbox(S, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, ux, uy, 0.32, 0.3, top - 0.05, top + 1.0, col, [0, 0, 0, 0], ST); }
+      bbox(S, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, ux, uy, L / 2 + 0.2, 0.2, top - 0.6, top - 0.2, LIN('#b5ab95'), [0, 0, 0, 0], ST);   // a string course under the merlons
+    }
+    stats.fronts = (stats.fronts || 0) + 1;
+  }
+}
 for (const [key, S] of sinks) {
   if (!S.pos.length) continue;
   const [area, ij] = key.split(':'), file = `l_${ij}.glb`;

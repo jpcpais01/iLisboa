@@ -3197,3 +3197,77 @@ export function bullringRoof(S, { cx, cy, r, z0, rise = 4, lin, srgb }) {
   for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a);
     sweep(S, W, [[c * (r + 0.3), s2 * (r + 0.3), 0.15], [c * r * 0.21, s2 * r * 0.21, rise * 0.8 + 0.12]].map(([u, v, z]) => [u, v, z, 0.3, 0.3]), rib, ST, 4, false); }
 }
+
+// Basílica da Estrela, the front the rule-built church lacks (drawn as a landmark overlay by landmarks3d.mjs, same frame
+// as parishChurch: façade at u = -hl, facing -u): a broad flight of steps, the projecting portico with three arches between
+// paired Corinthian columns, its balustrade with four statues, paired pilasters and statue niches on the upper storey, a
+// relief in the pediment, and clock faces on both towers. White lioz throughout.
+export function estrelaFront(S, { cx, cy, ux, uy, hl, hw, ground, H, lin, srgb }) {
+  const face = lin(srgb('#353b44')), gilt = lin(srgb('#c9a85a')), white = lin(srgb('#f3f0e9')), stone = lin(srgb('#e2dccd')), shade = lin(srgb('#cfc7b5')), dark = lin(srgb('#2f3134'));
+  const ST = [KIND.STONE / 8, 5 / 8, 0.4, 0.9], PL = [KIND.PLAIN / 8, 5 / 8, 0.4, 1];
+  const K = kit(S, { cx, cy, ux, uy, ground, zb: -2, wall: white, roof: white, ST: PL, TL: PL });
+  const { W3, blk } = K;
+  const F = -hl, tw = Math.min(3.6, Math.max(2.2, hw * 0.42)), fw = hw - 2 * tw + 0.2, Tt = Math.min(11, Math.max(6, tw * 2.8));
+  const D = 3.4, Fp = F - D, Hp = Math.min(11, H * 0.45);   // portico depth and height
+  // steps across the whole front
+  for (let k = 0; k < 6; k++) blk(Fp - 3.0 + k * 0.5, F, -hw - 0.6 + k * 0.05, hw + 0.6 - k * 0.05, -9, 0.18 * (k + 1), k % 2 ? stone : shade, ST);
+  const z0 = 1.08;
+  // portico body: side walls, back, roof slab; front: piers between three arches
+  const pairs = [-fw + 1.0, -fw / 3, fw / 3, fw - 1.0], gap = (pairs[1] - pairs[0]) - 2.6, aw = Math.min(3.2, gap * 0.8), ah = Hp - 4.2;
+  for (const sg of [-1, 1]) blk(Fp, F, sg * fw - 0.5, sg * fw + 0.5, z0, Hp - 1.7, white);
+  blk(Fp + 0.1, Fp + 0.9, -fw, fw, z0, Hp - 1.7, white);
+  for (let k = 0; k < 3; k++) {   // arched openings: a dark void with a round head, framed in stone
+    const v = (pairs[k] + pairs[k + 1]) / 2;
+    blk(Fp + 0.02, Fp + 0.06, v - aw / 2, v + aw / 2, z0, z0 + ah, dark, ST);
+    sweep(S, W3, Array.from({ length: 9 }, (_, q) => { const t = Math.PI * (q / 8); return [Fp + 0.04, v + Math.cos(t) * aw * 0.25, z0 + ah + Math.sin(t) * aw * 0.25 - 0.01, 0.02, aw * 0.25]; }), dark, ST, 6);
+    sweep(S, W3, Array.from({ length: 11 }, (_, q) => { const t = Math.PI * (q / 10); return [Fp - 0.08, v + Math.cos(t) * (aw / 2 + 0.2), z0 + ah + Math.sin(t) * (aw / 2 + 0.2), 0.14, 0.2]; }), stone, ST, 5);
+    for (const sg of [-1, 1]) blk(Fp - 0.12, Fp + 0.02, v + sg * (aw / 2 + 0.2) - 0.2, v + sg * (aw / 2 + 0.2) + 0.2, z0, z0 + ah, stone, ST);
+    ell(S, W3, [Fp - 0.15, v, z0 + ah + aw / 2 + 0.35], [0.2, 0.35, 0.45], stone, ST, 6);   // keystone
+  }
+  // paired Corinthian columns on pedestals, standing proud of the portico front
+  const cr = 0.42, cz0 = z0 + 1.0, ch = 0.95, cz1 = Hp - 1.7 - ch;
+  for (const v0 of pairs) for (const dv of [-0.55, 0.55]) {
+    const v = v0 + dv, C = (a, b, z) => W3(Fp - 0.7 + a, v + b, z);
+    blk(Fp - 1.25, Fp - 0.15, v - 0.55, v + 0.55, z0, cz0, shade, ST);
+    loft(S, C, [{ z: cz0, rx: cr * 1.2, ry: cr * 1.2 }, { z: cz0 + 0.3, rx: cr, ry: cr }, { z: cz1, rx: cr * 0.88, ry: cr * 0.88 }], white, ST, { sides: 16, cap: false });
+    corinthian(S, C, cr * 0.88, cz1, ch, stone, shade, ST);
+  }
+  // entablature, cornice, balustrade with statues over the pairs
+  blk(Fp - 1.25, F, -fw - 0.6, fw + 0.6, Hp - 1.7, Hp - 0.6, stone, ST);
+  blk(Fp - 1.55, F, -fw - 0.8, fw + 0.8, Hp - 0.6, Hp - 0.2, shade, ST);
+  blk(Fp - 1.0, F, -fw - 0.5, fw + 0.5, Hp - 0.2, Hp, white);
+  for (let v = -fw; v <= fw + 0.01; v += 0.45) limb(S, W3(Fp - 0.9, v, Hp), W3(Fp - 0.9, v, Hp + 0.85), 0.11, 0.11, 6, stone, ST, false);
+  blk(Fp - 1.05, Fp - 0.75, -fw - 0.3, fw + 0.3, Hp + 0.85, Hp + 1.05, stone, ST);
+  pairs.forEach((v, k) => {
+    blk(Fp - 1.25, Fp - 0.55, v - 0.5, v + 0.5, Hp, Hp + 1.1, stone, ST);
+    figure(S, (a, b, z) => W3(Fp - 0.9 - b, v + a, Hp + 1.1 + z), 1.35, white, ST, { robe: true, cloak: k % 2 === 1, arms: [[-0.25, 0.3, k % 2 ? 0.4 : -0.2], [0.3, 0.25, k % 2 ? -0.3 : 0.5]] });
+  });
+  // upper storey: paired pilasters above the columns, niches with statues between, the main cornice
+  for (const v0 of [pairs[0], pairs[3], pairs[1], pairs[2]]) for (const dv of [-0.55, 0.55]) blk(F - 0.35, F, v0 + dv - 0.3, v0 + dv + 0.3, Hp, H - 1.2, stone, ST);
+  for (const v of [(pairs[0] + pairs[1]) / 2, (pairs[2] + pairs[3]) / 2]) {
+    const nz = Hp + 1.6, nh = Math.min(4.2, H - 1.2 - nz - 1.2);
+    blk(F - 0.04, F, v - 0.9, v + 0.9, nz, nz + nh, shade, ST);
+    sweep(S, W3, Array.from({ length: 9 }, (_, q) => { const t = Math.PI * (q / 8); return [F - 0.02, v + Math.cos(t) * 0.45, nz + nh + Math.sin(t) * 0.45, 0.02, 0.45]; }), shade, ST, 6);
+    blk(F - 0.5, F, v - 0.7, v + 0.7, nz - 0.3, nz, stone, ST);
+    figure(S, (a, b, z) => W3(F - 0.35 - b, v + a, nz + z), Math.min(1.5, nh / 1.9), white, ST, { robe: true, arms: [[-0.2, 0.3, 0.3], [0.25, 0.3, -0.1]] });
+  }
+  { const { win } = openings(S, K.P2, W3, ux, uy, ground, stone, dark, ST); win(F, 0, -1, 0, Hp + 1.4, 2.2, Math.min(5, H - Hp - 4), 'pediment', 0.25); }
+  // the pediment's relief: a cartouche between reclining figures
+  const pedH = H + Math.max(hw * 0.55, 2) + 1.0, tz = (H - 1.2 + pedH) / 2 - 0.6;
+  for (const sg of [-1, 1]) sweep(S, W3, [[F - 0.2, sg * 1.8, tz - 1.6, 0.2, 0.3], [F - 0.25, sg * 3.4, tz - 1.4, 0.25, 0.45], [F - 0.2, sg * 5.0, tz - 1.9, 0.2, 0.3]], stone, ST, 6);
+  // clock faces on the towers
+  for (const sg of [-1, 1]) {
+    const vc = sg * (hw - tw), top = H + Tt, z = (H + top - 4.4) / 2, r = Math.min(1.1, tw * 0.33);
+    sweep(S, W3, [[F - 0.02, vc, z, 0.02, r + 0.3], [F - 0.14, vc, z, 0.14, r + 0.3]].map(([u, v, zz, a, b]) => [u, v, zz, a, b]), stone, ST, 16);
+    const C = (a, b, zz) => W3(F - 0.16 - zz * 0, vc + a, z + b);
+    void C;
+    const disc = (u, rr, col) => { const pts = 18; for (let q = 0; q < pts; q++) { const t0 = (q / pts) * 2 * Math.PI, t1 = ((q + 1) / pts) * 2 * Math.PI; tri(S, W3(u, vc, z), W3(u, vc + Math.cos(t0) * rr, z + Math.sin(t0) * rr), W3(u, vc + Math.cos(t1) * rr, z + Math.sin(t1) * rr), W3(-1, 0, 0).map((q2, i) => q2 - W3(0, 0, 0)[i]), col, [0, 0], [0, 0], [0, 0], [0, 0, 0, 0], ST); } };
+    disc(F - 0.16, r, face); disc(F - 0.18, r * 0.1, gilt);
+    limb(S, W3(F - 0.2, vc, z), W3(F - 0.2, vc, z + r * 0.62), 0.07, 0.04, 4, gilt, ST, false);
+    limb(S, W3(F - 0.2, vc, z), W3(F - 0.2, vc + r * 0.8, z), 0.06, 0.035, 4, gilt, ST, false);
+    for (let q = 0; q < 12; q++) { const a = (q / 12) * 2 * Math.PI; limb(S, W3(F - 0.19, vc + Math.cos(a) * r * 0.78, z + Math.sin(a) * r * 0.78), W3(F - 0.19, vc + Math.cos(a) * r * 0.92, z + Math.sin(a) * r * 0.92), 0.05, 0.05, 4, gilt, ST, false); }
+    // tower windows below the clock: two framed openings with cornices
+    const { win } = openings(S, K.P2, W3, ux, uy, ground, stone, dark, ST);
+    win(F, vc, -1, 0, Hp + 1.6, 1.3, 2.6, 'cornice', 0.15); win(F, vc, -1, 0, 1.4, 1.6, 3.6, 'pediment', 0.2);
+  }
+}
