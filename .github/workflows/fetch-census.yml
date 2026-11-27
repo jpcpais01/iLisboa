@@ -1,0 +1,27 @@
+name: fetch-census
+# INE census by statistical subsection (BGRI 2011 + 2021): construction era, structure and storeys of the buildings in each
+# city block → data/census. Drives each building's era and style in the tile build. The sandbox can't reach INE.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [pipeline/census/*.py, .github/workflows/fetch-census.yml]
+concurrency: fetch-census
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "pipeline/census\ndata/census\n.github", sparse-checkout-cone-mode: true }
+      - name: Fetch
+        run: |
+          pip install -q pyogrio shapely pyproj > /dev/null
+          if [ -f pipeline/census/fetch.py ]; then python pipeline/census/fetch.py; else python pipeline/census/probe.py; fi
+      - name: Commit
+        run: |
+          git config user.name "ilisboa-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A pipeline/census data/census 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "data: census by subsection [skip ci]" && git pull --rebase -q && git push)
