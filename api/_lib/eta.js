@@ -153,6 +153,7 @@ export function createEta() {
         let t = it.sched + (delay > 0 ? delay : delay * 0.5);
         t = Math.max(t, v.ts + Math.max(0, dk - it.d) / SAFE_V);
         const away = Math.max(0, dk - it.d);
+        if (it.k === 0) t = Math.max(t, it.sched);                                // at its first stop a bus lays over until its departure time
         if (t < nowS) t = nowS + Math.min(120, away / 6);                         // overdue by the timetable but not here yet
         Object.assign(row, { t, live: true, delay, age: nowS - v.ts, away, vid: v.id, here: away < 30 && (v.status === 1 || v.status === 'STOPPED_AT') });
       } else if (it.sched < nowS - 60) continue;                                   // its time has gone and no bus is seen
