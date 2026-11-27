@@ -242,19 +242,19 @@ export function createCars(ctx) {
     return opts[opts.length - 2];
   }
 
-  // Far streets are stepped less often: a lane advances when its fastest car would have moved ~0.35 px on screen since its
-  // last step (at most every 8th frame), so a city-wide view of 30k sub-pixel cars costs a fraction of the CPU with no
+  // Far streets are stepped less often: a lane advances when its fastest car would have moved ~0.5 px on screen since its
+  // last step (at most every 12th frame), so a city-wide view of 30k sub-pixel cars costs a fraction of the CPU with no
   // visible difference; near streets step every frame as before. Their cars keep the pose drawn at their last step.
   let frame = 0;
   function cadence() {
     const f = canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360));
-    for (const l of lanes.values()) { const pxPerFrame = (l.v * 1.3 * f) / Math.max(1, l.d) / 60; l.k = Math.max(1, Math.min(8, Math.floor(0.35 / Math.max(1e-6, pxPerFrame)))); l.tiny = (CAR_L * f) / Math.max(1, l.d) < 2.5; }
+    for (const l of lanes.values()) { const pxPerFrame = (l.v * 1.3 * f) / Math.max(1, l.d) / 60; l.k = Math.max(1, Math.min(12, Math.floor(0.5 / Math.max(1e-6, pxPerFrame)))); l.tiny = (CAR_L * f) / Math.max(1, l.d) < 2.5; }
   }
   function step(dtF) {
     frame++;
     for (const l of lanes.values()) {
       l.acc = (l.acc || 0) + dtF;
-      l.stepped = l.k <= 1 || (frame + (l.key & 7)) % l.k === 0;
+      l.stepped = l.k <= 1 || (frame + (l.key % 12)) % l.k === 0;
       if (!l.stepped) continue;
       const dt = Math.min(0.25, l.acc); l.acc = 0;
       const cars = l.cars;
