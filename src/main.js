@@ -532,6 +532,7 @@ function treeKinds() {
   const cypressFar = mergeGeometries([cyTrunk(3), spindle(1.2, 6.5, 5, 0xf0f0f0, 0.3)]); cypressFar.computeVertexNormals(); soften(cypressFar, 0, 6.5, 0, 0.35);
   // the crown alone, as an indexed octahedron the size of the far lobe (normals bent out like soften), for trees a few pixels across
   const crown = (r, y, ry, shade = 0xf0f0f0) => {
+    r *= 1.25; ry *= 1.25;   // a diamond covers 2r² where the lobes' round crown covers πr²: same canopy from afar
     const P = [r, y, 0, -r, y, 0, 0, y + ry, 0, 0, y - ry, 0, 0, y, r, 0, y, -r], N = [], C = [], c = new THREE.Color(shade), v = new THREE.Vector3();
     for (let i = 0; i < 6; i++) { v.set(P[i * 3], (P[i * 3 + 1] - y) * 1.4, P[i * 3 + 2]).normalize(); N.push(v.x, v.y, v.z); C.push(c.r, c.g, c.b); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
