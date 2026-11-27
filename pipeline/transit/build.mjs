@@ -139,7 +139,8 @@ for (const arg of process.argv.slice(2)) {
     const ids = rs.map((x) => x[1]);
     const key = `${t.route}|${ids.join(',')}`;
     let p = patterns.get(key);
-    if (!p) patterns.set(key, (p = { route: t.route, shapes: new Map(), dir: t.dir, head: t.head, stops: ids, profiles: new Map(), trips: [] }));
+    if (!p) patterns.set(key, (p = { route: t.route, shapes: new Map(), pats: new Set(), dir: t.dir, head: t.head, stops: ids, profiles: new Map(), trips: [] }));
+    if (t.pat) p.pats.add(t.pat);
     if (t.shape) p.shapes.set(t.shape, (p.shapes.get(t.shape) || 0) + 1);
     const t0 = rs[0][2];
     const prof = rs.map((x) => (isFinite(x[2]) ? x[2] - t0 : -1));
@@ -179,7 +180,7 @@ for (const arg of process.argv.slice(2)) {
       }
       for (const s of p.stops) { const st = stops.get(s); if (st) st.routes.add(key); }
       nPat++; nTrip += p.trips.length;
-      return { dir: p.dir, head: p.head, stops: p.stops, d: d.map(Math.round), shape: runs, prof: [...p.profiles.keys()].map((k) => k.split(',').map(Number)), trips: p.trips.sort((a, b) => a[2] - b[2]) };
+      return { dir: p.dir, head: p.head, pats: [...p.pats], stops: p.stops, d: d.map(Math.round), shape: runs, prof: [...p.profiles.keys()].map((k) => k.split(',').map(Number)), trips: p.trips.sort((a, b) => a[2] - b[2]) };
     });
     const json = JSON.stringify({ op, id: rid, line: R.short, name: R.long, color: R.color, text: R.text, type: R.type, patterns: outP });
     writeFileSync(`${OUT}/r/${key}.json`, json); bytes += json.length;
