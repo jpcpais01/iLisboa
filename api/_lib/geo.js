@@ -6,3 +6,5 @@ export const fwd = (lat, lon) => [(lon - LON0) * M_LON, (lat - LAT0) * M_LAT];
 export const BBOX = { S: 38.64, W: -9.30, N: 38.81, E: -9.02 };
 export const inBox = (lat, lon) => lat > BBOX.S && lat < BBOX.N && lon > BBOX.W && lon < BBOX.E;
 export const r1 = (v) => Math.round(v * 10) / 10;
+// back from the plane to WGS-84 (the assistant reports places as lat/lon)
+export const inv = (x, y) => [LAT0 + y / M_LAT, LON0 + x / M_LON];
