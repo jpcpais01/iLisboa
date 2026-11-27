@@ -1,6 +1,7 @@
 // Live aircraft (adsb.lol via /api/planes, every 8 s). Between reports each plane flies on by dead reckoning
 // (track, ground speed, climb rate) and a correction blends in over 3 s, so motion is continuous, never jumpy.
-// Each keeps a fading trail of where it has been since the layer was switched on.
+// Planes are always on: the 3D aircraft always fly. The dock toggle ("Marcar aviões") only shows the helper markers,
+// a blue dot that keeps each plane findable from far away and a fading trail of where it has been.
 import * as THREE from 'three';
 import { planeGeometry } from './models.js';
 import { createBeacons } from './beacons.js';
@@ -9,13 +10,14 @@ const POLL = 8000, TRAIL = 48, MAX = 160;
 
 export function createPlanes(ctx) {
   const { scene, ground } = ctx;
-  const group = new THREE.Group(); group.visible = false; scene.add(group);
+  const group = new THREE.Group(); scene.add(group);
+  const marks = new THREE.Group(); marks.visible = false; group.add(marks);   // dot + trail, the only part the toggle hides
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 });
   const mesh = new THREE.InstancedMesh(planeGeometry(), mat, MAX);
   mesh.count = 0; mesh.frustumCulled = false;
   group.add(mesh);
   const beacons = createBeacons(MAX, { size: 12 });
-  group.add(beacons.obj);
+  marks.add(beacons.obj);
   // trails: one LineSegments for all planes, alpha fading towards the tail
   const tg = new THREE.BufferGeometry();
   const tpos = new Float32Array(MAX * TRAIL * 2 * 3), talpha = new Float32Array(MAX * TRAIL * 2);
@@ -26,11 +28,11 @@ export function createPlanes(ctx) {
     vertexShader: 'attribute float aAlpha; varying float vA; void main(){ vA = aAlpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
     fragmentShader: 'varying float vA; void main(){ gl_FragColor = vec4(1., 1., 1., vA * .55); }',
   }));
-  trails.frustumCulled = false; group.add(trails);
+  trails.frustumCulled = false; marks.add(trails);
 
   const planes = new Map();
   const C_AIR = new THREE.Color(0x2f6fd6), C_GROUND = new THREE.Color(0x8b95a1);
-  let timer = 0, on = false, lastOk = 0, error = '', lastTrail = 0;
+  let timer = 0, on = false, markers = false, lastOk = 0, error = '', lastTrail = 0;
 
   async function poll() {
     if (!on) return;
@@ -111,14 +113,14 @@ export function createPlanes(ctx) {
 
   return {
     get on() { return on; },
-    set(v) {
-      on = v; group.visible = v;
-      clearTimeout(timer);
-      if (v) poll(); else { planes.clear(); mesh.count = 0; }
-    },
+    get markers() { return markers; },
+    // the aircraft feed: started once by index.js and left running
+    start() { if (on) return; on = true; poll(); },
+    // the dock toggle: helper dot + trail only
+    set(v) { markers = !!v; marks.visible = markers; ctx.status(); },
     update,
     status() {
-      if (!on) return '';
+      if (!on || !markers) return '';
       if (error && !lastOk) return 'sem ligação ao ADS-B';
       const air = [...planes.values()].filter((p) => !p.onGround).length;
       return `ao vivo · ${air} no ar${planes.size - air ? ` · ${planes.size - air} em terra` : ''}`;

@@ -76,7 +76,7 @@ export const TOOL_DEFS = [
   },
   {
     name: 'set_layer',
-    description: 'Turn a map layer on or off: traffic, transit (live buses/trams/Metro), planes, temperatura, vento (wind), chuva (rain radar), freguesias (parish borders), densidade (population density).',
+    description: 'Turn a map layer on or off: traffic, transit (live buses/trams/Metro), planes (aircraft are always shown; this only adds a blue marker dot and trail to find them), temperatura, vento (wind), chuva (rain radar), freguesias (parish borders), densidade (population density).',
     input_schema: { type: 'object', properties: { layer: { type: 'string', enum: LAYERS }, on: { type: 'boolean' } }, required: ['layer', 'on'] },
   },
   {

@@ -223,7 +223,7 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
       peekAt(lastText() || a.label || '');
     } else if (a.type === 'layer') setLayer(a.layer, a.on);
     else if (a.type === 'follow') {
-      setLayer(a.kind, true);
+      if (a.kind !== 'planes') setLayer(a.kind, true);   // planes always fly; their toggle is only the markers
       let n = 0; const tick = () => { live.follow(a.kind, a.id); if (!live.following && n++ < 20) setTimeout(tick, 400); };
       tick(); peekAt(lastText() || '');
     }

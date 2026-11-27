@@ -1,5 +1,6 @@
 // Live layers: traffic, public transport, aircraft. Self-contained: main.js hands over the scene and calls
-// update() once per frame. Every layer is off (and costs nothing) until its toggle is switched on.
+// update() once per frame. Traffic and transit are off (and cost nothing) until switched on; planes always fly, and their
+// toggle only shows the helper markers (blue dot + trail).
 import * as THREE from 'three';
 import { createGround } from './ground.js';
 import { ribbonUniforms } from './ribbons.js';
@@ -14,13 +15,14 @@ import { registerLayer } from '../layers/registry.js';
 const LAYERS = [
   { key: 'traffic', label: 'Trânsito', icon: '<rect x="7.5" y="2.5" width="9" height="19" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>' },
   { key: 'transit', label: 'Transportes', icon: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l1.5-4M16 21l-1.5-4"/><circle cx="8.5" cy="14" r=".6"/><circle cx="15.5" cy="14" r=".6"/>' },
-  { key: 'planes', label: 'Aviões', icon: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l7 4v2l-7-2v5l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-5l-7 2v-2l7-4V3.5z"/>' },
+  { key: 'planes', label: 'Marcar aviões', icon: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l7 4v2l-7-2v5l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-5l-7 2v-2l7-4V3.5z"/>' },
 ];
 
 export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, night = { value: 0 }, mobile = false, lod = () => 1 }) {
   const ground = createGround(scene, bounds);
   const ctx = { scene, ground, ll, status: () => renderStatus() };
   const layers = { traffic: createTraffic(ctx), transit: createTransit(ctx), planes: createPlanes(ctx) };
+  layers.planes.start();   // aircraft are always in the sky
   // ambient cars: always on, no toggle; their numbers and speeds follow the live traffic
   const cars = createCars({ scene, ground, ll, camera, canvas, night, mobile, lod });
 
@@ -33,7 +35,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
     handles[l.key] = registerLayer({
       id: l.key, label: l.label, group: 'live', icon: l.icon, status: () => layers[l.key].status(),
       legend: l.key === 'traffic' ? legend : undefined,
-      set: (v) => { layers[l.key].set(v); if (!v && card.dataset.k === l.key) { if (followed) stopFollow(); card.hidden = true; } },
+      set: (v) => { layers[l.key].set(v); if (!v && l.key !== 'planes' && card.dataset.k === l.key) { if (followed) stopFollow(); card.hidden = true; } },
     });
   }
 
@@ -145,6 +147,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
     get following() { return followed && { key: followed.key, id: followed.id }; },
     follow: startFollow, unfollow: stopFollow,
     // moving things on screen: the viewer keeps full frame rate (traffic alone is static and needs none)
-    get busy() { return layers.transit.on || layers.planes.on; },
+    // without markers, planes ride the still-view cadence (a plane kilometres away moves well under a pixel per frame)
+    get busy() { return layers.transit.on || layers.planes.markers; },
   };
 }
