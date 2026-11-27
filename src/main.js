@@ -458,10 +458,10 @@ function addTrees(buf) {
     chunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
   // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city);
-  if (!OLDLOD && chunks.length) {
+  if (chunks.length) {
     // and further still, every second tree at √2 the size, then every fourth at twice: the same canopy cover in a half, a quarter of the work
     const hs = (i) => Math.abs(Math.sin(i * 78.233) * 12543.17 % 1);
-    const lv = [1, 0.5, 0.25].map((f) => [...cellsOf(1e7)].map(({ kind, ids }) => { ids = f < 1 ? ids.filter((i) => hs(i) < f) : ids; const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, Math.max(1, ids.length)); place([a], K, ids, 1 / Math.sqrt(f)); a.count = ids.length; fin(a).castShadow = false; a.visible = false; return a; }));
+    const lv = (OLDLOD ? [1] : [1, 0.5, 0.25]).map((f) => [...cellsOf(1e7)].map(({ kind, ids }) => { ids = f < 1 ? ids.filter((i) => hs(i) < f) : ids; const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, Math.max(1, ids.length)); place([a], K, ids, 1 / Math.sqrt(f)); a.count = ids.length; fin(a).castShadow = false; a.visible = false; return a; }));
     const agg = lv[0];
     const b = new THREE.Box3(); for (const a of agg) b.union(new THREE.Box3().setFromCenterAndSize(a.boundingSphere.center, new THREE.Vector3().setScalar(a.boundingSphere.radius * 2)));
     const sph = b.getBoundingSphere(new THREE.Sphere());
@@ -902,13 +902,14 @@ renderer.setAnimationLoop((now) => {
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
-  const tinyD = Math.max(1100, 1.8 * px.f) * lodK;
+  // crowns: full detail swaps the lobed tree for its 6-vertex crown only once the whole tree is under ~1.5 px (?lodv=2: 3 px)
+  const tinyD = OLDLOD ? Math.max(2200, 3.6 * px.f) : Math.max(1100, 1.8 * px.f) * lodK;
   for (const A of treeAreas) {
-    const dA = camera.position.distanceTo(A.c) - A.r, far = dA > tinyD, at = !far ? -1 : dA > 4 * tinyD ? 2 : dA > 2 * tinyD ? 1 : 0;
+    const dA = camera.position.distanceTo(A.c) - A.r, far = dA > tinyD, at = !far ? -1 : OLDLOD ? 0 : dA > 4 * tinyD ? 2 : dA > 2 * tinyD ? 1 : 0;
     if (at !== A.at) { A.at = at; A.lv.forEach((L, k) => { for (const a of L) a.visible = k === at; }); }
     if (far !== A.far) { A.far = far; if (far) for (const t of A.chunks) t.near.visible = t.lo.visible = t.min.visible = false; }
   }
-  for (const t of treeChunks) { if (t.area?.far) continue; const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
+  for (const t of treeChunks) { if (t.area?.far) continue; const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !nearby && dd > tinyD; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
