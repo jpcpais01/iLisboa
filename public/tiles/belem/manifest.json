@@ -86,7 +86,7 @@
     -6958.470691318362,
     -3746.132409592001
    ],
-   "bytes": 65212,
+   "bytes": 63092,
    "balconies": null,
    "detail": "d_4_0.glb"
   },
@@ -114,7 +114,7 @@
     -5958.470691318362,
     -3746.132409592001
    ],
-   "bytes": 313392,
+   "bytes": 307456,
    "balconies": "bal_6_0.bin",
    "detail": "d_6_0.glb"
   },
@@ -128,7 +128,7 @@
     -5675.082414791048,
     -3746.132409592001
    ],
-   "bytes": 116608,
+   "bytes": 115204,
    "balconies": "bal_7_0.bin",
    "detail": "d_7_0.glb"
   },
@@ -422,8 +422,8 @@
     -6958.470691318362,
     -2246.132409592001
    ],
-   "bytes": 75460,
-   "balconies": null,
+   "bytes": 75724,
+   "balconies": "bal_4_3.bin",
    "detail": "d_4_3.glb"
   },
   {
@@ -436,7 +436,7 @@
     -6458.470691318362,
     -2246.132409592001
    ],
-   "bytes": 313024,
+   "bytes": 314368,
    "balconies": null,
    "detail": "d_5_3.glb"
   },
@@ -450,7 +450,7 @@
     -5958.470691318362,
     -2246.132409592001
    ],
-   "bytes": 201808,
+   "bytes": 205136,
    "balconies": "bal_6_3.bin",
    "detail": "d_6_3.glb"
   },
@@ -506,8 +506,8 @@
     -7958.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 111256,
-   "balconies": null,
+   "bytes": 112352,
+   "balconies": "bal_2_4.bin",
    "detail": "d_2_4.glb"
   },
   {
@@ -520,7 +520,7 @@
     -7458.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 226276,
+   "bytes": 226512,
    "balconies": "bal_3_4.bin",
    "detail": "d_3_4.glb"
   },
@@ -534,7 +534,7 @@
     -6958.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 320624,
+   "bytes": 335504,
    "balconies": "bal_4_4.bin",
    "detail": "d_4_4.glb"
   },
@@ -548,7 +548,7 @@
     -6458.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 490560,
+   "bytes": 501208,
    "balconies": "bal_5_4.bin",
    "detail": "d_5_4.glb"
   },
@@ -562,7 +562,7 @@
     -5958.470691318362,
     -1746.1324095920008
    ],
-   "bytes": 319276,
+   "bytes": 335032,
    "balconies": "bal_6_4.bin",
    "detail": "d_6_4.glb"
   },
@@ -576,7 +576,7 @@
     -5675.082414791048,
     -1746.1324095920008
    ],
-   "bytes": 625644,
+   "bytes": 625496,
    "balconies": "bal_7_4.bin",
    "detail": "d_7_4.glb"
   },
@@ -590,7 +590,7 @@
     -8958.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 146148,
+   "bytes": 158332,
    "balconies": "bal_0_5.bin",
    "detail": "d_0_5.glb"
   },
@@ -604,7 +604,7 @@
     -8458.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 171376,
+   "bytes": 196744,
    "balconies": "bal_1_5.bin",
    "detail": "d_1_5.glb"
   },
@@ -618,7 +618,7 @@
     -7958.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 188504,
+   "bytes": 209768,
    "balconies": "bal_2_5.bin",
    "detail": "d_2_5.glb"
   },
@@ -632,7 +632,7 @@
     -7458.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 363920,
+   "bytes": 409284,
    "balconies": "bal_3_5.bin",
    "detail": "d_3_5.glb"
   },
@@ -646,7 +646,7 @@
     -6958.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 279204,
+   "bytes": 291648,
    "balconies": "bal_4_5.bin",
    "detail": "d_4_5.glb"
   },
@@ -660,7 +660,7 @@
     -6458.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 393668,
+   "bytes": 395848,
    "balconies": "bal_5_5.bin",
    "detail": "d_5_5.glb"
   },
@@ -674,7 +674,7 @@
     -5958.470691318362,
     -1415.3774698637371
    ],
-   "bytes": 225436,
+   "bytes": 240792,
    "balconies": "bal_6_5.bin",
    "detail": "d_6_5.glb"
   },
@@ -688,34 +688,40 @@
     -5675.082414791048,
     -1415.3774698637371
    ],
-   "bytes": 114532,
+   "bytes": 123312,
    "balconies": "bal_7_5.bin",
    "detail": "d_7_5.glb"
   }
  ],
  "stats": {
   "authored": 9,
-  "buildings": 1491,
-  "lidar": 1391,
-  "height": 32,
+  "buildings": 1570,
+  "lidar": 1468,
+  "height": 34,
   "levels": 1,
   "estimated": 58,
-  "planar": 931,
-  "skeleton": 128,
-  "flat": 427,
-  "skeletonFail": 0,
+  "planar": 362,
+  "skeleton": 725,
+  "flat": 478,
+  "skeletonFail": 2,
   "parts": 46,
   "skippedOutlines": 3,
-  "partyEdges": 1430,
-  "balconies": 2527,
+  "partyEdges": 2133,
+  "balconies": 5884,
   "statues": 39,
   "wallsM": 14890.531067665645,
   "pillars": 0,
-  "chimneys": 1028,
+  "chimneys": 118,
   "remainders": 1,
   "thinParts": 2,
+  "boxEdge": 237,
+  "massed": 1255,
+  "massCut": 60,
+  "massSplit": 82,
+  "boxThin": 56,
+  "roofBoxes": 166,
+  "rims": 358,
   "churches": 5,
-  "dormers": 26,
   "landmarks": 6,
   "trams": 8,
   "tramPoles": 149,
@@ -738,19 +744,19 @@
    "tris": 10664
   },
   "waterSource": "dem",
-  "trees": 3455,
-  "treesMapped": 778,
+  "trees": 9572,
+  "treesMapped": 0,
   "lamps": 1803,
   "cars": 3399,
   "water": 0.7293,
-  "bytes": 9248997,
-  "detailTris": 150512,
-  "triangles": 680853
+  "bytes": 9339901,
+  "detailTris": 127080,
+  "triangles": 655209
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-26T23:04:21.380Z",
+ "built": "2026-11-27T00:30:45.552Z",
  "far": {
-  "bytes": 493916,
-  "tris": 66594
+  "bytes": 509308,
+  "tris": 69006
  }
 }
