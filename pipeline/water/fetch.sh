@@ -17,12 +17,17 @@ curl -sfL -m 120 -A "$UA" -o /tmp/feeds.csv https://files.mobilitydatabase.org/f
 head -1 /tmp/feeds.csv > probe/gtfs-catalogue.csv
 grep -iE 'transtejo|soflusa|ttsl|ferry.*portugal|portugal.*ferr|navegante|tml|transportes metropolitanos' /tmp/feeds.csv >> probe/gtfs-catalogue.csv || true
 grep -i ',PT,' /tmp/feeds.csv | cut -c1-300 > probe/gtfs-pt.csv || true
-ok=0
-for u in $(grep -iE 'transtejo|soflusa|ttsl' /tmp/feeds.csv | grep -oE 'https://[^,"]+\.zip[^,"]*' | sort -u); do
+ok=0; rm -rf raw/ferry
+# the official TTSL feed (mdb-2921) first; older Soflusa/Transtejo entries in the catalogue are 2019 snapshots
+for u in https://api.transtejo.pt/files/GTFS.zip https://files.mobilitydatabase.org/mdb-2921/latest.zip $(grep -iE 'transtejo|soflusa|ttsl' /tmp/feeds.csv | grep -oE 'https://[^,"]+\.zip[^,"]*' | grep -v -e mdb-1035 -e mdb-1038 | sort -u); do
   echo "try $u" >> probe/gtfs.txt
-  if curl -sfL -m 120 -A "$UA" -o /tmp/tt.zip "$u" && unzip -l /tmp/tt.zip | grep -q stop_times.txt; then
-    mkdir -p raw/ferry && unzip -o -q -j /tmp/tt.zip -d raw/ferry && ok=1; echo "ok $u" >> probe/gtfs.txt; ls -la raw/ferry >> probe/gtfs.txt; break
+  if curl -sfL -m 120 -A 'Mozilla/5.0 (iLisboa diorama)' -o /tmp/tt.zip "$u" && unzip -l /tmp/tt.zip | grep -q stop_times.txt; then
+    mkdir -p raw/ferry && unzip -o -q -j /tmp/tt.zip -d raw/ferry && ok=1; echo "ok $u" >> probe/gtfs.txt; ls -la raw/ferry >> probe/gtfs.txt; tail -3 raw/ferry/calendar*.txt >> probe/gtfs.txt; break
   fi
 done
-[ $ok = 0 ] && echo "no Transtejo GTFS found in the catalogue" >> probe/gtfs.txt
+# TML (Transportes Metropolitanos de Lisboa) realtime hub: does it carry the ferries? keep a sample to look at
+curl -sfL -m 60 -A "$UA" -o probe/tml-positions.pb https://go.tmlmobilidade.pt/hub/api/v1/realtime/vehicles/positions/gtfs || echo "tml positions failed" >> probe/gtfs.txt
+curl -sfL -m 60 -A "$UA" https://go.tmlmobilidade.pt/hub/api/v1/realtime/vehicles/positions 2>/dev/null | head -c 20000 > probe/tml-positions.json || true
+ls -la probe/tml-positions.* >> probe/gtfs.txt
+: > /dev/null; [ $ok = 0 ] && echo "no Transtejo GTFS found in the catalogue" >> probe/gtfs.txt
 true
