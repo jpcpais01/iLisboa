@@ -63,12 +63,13 @@ if (process.env.REFS !== '0') {
   const UA = { 'User-Agent': 'ilisboa-test/0.1 (research script)' };
   const cands = {};
   for (const v of views) for (const q of v.refq || []) {
+    if (process.env.REFVIEWS && !process.env.REFVIEWS.split(',').includes(v.id)) continue;
     const u = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=12&gsrsearch=${encodeURIComponent(q + ' filetype:bitmap')}&prop=imageinfo&iiprop=url|size|extmetadata&iiurlwidth=1600`;
     try {
       const j = await (await fetch(u, { headers: UA })).json();
       const pages = Object.values(j.query?.pages || {}).sort((a, b) => a.index - b.index);
       for (const p of pages) {
-        const ii = p.imageinfo?.[0]; if (!ii || ii.width < ii.height || ii.width < 1200) continue;
+        const ii = p.imageinfo?.[0]; if (!ii || ii.width < ii.height * 1.1 || ii.width < 1000) continue;
         (cands[v.id] ||= []).push({ q, title: p.title, thumb: ii.thumburl, page: ii.descriptionurl, w: ii.width, h: ii.height, artist: (ii.extmetadata?.Artist?.value || '').replace(/<[^>]+>/g, '').trim(), license: ii.extmetadata?.LicenseShortName?.value });
       }
     } catch (e) { console.log('wm fail', q, e.message); }
@@ -81,5 +82,6 @@ if (process.env.REFS !== '0') {
     }
     cands[id] = list.filter((c) => c.file);
   }
-  writeFileSync(D + 'ref/refs.json', JSON.stringify(cands, null, 1));
+  const old = existsSync(D + 'ref/refs.json') ? JSON.parse(readFileSync(D + 'ref/refs.json')) : {};
+  writeFileSync(D + 'ref/refs.json', JSON.stringify({ ...old, ...cands }, null, 1));
 }

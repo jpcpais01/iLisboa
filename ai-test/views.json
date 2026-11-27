@@ -35,8 +35,8 @@
  {
   "id": "wide",
   "name": "Wide city",
-  "cam": "38.7230,-9.1450,6500,195,58",
-  "place": "central Lisbon looking south over Avenida da Liberdade to the river",
+  "cam": "38.7250,-9.1420,5200,350,64",
+  "place": "central Lisbon seen from above the Tagus looking north over the Baixa and Avenida da Liberdade",
   "refq": [
    "Lisbon aerial view",
    "Lisboa vista a\u00e9rea Avenida da Liberdade",
@@ -45,13 +45,13 @@
  },
  {
   "id": "street",
-  "name": "Rua Augusta street level",
-  "cam": "38.7082,-9.1366,230,180,84",
-  "place": "Rua Augusta and its triumphal arch",
+  "name": "Arco da Rua Augusta, eye level",
+  "cam": "38.7084,-9.1366,190,0,86.5",
+  "place": "the Arco da Rua Augusta seen from Pra\u00e7a do Com\u00e9rcio at eye level",
   "refq": [
+   "Arco da Rua Augusta",
    "Rua Augusta Arch Lisbon",
-   "Rua Augusta Lisboa",
-   "Arco da Rua Augusta street"
+   "Arco da Rua Augusta Pra\u00e7a do Com\u00e9rcio"
   ]
  }
 ]
