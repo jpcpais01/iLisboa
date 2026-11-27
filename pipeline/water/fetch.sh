@@ -5,7 +5,7 @@ UA='iLisboa diorama (open data)'
 # 1. EMODnet bathymetry DTM (~115 m), Tagus estuary + bar. WCS 2.0.1, Lat/Long subsets.
 W=https://ows.emodnet-bathymetry.eu/wcs
 for cov in emodnet__mean emodnet__mean_2022 emodnet:mean; do
-  u="$W?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&CoverageId=$cov&SUBSET=Lat(38.55,38.90)&SUBSET=Long(-9.50,-8.85)&FORMAT=image%2Ftiff"
+  u="$W?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&CoverageId=$cov&SUBSET=Lat(38.50,38.90)&SUBSET=Long(-9.65,-8.85)&FORMAT=image%2Ftiff"
   code=$(curl -s -m 120 -A "$UA" -o raw/bathy.tif -w '%{http_code}' "$u"); echo "$cov $code $(stat -c %s raw/bathy.tif 2>/dev/null) $(file -b raw/bathy.tif)" | tee -a probe/bathy.txt
   if [ "$code" = 200 ] && file -b raw/bathy.tif | grep -qi tiff; then echo "ok $cov" >> probe/bathy.txt; break; fi
   head -c 600 raw/bathy.tif >> probe/bathy.txt; echo >> probe/bathy.txt; rm -f raw/bathy.tif
