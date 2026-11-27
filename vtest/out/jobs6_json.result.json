@@ -1,0 +1,22 @@
+[
+ {
+  "name": "h_b_wan22_s030",
+  "endpoint": "fal-ai/wan/v2.2-a14b/video-to-video",
+  "ok": true,
+  "ms": 64703,
+  "inference_s": 63.8529999256134,
+  "request": "01a21f6c-0cbc-7a73-8fff-0d3dec5520c4",
+  "seed": 1,
+  "file": "h_b_wan22_s030.mp4"
+ },
+ {
+  "name": "h_b_wan22_s045",
+  "endpoint": "fal-ai/wan/v2.2-a14b/video-to-video",
+  "ok": true,
+  "ms": 119821,
+  "inference_s": 117.21599984169006,
+  "request": "01a21f6c-0beb-78d3-959a-47fde0722a31",
+  "seed": 1,
+  "file": "h_b_wan22_s045.mp4"
+ }
+]
