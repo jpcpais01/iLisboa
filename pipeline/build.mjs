@@ -19,7 +19,8 @@ import { Raster, boxBlur } from './lib/raster.mjs';
 import { loadDetail } from './lib/detail.mjs';
 import { buildBridges } from './lib/bridges.mjs';
 import { makeCuts, cutCell, clipUnion } from './lib/cuts.mjs';
-import { makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp, tri as triRaw } from './lib/buildings.mjs';
+import { makeGenome, designGroups, BALC, ERA } from './lib/genome.mjs';
+import { setGene, makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp, tri as triRaw } from './lib/buildings.mjs';
 import { OVERRIDES, DROP, dropTag, BAIXA_ZONES, notBlock, pombalineBlocks, profileRoof, mansardProfile, arcoRuaAugusta, equestrianJose, pedroIVColumn, rossioFountain, portico, jeronimosWing, arenaShell, jazigo, seCathedral, panteao, carmoRuins, santaJustaLift, caisColunas, parishChurch, CHURCHES, tramCar, trainCar, catenaryMast, cacilheiro, miradouro, restauradoresObelisk, rossioStationFront, saoBentoFront, sailboat, metalDome, estrelaBasilica, marquesColumn, trellisCedar, pelourinho, domedTower, AREAS, ponte25Abril, PONTE_LINE, cristoRei, aqueduto, AQUEDUTO_LINE, torreBelem, padraoDescobrimentos, jeronimosChurch, estadioLuz, oriente, campoPequenoTower, torreVascoGama, amoreirasCrown, maat, oceanario, alvaladeStadium, bleachers, barrelRoof, palaSiza, sailCrown, VG_LINE, ponteVascoGama, slopedCrown, flareTower, dormers, sawtoothRoof, plainDome, minaretTop, vaultAlong, limb, twinSpires, bullringRoof } from './lib/authored.mjs';
 
 const { default: skPkg } = await import('straight-skeleton');
@@ -814,6 +815,17 @@ const surveyMass_ = (p) => {
 const VILLA_KINDS = new Set(['house', 'detached', 'villa', 'bungalow', 'semidetached_house']);
 const isVilla = (p) => { const k = p.tags.building, a = Math.abs(p.area), lv = parseFloat(p.tags['building:levels']);
   return !p.tags['building:part'] && a > 50 && a < 700 && !(lv > 3) && (VILLA_KINDS.has(k) || ((k === 'yes' || k === 'residential') && a < 400)) && Math.hypot(p.c[0], p.c[1] * 1.15) > 2500; };
+// façade genome (lib/genome.mjs): era, design set, mapped shops → what each building's front is made of
+const GENOME = makeGenome({ proj, hash });
+const NO_GENE = !!process.env.NO_GENE;   // old façades (A/B checks)
+let GROUPS = new Map();
+const SHOPS = new Map(), SHOP_G = 20;   // shop / café / bank nodes on a 20 m grid
+for (const n of extractNodes(els, proj, (t) => !!(t.shop || /^(restaurant|cafe|bar|pub|fast_food|pharmacy|bank|ice_cream|bureau_de_change|dentist|clinic|doctors|post_office|veterinary)$/.test(t.amenity || '') || t.craft || t.office && t['addr:street'])))
+  { const k = `${Math.floor(n.x / SHOP_G)},${Math.floor(n.y / SHOP_G)}`; (SHOPS.get(k) || SHOPS.set(k, []).get(k)).push(n); }
+const shopsAt = (p) => { const xs = p.outer.map((q) => q[0]), ys = p.outer.map((q) => q[1]); let n = 0;
+  for (let gx = Math.floor((Math.min(...xs) - 4) / SHOP_G); gx <= Math.floor((Math.max(...xs) + 4) / SHOP_G); gx++) for (let gy = Math.floor((Math.min(...ys) - 4) / SHOP_G); gy <= Math.floor((Math.max(...ys) + 4) / SHOP_G); gy++)
+    for (const q of SHOPS.get(`${gx},${gy}`) || []) if (pointInRing(q.x, q.y, p.outer) || segDist(q.x, q.y, p.outer) < 4) n++;
+  return n; };
 const STONE_SITES = polysArea.filter((a) => ['r10093261_0'].includes(a.id)).map((a) => ({ ring: a.outer, wall: '#dad3c6', flat: [206, 200, 188] }));
 function buildingSpec(p) {
   const t = p.tags, kind = t.building && t.building !== 'yes' ? t.building : t['building:part'] && t['building:part'] !== 'yes' ? t['building:part'] : t.building || 'yes';
@@ -917,7 +929,8 @@ function buildingSpec(p) {
   const flatCol = castle ? [170, 162, 148] : shape === 'flat' && parseColour(tameRoof(t['roof:colour'])) || pick(p.area > 2500 || hall ? BIG_ROOF : FLAT_ROOF, u('f'));
   const pitch = hall && shape === 'gabled' ? 7 + u('pt') * 5 : shape === 'pyramidal' ? 40 : church ? 34 : variant === 8 ? 16 + u('pt') * 6 : 24 + u('pt') * 13;
   const spec = { kind, h, minH, src, shape, floorH, groundH, bayW, variant, stone, castle, pillar, wall, roofCol, flatCol, pitch,
-    roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8 };
+    roofH: parseMeters(t['roof:height']), balconyFloors: floorH && variant !== 8 ? balconyFloors : [], balconyChance, parapet: variant === 3 || variant === 8 ? 1.1 : castle ? 0 : hall ? 0.5 : 0.8,
+    villa: isVilla(p), newTown, hall, church, palace, monument, wallData: !!(parseColour(tameWall(t['building:colour'])) || MATERIAL_C[mat]) };
   if (lidOk && shape !== 'flat') {   // pitched: the walls stop at the eave, the roof rises to the measured ridge
     const eave = Math.max(minH + 2.2, Math.min(lid.lo, h)), f = (eave - minH) / Math.max(1, h - minH);
     spec.h = eave; spec.roofH = spec.roofH ?? Math.max(1, Math.min(6, lid.top - eave));
@@ -939,7 +952,7 @@ function buildingSpec(p) {
   }
   if (!spec.wall) spec.wall = pick(RESI_ERA[0], u('w'));
   const site = STONE_SITES.find((z) => pointInRing(p.c[0], p.c[1], z.ring));
-  if (site && !t['building:colour']) { spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
+  if (site && !t['building:colour']) { spec.wallData = true; spec.wall = srgb(site.wall); spec.flatCol = site.flat; spec.roofCol = srgb(site.wall); spec.stone = true; spec.balconyFloors = []; }   // CCB: big blank walls of dressed stone, hardly a window (checked against Earth)
   // the photo and the survey, building by building: roof type from the tiles the photo sees, roof and wall colours as they are
   const det = p.mass ? DET.get(p.mass.parent.id) : lidOk && !p.ovr && !OVERRIDES[p.id] && !t['building:part'] && !church && !castle && !palace && !monument && !pillar ? detailOf(p, lid.top) : null;
   if (det && p.mass) {   // a slab of the survey massing: its roof as the photo and survey read it, slab by slab
@@ -973,7 +986,7 @@ function buildingSpec(p) {
     if (lk.roofCol && !t['roof:colour']) spec.roofCol = srgb(lk.roofCol);
     if (lk.flatCol && !t['roof:colour']) spec.flatCol = srgb(lk.flatCol);
     if (lk.sub8 !== undefined) spec.sub8 = lk.sub8;
-    spec.looked = true;
+    spec.looked = true; if (lk.wall) spec.wallData = true;
   }
   if (spec.detail && spec.variant === 8 && spec.sub8 === 1 && spec.floorH && spec.h >= 12 && !site) {   // Telheiras 70s–90s blocks: stacked concrete balconies with solid white parapets (checked against Earth)
     spec.balconyFloors = Array.from({ length: 40 }, (_, k) => k + 1); spec.balconyChance = 0.55; spec.balconyModern = true;
@@ -1017,17 +1030,81 @@ function measuredRoofBoxes(p, ctx, wallTop) {
   return k;
 }
 
+// Chimneys, flues and small roof housings on a pitched roof, where the 50 cm survey sees them: cells standing ≥0.8 m above the
+// roof around them (the median of a 5 m window) and above the drawn roof, grouped into blobs; a blob of up to 4 m² is a
+// chimney stack, up to 15 m² a housing (stair head, water tank, dormer cheek). Nothing is invented: a bare roof stays bare.
+function measuredChimneys(p, ctx, f) {
+  const ob = obb(p.outer); if (!ob) return 0;
+  const G = 0.5, nu = Math.ceil((2 * ob.hl) / G), nv = Math.ceil((2 * ob.hw) / G), z = new Float32Array(nu * nv).fill(NaN), g0 = ctx.ground ?? 0;
+  const W = (i, j) => [ob.cx + ob.ux * (-ob.hl + (i + 0.5) * G) + ob.vx * (-ob.hw + (j + 0.5) * G), ob.cy + ob.uy * (-ob.hl + (i + 0.5) * G) + ob.vy * (-ob.hw + (j + 0.5) * G)];
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const [x, y] = W(i, j); if (!pointInRing(x, y, p.outer) || segDist(x, y, p.outer) < 0.6) continue; const v = DETAIL.fine(x, y); if (isFinite(v)) z[j * nu + i] = v; }
+  const R = 5, up = new Uint8Array(nu * nv), tmp = [];
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    const v = z[j * nu + i]; if (!isFinite(v)) continue;
+    tmp.length = 0; for (let b = Math.max(0, j - R); b <= Math.min(nv - 1, j + R); b++) for (let a = Math.max(0, i - R); a <= Math.min(nu - 1, i + R); a++) { const w = z[b * nu + a]; if (isFinite(w)) tmp.push(w); }
+    if (tmp.length < 20) continue; tmp.sort((a, b) => a - b);
+    const [x, y] = W(i, j);
+    if (v - tmp[tmp.length >> 1] > 0.8 && v + g0 > f(x, y) + 0.4 && v - tmp[tmp.length >> 1] < 6) up[j * nu + i] = 1;
+  }
+  const seen = new Uint8Array(nu * nv), D = ctx.D || getTile(...tileOf(p.c[0], p.c[1])).b, info = [0, 0, 0, 0], st = [KIND.PLAIN / 8, ctx.spec.variant / 8, ctx.seed, 0.5];
+  let k = 0;
+  for (let s0 = 0; s0 < nu * nv && k < 10; s0++) {
+    if (!up[s0] || seen[s0]) continue;
+    const q = [s0], cells = []; seen[s0] = 1;
+    while (q.length) { const c = q.pop(); cells.push(c); const i = c % nu, j = (c / nu) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b, n = jj * nu + ii; if (ii >= 0 && jj >= 0 && ii < nu && jj < nv && up[n] && !seen[n]) { seen[n] = 1; q.push(n); } } }
+    if (cells.length < 2 || cells.length > 60) continue;
+    let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1, zt = []; for (const c of cells) { const i = c % nu, j = (c / nu) | 0; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); zt.push(z[c]); }
+    if (cells.length < (i1 - i0 + 1) * (j1 - j0 + 1) * 0.35) continue;   // a ragged scatter is survey noise or a tree over the roof
+    zt.sort((a, b) => a - b); const top = g0 + zt[Math.floor(zt.length * 0.8)];
+    const [cx, cy] = W((i0 + i1) / 2, (j0 + j1) / 2), stack = cells.length <= 16;
+    const hu = Math.max(stack ? 0.3 : 0.6, ((i1 - i0 + 1) * G) / 2 - 0.1), hv = Math.max(stack ? 0.3 : 0.6, ((j1 - j0 + 1) * G) / 2 - 0.1);
+    const base = Math.min(f(cx - ob.ux * hu - ob.vx * hv, cy - ob.uy * hu - ob.vy * hv), f(cx + ob.ux * hu + ob.vx * hv, cy + ob.uy * hu + ob.vy * hv), f(cx, cy)) - 0.6;
+    if (top - base < 0.9) continue;
+    const col = stack ? ctx.colTrim : ctx.colWall.map((c) => c * 0.95);
+    box(D, cx, cy, ob.ux, ob.uy, hu, hv, base, top - (stack ? 0.15 : 0), col, info, st);
+    if (stack) box(D, cx, cy, ob.ux, ob.uy, hu + 0.07, hv + 0.07, top - 0.15, top, ctx.colRoof, info, st);   // the stack's tiled cap
+    else box(D, cx, cy, ob.ux, ob.uy, hu + 0.1, hv + 0.1, top, top + 0.12, ctx.colRoof, info, st);
+    k++;
+  }
+  return k;
+}
 process.on('exit', () => { if (!process.env.DUMP_DET) return; const o = []; for (const [id, d] of DET) { if (!d) continue; const p = polysB.find((q) => q.id === id); if (!p) continue; const [la, lo] = proj.inv(p.c[0], p.c[1]); const m = (MASS.get(id) || []).map((q) => q.mass && { r: q.mass.roof, deck: +q.mass.deck.toFixed(1), tE: q.mass.tE, tI: q.mass.tI, b: q.mass.boxes.length, tA: q.mass.tA, rimD: q.mass.rimD }); o.push({ id, la: +la.toFixed(5), lo: +lo.toFixed(5), h: d.h, wall: d.wall, src: d.wallSrc, cands: d.cands, tf: +d.tileFrac.toFixed(2), tile: d.tile, flat: d.flat, m }); } fs.writeFileSync(process.env.DUMP_DET, JSON.stringify(o)); });
 const FAR = [];   // footprints for the far level of detail (one block per building)
 const BAD = []; // guard: any building vertex far outside the diorama fails the build
 const tileB0 = (x, y) => { const [ti, tj] = tileOf(x, y); return getTile(ti, tj).b; };
 function addBuilding(p) {
   const S0 = (() => { const [ti, tj] = tileOf(p.c[0], p.c[1]); return getTile(ti, tj).b; })(), n0 = S0.pos.length;
-  addBuilding_(p);
+  addBuilding_(p); setGene(null);
   for (let i = n0 + 1; i < S0.pos.length; i += 3) if (S0.pos[i] < -40 || S0.pos[i] > 400 || !isFinite(S0.pos[i])) { { BAD.push(`${p.id} y=${S0.pos[i].toFixed(0)}`); break; } }
+}
+// the building's façade genome → spec (era wall colour, bay width, balconies to match) and the per-vertex _GENE bytes.
+// Landmarks, halls, churches, palaces and hand-authored buildings keep their own fronts (no genome).
+const balcRow = (k, fl, d) => (((k * k * 31 + k * 73 + fl * 151 + d * 37 + 11) % 97) + 97) % 97 / 97;   // same rule as the shader's (materials.js)
+const balcCol = (k, d) => (((k * k * 31 + k * 73 + d * 37 + 5) % 97) + 97) % 97 / 97;
+const GENE_DUMP = []; process.on('exit', () => { if (process.env.DUMP_GENE) fs.writeFileSync(process.env.DUMP_GENE, JSON.stringify(GENE_DUMP)); });
+function applyGene(p, s) {
+  if (NO_GENE || s.src === 'authored' || !s.floorH || s.hall || s.church || s.palace || s.monument || s.stone || s.castle || ![0, 1, 2, 3, 8].includes(s.variant) || s.kind === 'roof') return null;
+  const set = GROUPS.get(p.mass ? p.mass.parent.id : p.id) || (p.mass ? p.mass.parent.id : p.id);
+  const era = GENOME.eraOf(p, s, null, set);
+  const g = GENOME.geneOf(p, s, { era, design: set, shops: shopsAt(p) });
+  if (!s.wallData) s.wall = srgb(GENOME.eraWall(era, set));
+  s.bayW *= 0.92 + 0.16 * hash(set + 'bw');
+  if (era <= ERA.GAIO && s.bayW > 3.1) s.bayW = 2.6 + 0.4 * hash(set + 'bw2');
+  // balconies drawn as geometry (bal_*.bin): the same bays the shader opens as balcony doors (balcRow / balcCol)
+  const B = g.balc, d = g.design;
+  s.balcPick = B === BALC.IRON_ALL ? (k, fl) => balcRow(k, fl, d) < 0.88 : B === BALC.IRON_NOBLE || B === BALC.IRON_RUN ? (k, fl) => fl === 1
+    : B === BALC.SLAB_BAY || B === BALC.MARQUISE ? (k) => balcCol(k, d) < 0.5 : B === BALC.SLAB_BAND ? (k) => balcCol(k, d) < 0.9 : null;
+  s.balconyFloors = s.balcPick ? Array.from({ length: 40 }, (_, k) => k + 1) : [];
+  s.balconyModern = B === BALC.SLAB_BAY || B === BALC.SLAB_BAND || B === BALC.MARQUISE;
+  s.balconyRun = B === BALC.IRON_RUN || B === BALC.SLAB_BAND;
+  if (process.env.DUMP_GENE) GENE_DUMP.push([p.id, set, Math.round(p.c[0]), Math.round(p.c[1]), ...g.bytes]);
+  s.gene = g; stats.gene = (stats.gene || 0) + 1; stats['era' + era] = (stats['era' + era] || 0) + 1;
+  if (process.env.DBG_ID === p.id) console.log('GENE', p.id, set, JSON.stringify(g));
+  return g;
 }
 function addBuilding_(p) {
   const s = buildingSpec(p);
+  const gene = applyGene(p, s); setGene(gene && gene.bytes);
   stats.buildings++; stats[s.src]++;
   let seed = hash(p.id + 'seed');
   if (s.sub8 !== undefined || s.msBand) {   // the shader reads the sub-style from fract(seed·23.17) of the 12-bit seed it receives
@@ -1128,6 +1205,7 @@ function addBuilding_(p) {
     }
   }
   else if (s.detail && mode === 'flat' && LIDAR) { const k = measuredRoofBoxes(p, ctx, wallTop); stats.roofBoxes = (stats.roofBoxes || 0) + k; }   // what stands on the roof, as the survey saw it
+  else if (!s.stone && s.h > 5 && mode !== 'flat' && s.detail && DETAIL?.fine && DETAIL.fineCovers?.(p.c[0], p.c[1])) { const k = measuredChimneys(p, ctx, res.f); stats.lidarChimneys = (stats.lidarChimneys || 0) + k; }   // chimneys and roof housings where the survey saw them
   else if (!s.stone && s.h > 5) { roofExtras(ctx.D || S, ctx, res.f, rng, mode !== 'flat'); stats.chimneys++; }
   // solar panels on about a third of the flat-roofed villas (Restelo, Belém from above)
   if (mode === 'flat' && isVilla(p) && hash(p.id + 'pv') < 0.35) {
@@ -1304,6 +1382,10 @@ function addBuilding_(p) {
   const baixaSet = new Set(baixa);
   todo = todo.filter((p) => !baixaSet.has(p) && !(p.tags['building:part'] && inZone(p.c[0], p.c[1])));
   markPartyWalls(todo.filter((p) => !p.tags['building:part']));
+  { const fp = todo.filter((p) => !p.tags['building:part'] && !OVERRIDES[p.id]); for (const p of fp) p.obb = obb(p.outer);
+    GROUPS = designGroups(fp, (p) => { const m = p.mass ? { mid: p.mass.deck } : measured(p); return m?.mid ?? parseMeters(p.tags.height); });
+    const sizes = new Map(); for (const g of GROUPS.values()) sizes.set(g, (sizes.get(g) || 0) + 1);
+    stats.designSets = [...sizes.values()].filter((n) => n > 1).length; stats.designSetBuildings = [...sizes.values()].filter((n) => n > 1).reduce((a, n) => a + n, 0); }
   // parish churches: whitewashed naves with towers and pedimented fronts, built from the footprint's OBB
   const inBuilding = (x, y, self) => polysB.some((q) => q !== self && !q.tags['building:part'] && Math.abs(q.c[0] - x) < 80 && Math.abs(q.c[1] - y) < 80 && pointInRing(x, y, q.outer));
   for (const p of todo) {
@@ -1732,6 +1814,7 @@ function distribute(T, far = true) {
       for (let q = 0; q < 9; q++) { F.P.push(T.pos[o + q]); F.C.push(T.col[o + q]); } }
     for (let k = 0; k < 9; k++) { D.pos.push(T.pos[o + k]); D.nrm.push(T.nrm[o + k]); D.col.push(T.col[o + k]); }
     for (let k = 0; k < 12; k++) { D.info.push(T.info[t * 12 + k]); D.style.push(T.style[t * 12 + k]); }
+    for (let k = 0; k < 12; k++) D.gene.push(0);
     for (let k = 0; k < 6; k++) D.surf.push(T.surf[t * 6 + k]);
   }
   return kept;
@@ -2688,6 +2771,7 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     addMesh(doc, scene, 'buildings', {
       POSITION: [Float32Array.from(B.pos), 'VEC3'], NORMAL: [Float32Array.from(B.nrm), 'VEC3'], COLOR_0: [col, 'VEC3', true],
       TEXCOORD_0: [Float32Array.from(B.surf, (v) => Math.min(1, Math.max(0, v / 512 + 0.5))), 'VEC2'], _INFO: [Float32Array.from(B.info), 'VEC4'], _STYLE: [Float32Array.from(B.style), 'VEC4'],
+      ...(B.gene.some((v) => v) ? { _GENE: [Uint8Array.from(B.gene), 'VEC4', true] } : {}),   // façade genome (buildingGene)
     }, bmat);
     totalTris += B.pos.length / 9;
     const Dd = T.d;   // façade relief: its own file, fetched only for tiles near the camera

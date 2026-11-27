@@ -33,7 +33,7 @@ const _v = new THREE.Vector3();
 export function restyle(mesh) {
   if (!index || !index.restyle.length || mesh.userData.lmStyled) return;
   mesh.userData.lmStyled = true;
-  const g = mesh.geometry, N = g.attributes.normal, P = g.attributes.position, S = g.attributes.aStyle, C = g.attributes.color, I = g.index;
+  const g = mesh.geometry, N = g.attributes.normal, P = g.attributes.position, S = g.attributes.aStyle, C = g.attributes.color, G = g.attributes.aGene, I = g.index;
   if (!S || !C) return;
   if (!g.boundingBox) g.computeBoundingBox();
   mesh.updateWorldMatrix(true, false);
@@ -55,11 +55,11 @@ export function restyle(mesh) {
       if (done[q]) continue; done[q] = 1;
       const kind = Math.round(S.getX(q) * 8), variant = Math.round(S.getY(q) * 8);
       if (kind === 1 || kind === 2 || (kind === 6 && hit.variant === -2)) {
-        if (hit.variant >= 0 && (variant === 1 || variant === 2)) S.setY(q, hit.variant / 8);
+        if (hit.variant >= 0 && (variant === 1 || variant === 2)) { S.setY(q, hit.variant / 8); if (G) G.setX(q, 0); }   // a landmark's own front, not the street's genome
         if (hit.wall) C.setXYZ(q, hit.wall[0], hit.wall[1], hit.wall[2]);
       } else if ((kind === 3 || kind === 5 || (kind === 4 && hit.variant === -2)) && hit.roof) C.setXYZ(q, hit.roof[0], hit.roof[1], hit.roof[2]);
       touched++;
     }
   }
-  if (touched) { S.needsUpdate = true; C.needsUpdate = true; }
+  if (touched) { S.needsUpdate = true; C.needsUpdate = true; if (G) G.needsUpdate = true; }
 }

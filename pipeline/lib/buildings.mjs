@@ -69,11 +69,12 @@ export function markPartyWalls(polys) {
       for (const t of [0.2, 0.5, 0.8]) {
         const x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
         const cand = grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`) || [];
-        if (cand.some(([qi, c, d]) => {
+        const hit = cand.find(([qi, c, d]) => {
           if (qi === pi) return false;
           const l = Math.hypot(d[0] - c[0], d[1] - c[1]); if (l < 0.3) return false;
           return Math.abs(((d[0] - c[0]) * dx + (d[1] - c[1]) * dy) / l) > 0.94 && segDist(x, y, c, d) < 0.7;
-        })) hits++;
+        });
+        if (hit) { hits++; (p.nbrs || (p.nbrs = new Set())).add(polys[hit[0]]); }   // who stands across the wall (design sets, genome.mjs)
       }
       return hits >= 2;
     });
@@ -84,10 +85,13 @@ export function markPartyWalls(polys) {
 // Per vertex: position, normal, colour, surf (2D surface coords in metres),
 // info (wallTopRel/128, floorH/8, bays/128, groundFloorH/8) — normalised so they quantise, style (kind/8, variant/8, seed, bayW/6).
 export const KIND = { PLAIN: 0, FACADE: 1, BLANK: 2, TILES: 3, FLAT: 4, MANSARD: 5, STONE: 6 };
-export function makeSink() { return { pos: [], nrm: [], col: [], surf: [], info: [], style: [] }; }
+export function makeSink() { return { pos: [], nrm: [], col: [], surf: [], info: [], style: [], gene: [] }; }
+// the façade genome of the building being drawn (4 bytes, see buildingGene in build.mjs); 0 = none (old shader path)
+let GENE = [0, 0, 0, 0];
+export const setGene = (g) => { GENE = g || [0, 0, 0, 0]; };
 function tri(S, a, b, c, n, col, sa, sb, sc, info, style) {
   S.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-  for (let k = 0; k < 3; k++) { S.nrm.push(n[0], n[1], n[2]); S.col.push(col[0], col[1], col[2]); S.info.push(info[0], info[1], info[2], info[3]); S.style.push(style[0], style[1], style[2], style[3]); }
+  for (let k = 0; k < 3; k++) { S.nrm.push(n[0], n[1], n[2]); S.col.push(col[0], col[1], col[2]); S.info.push(info[0], info[1], info[2], info[3]); S.style.push(style[0], style[1], style[2], style[3]); if (S.gene) S.gene.push(GENE[0], GENE[1], GENE[2], GENE[3]); }
   S.surf.push(sa[0], sa[1], sb[0], sb[1], sc[0], sc[1]);
 }
 const normal3 = (a, b, c) => {
@@ -209,9 +213,10 @@ export function buildRoofAndWalls(S, ctx) {
           const z = ground + spec.groundH + (fl - 1) * spec.floorH;
           if (z + 2.4 > wallTop) continue;
           for (let k = 0; k < bays; k++) {
-            if (spec.balconyChance < 1 && rng(spec.balconyModern ? `${i}_${k}` : `${i}_${k}_${fl}`) > spec.balconyChance) continue;   // modern blocks stack theirs bay by bay
+            if (spec.balcPick ? !spec.balcPick(k, fl) : spec.balconyChance < 1 && rng(spec.balconyModern ? `${i}_${k}` : `${i}_${k}_${fl}`) > spec.balconyChance) continue;   // modern blocks stack theirs bay by bay; a genome picks the bays the shader opens
             const t = (k + 0.5) / bays;
-            out.balconies.push([a[0] + (b[0] - a[0]) * t + ox * 0.02, z, -(a[1] + (b[1] - a[1]) * t + oy * 0.02), Math.atan2(ox, -oy), spec.balconyModern ? -Math.min(bw * 0.92, 3.4) : Math.min(bw * 0.62, 1.7)]);   // negative width: concrete slab, solid white parapet
+            const w = spec.balconyRun ? bw * 1.01 : spec.balconyModern ? Math.min(bw * 0.92, 3.4) : Math.min(bw * 0.62, 1.7);   // a run: bay to bay, one balcony along the floor
+            out.balconies.push([a[0] + (b[0] - a[0]) * t + ox * 0.02, z, -(a[1] + (b[1] - a[1]) * t + oy * 0.02), Math.atan2(ox, -oy), spec.balconyModern ? -w : w]);   // negative width: concrete slab, solid white parapet
           }
         }
       }
@@ -303,8 +308,11 @@ export function reliefPilaster(D, a, b, end, w, d, z0, z1, col, ST) {
 const STONE_C = [0.69, 0.63, 0.53], WHITE_C = [0.86, 0.84, 0.79];   // linear: worn lioz, lime-washed trim
 function facadeRelief(D, ctx, isFlat, parapet, f) {
   const { outer, party, ground, bottom, wallTop, spec, seed, colWall } = ctx;
-  const v = spec.variant, formal = v === 0 || v === 4 || v === 6, modern = v === 3;
-  const trim = formal ? STONE_C : WHITE_C, I0 = [0, 0, 0, 0], ST = [KIND.PLAIN / 8, v / 8, seed, 0.9];
+  const v = spec.variant, g = spec.gene;
+  // with a genome the trims are the genome's: stone (cantaria) or white surrounds, string courses, slab edges, none
+  const formal = g ? [2, 5].includes(g.trim) || (g.trim === 1 && g.era <= 3) : v === 0 || v === 4 || v === 6, modern = g ? g.trim === 4 || (g.era >= 5 && g.trim !== 0 && g.trim !== 6) && g.balc !== 5 : v === 3;
+  if (g && g.trim === 0 && g.era >= 5) return;   // plain modern render: nothing stands proud
+  const trim = formal && !(g && g.trim === 1) ? STONE_C : WHITE_C, I0 = [0, 0, 0, 0], ST = [KIND.PLAIN / 8, v / 8, seed, 0.9];
   const n = outer.length, gh = ground + spec.groundH, fh = spec.floorH;
   const edges = outer.map((a, i) => { const b = outer[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]); return { a, b, L, dx: (b[0] - a[0]) / (L || 1), dy: (b[1] - a[1]) / (L || 1), on: !party[i] && L >= 1.2 }; });
   const band = (e, z0, z1, d, col, ext = d) => reliefBand(D, e.a, e.b, z0, z1, d, col, ST, bottom, ext);
@@ -319,13 +327,15 @@ function facadeRelief(D, ctx, isFlat, parapet, f) {
     if (modern) {   // concrete slab edges at every floor
       for (let z = gh; z < top - 1; z += fh) band(e, z - 0.32, z, 0.06, [0.62, 0.61, 0.58]);
     } else {
-      if (formal || v === 1 && seed < 0.45) band(e, gh - 0.24, gh, 0.1, trim);            // string course over the shops
+      if (formal || (g ? g.trim === 3 || g.trim === 1 : v === 1 && seed < 0.45)) band(e, gh - 0.24, gh, 0.1, trim);   // string course over the shops
+      if (g && g.trim === 3) for (let z = gh + fh; z < top - 2; z += fh) band(e, z - 0.16, z, 0.06, trim);   // a string course at every floor
       if (v === 4) for (let z = gh + fh; z < top - 2; z += fh) band(e, z - 0.18, z, 0.07, trim);
       // cornice: two steps under the eave (pitched) or crowning the parapet (flat)
       if (isFlat) { band(e, top - 0.1, top + 0.18, 0.26, trim); band(e, top - 0.42, top - 0.1, 0.12, trim); }
       else { band(e, top - 0.34, top - 0.04, 0.16, trim); band(e, top - 0.62, top - 0.34, 0.07, trim); }
       // cunhais at convex corners that are not against a neighbour
       if (e.L > 2.5) {
+        if (g && ![1, 2].includes(g.trim)) continue;   // corner pilasters only on dressed fronts
         if (convex(i) || !edges[(i - 1 + n) % n].on) pilaster(e, 0, formal ? 0.55 : 0.45, 0.08, bottom + 0.6, top - 0.62, trim);   // also where the front meets a neighbour
         if (convex((i + 1) % n) || !edges[(i + 1) % n].on) pilaster(e, 1, formal ? 0.55 : 0.45, 0.08, bottom + 0.6, top - 0.62, trim);
       }

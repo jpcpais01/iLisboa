@@ -307,6 +307,7 @@ function adopt(tile, gltf, mode) {
       g.setAttribute('surf', g.attributes.uv); g.deleteAttribute('uv');
       g.setAttribute('aInfo', g.attributes._info); g.deleteAttribute('_info');
       g.setAttribute('aStyle', g.attributes._style); g.deleteAttribute('_style');
+      if (g.attributes._gene) { g.setAttribute('aGene', g.attributes._gene); g.deleteAttribute('_gene'); }   // façade genome (pipeline/lib/genome.mjs); absent = old façades
       o.material = matBuildings;
       o.castShadow = o.receiveShadow = true; bigCaster(o);
       restyle(o);   // landmarks the generic rules drew as houses: palatial window grid, known colours (src/lmdetail.js)

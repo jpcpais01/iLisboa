@@ -10,8 +10,15 @@ export const overlayUniforms = { uOv: { value: null }, uOvBox: { value: new THRE
 //   surf  = façade: (bay coordinate, metres above ground) · roof: (metres along eave, metres up-slope)
 //   aInfo = (wallTop, floorH, bays, groundFloorH) normalised · aStyle = (kind, variant, seed, bayW) normalised
 const BUILDING_GLSL = /* glsl */ `
-varying vec2 vSurf; varying vec4 vInfo; varying vec4 vStyle; varying vec3 vWP;
+varying vec2 vSurf; varying vec4 vInfo; varying vec4 vStyle; varying vec3 vWP; varying vec4 vGene;
 uniform float uNight;
+// façade genome palettes (pipeline/lib/genome.mjs): shutter paint, azulejo / mosaic colours, barra (base band) colours
+vec3 shutPal(float i) { return i < .5 ? vec3(.16, .26, .19) : i < 1.5 ? vec3(.1, .27, .23) : i < 2.5 ? vec3(.32, .21, .13) : i < 3.5 ? vec3(.4, .14, .11)
+  : i < 4.5 ? vec3(.86, .85, .8) : i < 5.5 ? vec3(.76, .7, .58) : i < 6.5 ? vec3(.53, .54, .54) : vec3(.19, .2, .21); }
+vec3 tilePal(float i) { return i < .5 ? vec3(.16, .3, .62) : i < 1.5 ? vec3(.17, .45, .36) : i < 2.5 ? vec3(.8, .62, .2) : i < 3.5 ? vec3(.45, .2, .22)
+  : i < 4.5 ? vec3(.12, .22, .5) : i < 5.5 ? vec3(.2, .52, .5) : i < 6.5 ? vec3(.48, .58, .66) : vec3(.86, .84, .78); }
+vec3 barraPal(float i) { return i < .5 ? vec3(.78, .58, .22) : i < 1.5 ? vec3(.2, .38, .62) : i < 2.5 ? vec3(.5, .5, .48) : i < 3.5 ? vec3(.5, .2, .15)
+  : i < 4.5 ? vec3(.28, .45, .3) : vec3(.86, .7, .25); }
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
@@ -28,9 +35,9 @@ export function buildingMaterial() {
   m.onBeforeCompile = (s) => {
     s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
     s.vertexShader = s.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 surf; attribute vec4 aInfo; attribute vec4 aStyle;\nvarying vec2 vSurf; varying vec4 vInfo; varying vec4 vStyle; varying vec3 vWP;')
+      .replace('#include <common>', '#include <common>\nattribute vec2 surf; attribute vec4 aInfo; attribute vec4 aStyle; attribute vec4 aGene;\nvarying vec2 vSurf; varying vec4 vInfo; varying vec4 vStyle; varying vec3 vWP; varying vec4 vGene;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-vSurf = (surf - .5) * 512.; vInfo = aInfo * vec4(128., 8., 128., 8.); vStyle = aStyle * vec4(8., 8., 1., 6.);
+vSurf = (surf - .5) * 512.; vInfo = aInfo * vec4(128., 8., 128., 8.); vStyle = aStyle * vec4(8., 8., 1., 6.); vGene = aGene;
 vWP = (modelMatrix * vec4(transformed, 1.)).xyz;`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', '#include <common>\n' + BUILDING_GLSL)
@@ -47,6 +54,18 @@ float ms = fract(seed * 23.17);                             // sub-style: modern
 // apartment blocks by era: 0 punched windows + roller shutters, 1 1960s–70s continuous balcony bands,
 // 2 Estado Novo 'Português Suave' (stone-framed windows, stone ground floor), 3 1980s–90s aluminium windows and glazed marquises
 float sub8 = variant > 7.5 ? (ms < .4 ? 0. : ms < .6 ? 1. : ms < .8 ? 2. : 3.) : -1.;
+// the building's genome: era, design, frame, shutters, balconies, trims, ground floor, finish, lived-in layer (0 = none)
+vec4 GB = floor(vGene * 255. + .5);
+float era = mod(GB.x, 8.), dsg = floor(GB.x / 8.), hasG = step(.5, era);
+float gFrame = mod(GB.y, 4.), gShut = mod(floor(GB.y / 4.), 8.), gShutC = floor(GB.y / 32.);
+float gBalc = mod(GB.z, 8.), gTrim = mod(floor(GB.z / 8.), 8.), gGround = floor(GB.z / 64.);
+float gFin = mod(GB.w, 8.), gFinC = mod(floor(GB.w / 8.), 8.), gLife = floor(GB.w / 64.);
+float d1 = fract(dsg * .618 + .11), d2 = fract(dsg * .381 + .37), d3 = fract(dsg * .7236 + .59);
+if (hasG > .5) {
+  sub8 = -1.;
+  frameC = gFrame < .5 ? vec3(.92, .91, .88) : gFrame < 1.5 ? stoneC * 1.03 : gFrame < 2.5 ? vec3(.7, .71, .72) : vec3(.2, .18, .16);
+}
+vec3 trimC = gTrim > 6.5 ? barraPal(gFinC) : gTrim > 1.5 && gTrim < 2.5 || gTrim > 4.5 && gTrim < 5.5 ? stoneC : vec3(.9, .89, .85);
 if (sub8 > 1.5 && sub8 < 2.5) frameC = stoneC * 1.04;
 if (sub8 > 2.5) frameC = fract(seed * 7.3) < .62 ? vec3(.27, .2, .16) : vec3(.9, .9, .88);
 
@@ -70,7 +89,7 @@ if (kind < .5) {                                  // plain trims, chimneys
     float aa = pxm * .7;
     float far = smoothstep(.38, 1.05, pxm);   // windows hold until a bay is ~1 px wide
     if (far > .995) {   // far façades: the window grid alone, box-filtered (cheap, and it holds from ~1 m a pixel out to the horizon)
-      float wf = variant > 2.5 && variant < 3.5 ? (ms < .28 ? .94 : ms < .7 ? .84 : .5) : variant > 7.5 ? .55 : .44;
+      float wf = hasG > .5 ? (era > 6.5 ? .66 + .3 * d1 : era > 4.5 ? .5 + .3 * d1 : .42) : variant > 2.5 && variant < 3.5 ? (ms < .28 ? .94 : ms < .7 ? .84 : .5) : variant > 7.5 ? .55 : .44;
       float cxw = fpulse(bx, .5 - wf * .5, .5 + wf * .5, fwidth(bx));
       float above = step(gh, y), cyw = mix(.45, fpulse((y - gh) / fh, .28, .86, fwidth(y) / fh), above);
       float win = cxw * cyw;
@@ -101,17 +120,94 @@ if (kind < .5) {                                  // plain trims, chimneys
       wallC = base * (1. + shade) * joint * (.96 + .05 * grime);
       rough = .8;
     }
+    float upper = step(gh, y);
+    if (hasG > .5 && gFin > .5 && gFin < 7.5 && (upper > .5 || gFin > 3.5)) {   // the genome's cladding: azulejo, relief tiles, mosaic, brick, stone, panels
+      vec2 wp = vec2(bx * bw, y);
+      float tfar = smoothstep(.03, .09, pxm), mfar = smoothstep(.006, .02, pxm);   // 14 cm tiles / 2.5 cm mosaic: average out before they alias
+      if (gFin < 1.5) {   // patterned azulejo, 14 cm tiles with a four-fold motif in the set's colour
+        vec2 tp = wp / .14; vec2 tf = fract(tp) - .5; float tile = h21(floor(tp / 2.) + seed);
+        float motif = smoothstep(.36, .3, length(abs(tf) - .22)) + smoothstep(.12, .06, abs(abs(tf.x) - abs(tf.y))) * step(.5, d1);
+        vec3 glaze = mix(vec3(.93, .93, .9), tilePal(gFinC), clamp(motif, 0., 1.) * .85) * (.93 + .07 * tile);
+        wallC = mix(glaze, mix(vec3(.93, .93, .9), tilePal(gFinC), .4), tfar); rough = .35;
+      } else if (gFin < 2.5) {   // plain relief tiles, one glaze, each tile a little domed
+        vec2 tp = wp / .14; vec2 tf = fract(tp) - .5;
+        float sh = 1. - (1. - tfar) * (.12 * (tf.y + tf.x * .4) + .2 * (1. - box1(-.46, .46, tf.x, aa * 8.) * box1(-.46, .46, tf.y, aa * 8.)));
+        wallC = tilePal(gFinC) * mix(.7, .85, d2) * mix(sh * (.94 + .06 * h21(floor(tp) + seed)), .93, tfar); rough = .3;
+      } else if (gFin < 3.5) {   // pastilha: 2.5 cm glass mosaic, 1950s–80s
+        vec2 tp = wp / .025; float tile = h21(floor(tp) + seed);
+        wallC = mix(tilePal(gFinC), vec3(.86, .86, .84), .45) * (.97 + .14 * (tile - .5) * (1. - mfar)); rough = .4;
+      } else if (gFin < 4.5) {   // exposed brick, stretcher bond
+        vec2 bp = vec2(wp.x / .25 + .5 * mod(floor(wp.y / .075), 2.), wp.y / .075);
+        float bf = smoothstep(.012, .04, pxm), j = (1. - box1(.08, .92, fract(bp.y), aa * 12.) * box1(.04, .96, fract(bp.x), aa * 4.)) * (1. - bf);
+        wallC = mix(mix(vec3(.55, .3, .22) * (.85 + .25 * h21(floor(bp) + seed)), vec3(.57, .35, .27), bf), vec3(.72, .7, .66), j * .8); rough = .85;
+      } else if (gFin < 5.5) {   // stone cladding panels
+        vec2 sp = vec2(wp.x / 1.2, wp.y / .6); float j = (1. - box1(.02, .98, fract(sp.x), aa) * box1(.03, .97, fract(sp.y), aa)) * (1. - far);
+        wallC = mix(d2 < .5 ? vec3(.82, .78, .7) : vec3(.62, .62, .6), base, .25) * (.95 + .07 * h21(floor(sp) + seed)) * (1. - .2 * j); rough = .6;
+      } else if (gFin < 6.5) {   // large composite / concrete panels, one per storey
+        vec2 sp = vec2(wp.x / 3., (y - gh) / fh); float j = (1. - box1(.01, .99, fract(sp.x), aa * .4) * box1(.02, .98, fract(sp.y), aa)) * (1. - far);
+        wallC = base * (.97 + .05 * h21(floor(sp) + seed)) * (1. - .25 * j); rough = .5;
+      } else if (y < gh) {   // rusticated ground floor: deep horizontal joints
+        wallC *= 1. - .3 * (1. - box1(.08, .92, fract(y / .45), aa * 3.)) * (1. - far);
+      }
+    }
     col = wallC;
+    if (hasG > .5) {   // the genome's dressing of the wall: socle, ground floor, bands, cornice, corner pilasters
+      float dEndG = min(bx, bays - bx) * bw;
+      if (gTrim > .5 && gTrim < 2.5) col = mix(col, trimC * (.95 + .05 * grime), box1(-9., gTrim > 1.5 ? .9 : .6, y, aa) + box1(gh - .22, gh, y, aa) + box1(top - .45, top, y, aa) * .8 + step(dEndG, .45) * step(.9, y));
+      if (gTrim > 2.5 && gTrim < 3.5) col = mix(col, trimC, box1(-9., .6, y, aa) + upper * box1(-.01, .16, mod(y - gh, fh), aa) + box1(top - .35, top, y, aa));
+      if (gTrim > 3.5 && gTrim < 4.5) col = mix(col, vec3(.66, .65, .62) * (.95 + .05 * grime), upper * box1(fh - .3, fh, mod(y - gh, fh), aa));
+      if (gTrim > 4.5 && gTrim < 5.5) {   // dressed stone ground floor, ashlar courses
+        float j = (1. - box1(.05, .95, fract(y / .5), aa * 2.)) * (1. - far);
+        col = mix(col, stoneC * (.93 + .06 * h21(vec2(floor(bx * bw / .9), floor(y / .5)) + seed)) * (1. - .2 * j), 1. - upper);
+        col = mix(col, stoneC, box1(top - .4, top, y, aa));
+      }
+      if (gTrim > 5.5 && gTrim < 6.5) {   // ceramic tiles on the ground floor (1960s–90s entrances and shops)
+        vec2 tp = vec2(bx * bw / .2, y / .1); float j = (1. - box1(.06, .94, fract(tp.y), aa * 10.) * box1(.03, .97, fract(tp.x), aa * 5.)) * (1. - far);
+        vec3 tc = d2 < .33 ? vec3(.42, .3, .22) : d2 < .66 ? vec3(.55, .54, .5) : vec3(.74, .68, .58);
+        col = mix(col, mix(tc * (.9 + .15 * h21(floor(tp) + seed)), vec3(.7), j * .5), 1. - upper); rough = mix(rough, .35, 1. - upper);
+      }
+      if (gTrim > 6.5) col = mix(col, trimC * (.92 + .08 * grime), box1(-9., .7 + .35 * d1, y, aa));   // barra: the coloured base band of a whitewashed house
+    }
     // stone plinth, string course, cornice band, corner pilasters (Pombaline / palatial)
-    float formal = (step(variant, .5) + step(3.5, variant)) * step(variant, 7.5) + step(1.5, sub8) * step(sub8, 2.5);
+    float formal = ((step(variant, .5) + step(3.5, variant)) * step(variant, 7.5) + step(1.5, sub8) * step(sub8, 2.5)) * (1. - hasG);
     float dEnd = min(bx, bays - bx) * bw;
     col = mix(col, stoneC * (.95 + .05 * grime), formal * (box1(-9., sub8 > 1.5 && sub8 < 2.5 ? gh : .85, y, aa) + box1(gh - .22, gh, y, aa) + box1(top - .45, top, y, aa) * .8 + step(dEnd, .42) * step(.9, y)));
     col = mix(col, base * .78, box1(top - .6, top - .45, y, aa) * formal);     // cornice shadow line
     // window geometry per variant
     float ww, y0, y1; float door = 0., shop = 0., balc = 0., shutters = 0.;
-    float jit = variant > .5 && variant < 2.5 ? (rB - .5) * .25 * bw : 0.;
-    float balc8 = 0.;
-    if (variant > 7.5) {                                        // apartment block: punched windows with roller shutters, balcony columns
+    float jit = variant > .5 && variant < 2.5 || era > .5 && era < 1.5 ? (rB - .5) * .25 * bw : 0.;
+    float balc8 = 0., hasB = 0., loggia = 0., marq = 0., pair = 0., garage = 0., pilo = 0.;
+    float uxw = ux, wid = bi;   // wid: one id per window (hashes must not vary across a window)
+    if (hasG > .5) {
+      // balcony bays: the same rule the pipeline uses to place the balcony slabs and railings (build.mjs balcRow / balcCol)
+      float bRow = mod(bi * bi * 31. + bi * 73. + fi * 151. + dsg * 37. + 11., 97.) / 97., bCol = mod(bi * bi * 31. + bi * 73. + dsg * 37. + 5., 97.) / 97.;
+      float fitB = step(gh + (fi - 1.) * fh + 2.4, top) * step(.5, fi);
+      hasB = fitB * (gBalc < .5 ? 0. : gBalc < 1.5 ? step(bRow, .88) : gBalc < 3.5 ? step(fi, 1.5) : gBalc < 4.5 || gBalc > 6.5 ? step(bCol, .5) : gBalc < 5.5 ? step(bCol, .9) : 0.);
+      loggia = fitB * step(5.5, gBalc) * step(gBalc, 6.5) * step(bCol, .5);
+      marq = hasB * step(6.5, gBalc);
+      pair = step(3.5, era) * step(era, 6.5) * step(.72, d3) * step(2.3, bw) * (1. - hasB) * (1. - isG);
+      if (pair > .5) uxw = abs(ux) - bw * .25;   // two windows to the bay
+      wid = bi + pair * step(0., ux) * .5;
+      if (era < 1.5) { ww = clamp(bw * (.34 + .12 * rB), .7, 1.15); y0 = flH * .3; y1 = flH * (.78 + .06 * rB); if (rB > .9 && isG < .5 && hasB < .5) ww = 0.; }
+      else if (era < 2.5) { ww = min(1.15, bw * .42); y0 = flH * .28; y1 = flH * .84; }
+      else if (era < 3.5) { ww = min(1.3, bw * (.42 + .07 * d1)); y0 = flH * (.2 + .08 * d2); y1 = flH * (.86 + .04 * d1); }
+      else if (era < 4.5) { ww = min(1.55, bw * (.44 + .1 * d1)); y0 = flH * (.27 + .06 * d2); y1 = flH * .84; }
+      else if (era < 5.5) { ww = bw * (.5 + .4 * d1); y0 = flH * (.3 + .12 * d2); y1 = flH * (.86 + .06 * d3); }
+      else if (era < 6.5) { ww = min(2., bw * (.48 + .22 * d1)); y0 = flH * (.32 + .06 * d2); y1 = flH * .78; }
+      else { ww = bw * (.66 + .3 * d1); y0 = d2 < .5 ? .05 : flH * .3; y1 = flH * .93; }
+      if (pair > .5) ww = min(ww * .5, bw * .4);
+      if (hasB > .5 || loggia > .5) { ww = era < 3.5 ? min(1.2, bw * .46) : bw * (era > 6.5 ? .9 : .72); y0 = .06; y1 = flH * (era < 3.5 ? .88 : .86); }
+      balc = hasB * step(gBalc, 3.5);   // iron railings over the lower metre of the French windows
+      shutters = 0.;
+      if (isG > .5) {   // the ground floor: mapped shops, a garage row, pilotis, or a house's door and windows
+        float mid = floor(bays * .5), isDoor = step(abs(bi - mid), .1);
+        if (gGround > .5 && gGround < 1.5) { shop = 1. - isDoor * step(2.5, bays); if (shop < .5) { ww = min(1.4, bw * .55); y0 = 0.; y1 = min(2.7, flH * .86); } }
+        else if (gGround > 1.5 && gGround < 2.5) { garage = step(h21(vec2(bi, seed * 3.)), .55) * (1. - isDoor); ww = garage > .5 ? bw * .82 : min(1.2, bw * .45); y0 = garage > .5 ? 0. : 1.1; y1 = garage > .5 ? min(2.6, flH * .8) : 2.1; if (isDoor > .5) { y0 = 0.; y1 = min(2.6, flH * .86); } }
+        else if (gGround > 2.5) { pilo = 1.; ww = 0.; }
+        else if (era < 1.5) { float dr = step(rB, .45); ww = dr > .5 ? min(1.1, bw * .45) : min(.8, bw * .3); y0 = dr > .5 ? 0. : 1.1; y1 = dr > .5 ? min(2.4, flH * .86) : 2.; }
+        else { ww = isDoor > .5 ? min(1.5, bw * .55) : min(1.1, bw * .4); y0 = isDoor > .5 ? 0. : 1.2; y1 = isDoor > .5 ? min(2.8, flH * .88) : min(flH * .82, 2.4); }
+      }
+    } else if (variant > 7.5) {                                        // apartment block: punched windows with roller shutters, balcony columns
       ww = min(1.5, bw * .5); y0 = isG > .5 ? .1 : flH * .3; y1 = flH * .86; shop = isG;
       balc8 = step(h21(vec2(floor(bi / (1. + step(.5, ms))), seed * 13.)), .4 + .25 * ms) * (1. - isG);
       if (sub8 > .5 && sub8 < 1.5) balc8 = (1. - isG) * step(.2, h21(vec2(floor(bi / 3.), seed * 5.)));   // bands run across most bays
@@ -137,12 +233,12 @@ if (kind < .5) {                                  // plain trims, chimneys
       door = isG * step(rB, .4);
       if (rB > .9 && isG < .5) ww = 0.;                          // blind bay
     }
-    if (isG > .5 && shop < .5) {                                // doors / small ground-floor windows
+    if (isG > .5 && shop < .5 && hasG < .5) {                   // doors / small ground-floor windows
       if (door > .5 || variant > 3.5) { ww = min(1.3, bw * .5); y0 = 0.; y1 = min(2.5, flH * .86); }
       else { ww = min(.8, bw * .3); y0 = 1.2; y1 = 2.1; }
     }
-    if (shop > .5) { ww = bw * (variant > 2.5 ? .9 : .62); y0 = .12; y1 = flH * .7; }
-    vec2 p = vec2(ux - jit, fy);
+    if (shop > .5) { ww = bw * (variant > 2.5 || era > 4.5 ? .9 : .62); y0 = .12; y1 = flH * (hasG > .5 ? .74 : .7); }
+    vec2 p = vec2(uxw - jit, fy);
     float inWin = rect(vec2(-ww * .5, y0), vec2(ww * .5, y1), p, aa) * step(.01, ww);
     float fr = (variant > 2.5 && variant < 3.5) ? .04 : .13;
     float inGlass = rect(vec2(-ww * .5 + fr, y0 + fr), vec2(ww * .5 - fr, y1 - fr), p, aa);
@@ -176,6 +272,17 @@ if (kind < .5) {                                  // plain trims, chimneys
       vec3 sc = rB < .35 ? vec3(.22, .33, .24) : rB < .6 ? vec3(.36, .24, .16) : rB < .8 ? vec3(.45, .17, .13) : vec3(.86, .85, .8);
       glass = sc * (.82 + .18 * step(.5, fract(fy * 14.))) * (1. - .4 * box1(-.02, .02, p.x, aa));
     }
+    if (hasG > .5 && shop < .5 && garage < .5 && isG < .5) {     // the genome's shutters, each flat a little its own (gLife)
+      float rS = h21(vec2(wid * 1.3, fi) + seed * 17.), odd = step(rS, .05 + .06 * gLife);
+      vec3 sc = shutPal(odd > .5 ? mod(gShutC + 4. + floor(rS * 40.), 8.) : gShutC);
+      float sh = y1 - fr - (y1 - y0 - 2. * fr) * (.12 + .75 * h21(vec2(wid * 3.1, fi) + seed));   // how far down it is
+      if (gShut > 1.5 && gShut < 2.5) glass = mix(glass, sc * (.86 + .14 * step(.5, fract(fy * 16.))), step(sh, fy));                         // roller (estore)
+      else if (gShut > 2.5 && gShut < 3.5) glass = mix(glass, sc * (.8 + .2 * step(.45, fract(fy * 22.))), step(sh, fy) * step(.25, rS));    // louvred persiana
+      else if (gShut > 4.5) glass = mix(glass, sc * (.88 + .12 * step(.5, fract(fy * 30.))), step(sh, fy) * step(.3, rS));                   // external venetian
+      else if (gShut > 3.5) glass = mix(glass, sc * (.75 + .1 * step(.5, fract(p.x * 2.))), step(rS, .45) * .85);                           // inner wooden shutters, closed behind the glass
+      else if (gShut > .5 && rS < .3) glass = sc * (.82 + .18 * step(.5, fract(fy * 14.))) * (1. - .4 * box1(-.02, .02, p.x, aa));          // portadas shut
+    }
+    if (hasG > .5 && garage > .5) glass = vec3(.55, .56, .56) * (.85 + .15 * step(.5, fract(fy * 9.)));   // garage door: ribbed steel
     p = pf; fy = fyf;                                          // signs, railings and sills stand at the wall face
     if (shop > .5) {                                           // shop sign band above the opening
       vec3 sign = h21(vec2(bi, seed)) < .5 ? vec3(.12, .2, .16) : h21(vec2(bi, seed + 1.)) < .5 ? vec3(.35, .08, .09) : vec3(.08, .1, .2);
@@ -189,6 +296,19 @@ if (kind < .5) {                                  // plain trims, chimneys
     winC = mix(winC, vec3(.06), railM * .9);
     // sill
     col = mix(col, frameC, rect(vec2(-ww * .5 - .1, y0 - .1), vec2(ww * .5 + .1, y0), p, aa) * step(.3, y0) * (1. - shop));
+    if (hasG > .5 && ww > .01) {
+      // window surrounds (cantaria / painted / barra) and, for roller blinds of the 70s–90s, the blind box over the window
+      float sw = gTrim > 1.5 && gTrim < 2.5 ? .16 : .12;
+      float sur = rect(vec2(-ww * .5 - sw, y0 - sw * (1. - step(y0, .1))), vec2(ww * .5 + sw, y1 + sw), p, aa) * (1. - inWin);
+      float dressed = (step(.5, gTrim) * step(gTrim, 2.5) + step(4.5, gTrim) * step(gTrim, 5.5) * (1. - upper) + step(6.5, gTrim)) * (1. - shop);
+      col = mix(col, trimC * (.94 + .05 * grime), sur * dressed);
+      if (gShut > 1.5 && gShut < 2.5 && era > 5.5) col = mix(col, shutPal(gShutC) * .9, rect(vec2(-ww * .5, y1), vec2(ww * .5, y1 + .2), p, aa) * (1. - shop));
+      if (gShut > .5 && gShut < 1.5 && isG < .5) {   // open portadas folded back against the wall either side
+        float rS = h21(vec2(wid * 1.3, fi) + seed * 17.);
+        float leaf = (rect(vec2(-ww * 1.02, y0 + .02), vec2(-ww * .52, y1 - .02), p, aa) + rect(vec2(ww * .52, y0 + .02), vec2(ww * 1.02, y1 - .02), p, aa)) * step(.3, rS);
+        col = mix(col, shutPal(gShutC) * (.85 + .15 * step(.5, fract(fy * 14.))), leaf * (1. - far));
+      }
+    }
     col = mix(col, winC, inWin);
     glassAmt = inGlass * (1. - shutters);
     glow = glassAmt * step(h21(vec2(bi * 1.7, fi) + seed * 5.), .42) * (1. - shop * .3);
@@ -205,6 +325,38 @@ if (kind < .5) {                                  // plain trims, chimneys
       col = mix(col, parC * .82, inB * box1(-.2, -.05, fy, aa));
       col *= 1. - .25 * inB * box1(1.05, 1.3, fy, aa) * step(.5, glassAmt);
       glassAmt *= 1. - inB * step(fy, 1.05); glow *= 1. - inB * step(fy, 1.05);
+    }
+    if (hasG > .5) {
+      float inB = box1(-bw * .47, bw * .47, ux, aa);
+      if (loggia > .5) {   // a loggia: the balcony cut into the block, its back wall in shade, a solid parapet at the front
+        float back = inB * box1(-.05, flH - .2, fy, aa);
+        col = mix(col, mix(col * .42, winC, inWin), back * (1. - far * .5));
+        col = mix(col, wallC * 1.03, inB * box1(-.05, 1.05, fy, aa));
+        glassAmt *= 1. - inB * step(fy, 1.05);
+      }
+      if (marq > .5) {   // marquise: the balcony glazed in, aluminium mullions every ~80 cm, above the slab's parapet
+        float mq = inB * box1(1.05, flH - .15, fy, aa);
+        float mul = box1(-.035, .035, fract(ux / .8) - .5, aa * 2.) + box1(flH - .25, flH - .15, fy, aa);
+        col = mix(col, mix(mix(vec3(.2, .24, .28), frameC, .2), frameC, clamp(mul, 0., 1.)), mq);
+        glassAmt = max(glassAmt, mq * (1. - mul) * .7);
+      }
+      if (isG < .5 && hasB < .5 && loggia < .5 && ww > .01) {
+        float rL = h21(vec2(wid * 2.7, fi * 1.9) + seed * 9.);
+        // closed-in balcony a resident added (1950s on): aluminium and glass across the bay
+        if (era > 3.5 && rL < .025 * gLife) { float mq = inB * box1(.1, flH - .15, fy, aa); col = mix(col, mix(vec3(.24, .27, .3), vec3(.72, .73, .74), box1(-.03, .03, fract(ux / .7) - .5, aa * 2.)), mq); }
+        // an air conditioner beside the window
+        else if (era > 2.5 && rL < .05 + .05 * gLife) { float ac = rect(vec2(ww * .5 + .15, y0 + .05), vec2(ww * .5 + .95, y0 + .6), p, aa);
+          col = mix(col, vec3(.8, .8, .78) * (1. - .3 * box1(.08, .52, fy - y0, aa) * step(.5, fract((p.x - ww * .5) * 18.))), ac * (1. - far)); col *= 1. - .25 * rect(vec2(ww * .5 + .17, y0 - .15), vec2(ww * .5 + .97, y0 + .05), p, aa) * (1. - far); }
+        // washing on a line under the window (the old town)
+        else if (era < 3.5 && gLife > 1.5 && rL > .9) { float ln = rect(vec2(-ww * .7, y0 - .75), vec2(ww * .7, y0 - .2), p, aa) * step(.35, fract(p.x / .38));
+          col = mix(col, mix(vec3(.85, .83, .78), vec3(.2 + .6 * h21(vec2(floor(p.x / .38), fi)), .3 + .4 * h21(vec2(fi, floor(p.x / .38))), .55), step(.5, h21(vec2(floor(p.x / .38) + 3., fi)))), ln * (1. - far)); }
+      }
+      if (pilo > .5 && isG > .5) {   // pilotis: the ground floor open under the block, columns at the bays
+        col = mix(vec3(.12, .12, .12) + .1 * smoothstep(0., gh, y), wallC * .95, box1(-.25, .25, ux, aa) + box1(gh - .4, gh, y, aa));
+        glassAmt = 0.;
+      }
+      if (shop > .5) { float aw = step(.55, d2) * step(.35, h21(vec2(bi, seed * 5.)));   // canvas awnings over some shopfronts
+        col = mix(col, mix(vec3(.45, .12, .1), vec3(.12, .25, .2), step(.5, h21(vec2(bi + 2., seed)))) * (.85 + .15 * step(.5, fract(ux * 2.))), aw * rect(vec2(-ww * .5, y1 + .1), vec2(ww * .5, y1 + .7), p, aa)); }
     }
     if (variant > 5.5 && variant < 6.5 && isG > .5) {                           // Praça do Comércio: arcade of round arches on square piers
       float hwA = bw * .5 - .9, spring = gh - .8 - hwA;
@@ -267,7 +419,7 @@ diffuseColor.rgb = col;
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(rough, .12, glassAmt);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6 + diffuseColor.rgb * vec3(1., .8, .55) * flood * uNight * .55;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-buildings-v14';
+  m.customProgramCacheKey = () => 'ilisboa-buildings-v15';
   return m;
 }
 
