@@ -69,8 +69,8 @@ def login(s):
     say("logged in")
 
 
-def search(s, coll):
-    body = {"bbox": [W, S, E, N], "limit": 1000, "collections": [coll]}
+def search(s, coll, bbox):
+    body = {"bbox": bbox, "limit": 1000, "collections": [coll]}
     feats, url, method = [], SEARCH, "POST"
     while url:
         r = s.post(url, json=body, timeout=60) if method == "POST" else s.get(url, timeout=60)
@@ -117,7 +117,11 @@ def main():
     else: say("no DGT_USER / DGT_PASSWORD: probing the catalogue only")
     found = {}
     for coll in ("MDS-2m", "MDT-2m"):
-        feats = search(s, coll)
+        # one search per area (with its margin), deduplicated: a ring of new areas around the city must not pull the whole box
+        seen = {}
+        for name, s0, w0, n0, e0 in areas:
+            for f in search(s, coll, [w0 - M, s0 - M, e0 + M, n0 + M]): seen.setdefault(f.get("id"), f)
+        feats = list(seen.values())
         found[coll] = [(f.get("id"), tiff_href(f), f.get("bbox")) for f in feats]
         say(f"{coll}: {len(feats)} items")
         for fid, href, bb in found[coll][:3]: say(f"  {fid} {bb} {href}")
