@@ -537,6 +537,7 @@ float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); 
 // Far blocks (one extruded footprint per building, past the mid tier): flat-shaded walls in the façade colour, with the same
 // box-filtered window grid the full buildings fall back to at range (bays ~3.4 m, storeys ~3.1 m, anchored in world space), so
 // the hand-over from full to far keeps rows of windows instead of turning into blank boxes; after dusk a share of them is lit.
+const FAR_ROOF = (() => { const q = new URLSearchParams(location.search).get('fbr'); const v = q ? q.split(',').map(Number) : [0.85, 0.91, 0.93]; return `vec3(${v.map((x) => x.toFixed(3)).join(',')})`; })();   // (?fbr=r,g,b to tune)
 export function farBuildingMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
   m.onBeforeCompile = (s) => {
@@ -545,12 +546,13 @@ export function farBuildingMaterial() {
       .replace('#include <common>', '#include <common>\nvarying vec3 vFW;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vFW;\n' + BUILDING_GLSL.replace(/varying[^\n]*\n/, ''))
+      .replace('#include <common>', '#include <common>\n#define FAR_ROOF ' + FAR_ROOF + '\nvarying vec3 vFW;\n' + BUILDING_GLSL.replace(/varying[^\n]*\n/, ''))
       .replace('#include <color_fragment>', `#include <color_fragment>
 float glow = 0.;
 {
   vec3 nW = normalize(cross(dFdx(vFW), dFdy(vFW)));
   float wall = 1. - smoothstep(.35, .6, abs(nW.y));
+  diffuseColor.rgb *= mix(FAR_ROOF, vec3(1.), wall);   // a full building's roof (tile texture, ridges, eaves in shade) reads darker and less orange than its flat colour: match it from afar
   if (wall > 0.) {
     vec2 tg = normalize(vec2(-nW.z, nW.x) + 1e-5);
     float u = dot(vFW.xz, tg) / 3.4, v = vFW.y / 3.1;
@@ -563,6 +565,6 @@ float glow = 0.;
 }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1., .72, .4) * glow * uNight * 1.6;');
   };
-  m.customProgramCacheKey = () => 'ilisboa-far-buildings-v1';
+  m.customProgramCacheKey = () => 'ilisboa-far-buildings-v2' + FAR_ROOF;
   return m;
 }
