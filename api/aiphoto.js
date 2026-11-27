@@ -10,6 +10,7 @@ const PROMPT = 'Turn this 3D render of Lisbon, Portugal into a real photograph. 
   'Keep the same time of day, sun direction, light, weather and season as the render. ' +
   'Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster façades with real windows and shutters, Portuguese calçada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. ' +
   'The second image is the exact depth map of the first: the geometry must match it.';
+const EDGES = ' The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.';
 const RATIOS = ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16'];
 
 // ─── abuse and cost limits (per warm instance) ───
@@ -39,19 +40,19 @@ export default async function handler(req, res) {
   if (!key) return res.status(503).json({ error: 'not_configured' });
   let body = req.body;
   if (typeof body === 'string') try { body = JSON.parse(body); } catch { body = null; }
-  if (!body || !okData(body.image, 'image/jpeg', 3.2e6) || !okData(body.depth, 'image/png', 1.2e6)) return res.status(400).json({ error: 'bad_input' });
+  if (!body || !okData(body.image, 'image/jpeg', 3.0e6) || !okData(body.depth, 'image/png', 1.0e6) || (body.edges != null && !okData(body.edges, 'image/png', 0.6e6))) return res.status(400).json({ error: 'bad_input' });
   const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?').split(',')[0].trim();
   const lim = limited(ip);
   if (lim) { res.setHeader('Retry-After', lim === 'minute' ? '60' : '3600'); return res.status(429).json({ error: 'rate_limited', scope: lim }); }
 
   const a = Math.min(3, Math.max(0.3, +body.aspect || 16 / 9));
-  const ratio = RATIOS.reduce((b, r) => { const [x, y] = r.split(':').map(Number); return Math.abs(Math.log(x / y / a)) < Math.abs(Math.log(b.v / a)) ? { r, v: x / y } : b; }, { r: '16:9', v: 16 / 9 }).r;
+  const ratio = RATIOS.includes(body.ratio) ? body.ratio : RATIOS.reduce((b, r) => { const [x, y] = r.split(':').map(Number); return Math.abs(Math.log(x / y / a)) < Math.abs(Math.log(b.v / a)) ? { r, v: x / y } : b; }, { r: '16:9', v: 16 / 9 }).r;
   const t0 = Date.now();
   try {
     const r = await fetch(`https://fal.run/${MODEL}`, {
       method: 'POST',
       headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: PROMPT, image_urls: [body.image, body.depth], aspect_ratio: ratio, resolution: '2K', output_format: 'jpeg', num_images: 1 }),
+      body: JSON.stringify({ prompt: PROMPT + (body.edges ? EDGES : ''), image_urls: body.edges ? [body.image, body.depth, body.edges] : [body.image, body.depth], aspect_ratio: ratio, resolution: '2K', output_format: 'jpeg', num_images: 1 }),
       signal: AbortSignal.timeout(85000),
     });
     const j = await r.json().catch(() => ({}));

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { registerAction } from '../layers/registry.js';
 import './photo.css';
-import { captureDepth, enhance, fidelity } from './aiphoto.js';
+import { captureDepth, prepare, enhance, fidelity } from './aiphoto.js';
 
 const SIZES = [{ id: '1080p', s: 1080 }, { id: '2K', s: 1440 }, { id: '4K', s: 2160 }];   // short side, as in "1080p"
 const ICON = '<path d="M3 8.5h3l2-2.5h8l2 2.5h3V19H3z"/><circle cx="12" cy="13" r="3.4"/><path d="M18 11h.01"/>';
@@ -32,9 +32,9 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     <div class="ph-work" hidden><i class="ph-spin"></i><span class="ph-msg"></span><button type="button" class="ph-cancel">Cancelar</button></div>
     <div class="ph-done" hidden>
       <div class="ph-pic"><img alt="" /><span class="ph-badge" hidden title="Quanto da geometria real (arestas tiradas do mapa de profundidade exato da cena) se mantém na imagem da IA"></span></div>
-      <div class="ph-seg" role="tablist" hidden><button type="button" data-v="0" role="tab">Original</button><button type="button" data-v="1" role="tab">IA</button></div>
+      <div class="ph-seg" role="tablist" hidden><button type="button" data-v="0" role="tab">Original</button><button type="button" data-v="1" role="tab">Neural</button></div>
       <div class="ph-info"><b></b><small></small></div>
-      <button type="button" class="ph-ai"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16.5l-1.8-5L5 9.7l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg><span>Tornar real com IA</span></button>
+      <button type="button" class="ph-ai"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16.5l-1.8-5L5 9.7l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg><span>Melhoramento neural</span></button>
       <div class="ph-acts"><button type="button" class="ph-save">Guardar</button><button type="button" class="ph-share" hidden>Partilhar</button><button type="button" class="ph-back">Fechar</button></div>
     </div>`;
   document.body.appendChild(ui);
@@ -78,7 +78,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   function closeDone() {
     aiJob?.abort(); aiJob = null;
     done.hidden = true; bar.hidden = false;
-    if (result) { URL.revokeObjectURL(result.url); if (result.ai) URL.revokeObjectURL(result.ai.url); result = null; }
+    if (result) { for (const v of [result, result.ai, result.base]) if (v) URL.revokeObjectURL(v.url); result = null; }
     wake();
   }
 
@@ -136,7 +136,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   function show(r, v) {   // v: the picture on show (the original or the AI version); save and share follow it
     done.querySelector('img').src = v.url;
     done.querySelector('.ph-info b').textContent = `${v.W} × ${v.H}`;
-    done.querySelector('.ph-info small').textContent = `${(v.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG${v === r.ai ? ' · IA' : ''}`;
+    done.querySelector('.ph-info small').textContent = `${(v.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG${v === r.ai ? ' · neural' : ''}`;
     const badge = $('.ph-badge');
     badge.hidden = v !== r.ai || r.ai.score == null;
     if (!badge.hidden) { badge.textContent = `${r.ai.score}% fiel à geometria`; badge.dataset.q = r.ai.score >= 80 ? 'hi' : r.ai.score >= 70 ? 'mid' : 'lo'; }
@@ -150,9 +150,9 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   function showDone(r) {
     show(r, r);
     $('.ph-seg').hidden = true;
-    const ai = $('.ph-ai'); ai.hidden = !r.depth; ai.disabled = false; ai.classList.remove('busy', 'err'); ai.querySelector('span').textContent = 'Tornar real com IA';
+    const ai = $('.ph-ai'); ai.hidden = !r.depth; ai.disabled = false; ai.classList.remove('busy', 'err'); ai.querySelector('span').textContent = 'Melhoramento neural';
     ai.onclick = () => (aiJob ? aiJob.abort() : makeReal(r));
-    for (const b of ui.querySelectorAll('.ph-seg button')) b.onclick = () => r.ai && show(r, +b.dataset.v ? r.ai : r);
+    for (const b of ui.querySelectorAll('.ph-seg button')) b.onclick = () => r.ai && show(r, +b.dataset.v ? r.ai : r.base || r);
     $('.ph-back').onclick = closeDone;
     done.hidden = false;
     if (!mobile) save(r);   // desktop: straight to Downloads; phones choose (Partilhar → Guardar imagem puts it in Photos)
@@ -163,21 +163,23 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   async function makeReal(r) {
     const ai = $('.ph-ai'), label = ai.querySelector('span'), ac = new AbortController(), t0 = performance.now();
     aiJob = ac; ai.classList.add('busy'); ai.classList.remove('err');
-    const tick = setInterval(() => { label.textContent = `A revelar com IA · ${Math.round((performance.now() - t0) / 1000)} s · tocar para cancelar`; }, 250);
-    label.textContent = 'A revelar com IA…';
+    const tick = setInterval(() => { label.textContent = `A processar · ${Math.round((performance.now() - t0) / 1000)} s · tocar para cancelar`; }, 250);
+    label.textContent = 'A processar…';
     try {
-      const blob = await enhance(r.blob, r.depth, ac.signal);
+      const prep = await prepare(r.blob, r.depth);   // cropped to the model's exact shape: sent, scored and shown as "Original"
+      const blob = await enhance(prep, ac.signal);
       if (ac.signal.aborted || result !== r) return;
       const bmp = await createImageBitmap(blob);
-      r.ai = { blob, url: URL.createObjectURL(blob), name: r.name.replace(/\.jpg$/, '-ia.jpg'), W: bmp.width, H: bmp.height, score: null };
+      r.base = { blob: prep.blob, url: URL.createObjectURL(prep.blob), name: r.name.replace(/\.jpg$/, '-recorte.jpg'), W: prep.W, H: prep.H };
+      r.ai = { blob, url: URL.createObjectURL(blob), name: r.name.replace(/\.jpg$/, '-neural.jpg'), W: bmp.width, H: bmp.height, score: null };
       bmp.close?.();
       label.textContent = 'A medir a fidelidade…';
-      try { r.ai.score = await fidelity(r.depth, r.blob, blob); } catch (e) { console.warn('score', e); }
+      try { r.ai.score = await fidelity(prep.depth, prep.blob, blob); } catch (e) { console.warn('score', e); }
       window.__photo.lastAI = { W: r.ai.W, H: r.ai.H, bytes: blob.size, score: r.ai.score, ms: Math.round(performance.now() - t0) };
       ai.hidden = true; $('.ph-seg').hidden = false;
       show(r, r.ai);
     } catch (e) {
-      if (ac.signal.aborted) { label.textContent = 'Tornar real com IA'; return; }
+      if (ac.signal.aborted) { label.textContent = 'Melhoramento neural'; return; }
       console.error('aiphoto', e);
       ai.classList.add('err'); label.textContent = AI_ERR[e.code] || 'Não foi possível. Tocar para tentar outra vez.';
     } finally {

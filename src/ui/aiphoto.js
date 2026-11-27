@@ -6,7 +6,7 @@
 // that stores log depth in RGB bytes (works on every WebGL2 phone, no float render targets needed).
 import * as THREE from 'three';
 
-const GRID = 960;   // long side of the depth grid and of the score
+const GRID = 1536;   // long side of the depth grid (the edge map the model sees); the score runs on a 960 resample
 
 // ─── depth ───────────────────────────────────────────────────────────────
 export function captureDepth(renderer, scene, camera, W, H) {
@@ -116,8 +116,14 @@ function edges(g, w, h) {
   }
   return n;
 }
-export async function fidelity(depth, renderBlob, aiBlob) {
-  const { w, h } = depth, G = geoEdges(depth);
+function resample({ z, w, h }, long) {   // nearest, so depth jumps stay jumps
+  const s = long / Math.max(w, h); if (s >= 1) return { z, w, h };
+  const W = Math.round(w * s), H = Math.round(h * s), o = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) o[y * W + x] = z[Math.min(h - 1, Math.floor((y + 0.5) / s)) * w + Math.min(w - 1, Math.floor((x + 0.5) / s))];
+  return { z: o, w: W, h: H };
+}
+export async function fidelity(full, renderBlob, aiBlob) {
+  const depth = resample(full, 960), { w, h } = depth, G = geoEdges(depth);
   const er = edges(await grey(renderBlob, w, h), w, h), ea = edges(await grey(aiBlob, w, h), w, h);
   const B = 20; let sum = 0, cells = 0;
   for (let y0 = 0; y0 < h; y0 += B) for (let x0 = 0; x0 < w; x0 += B) {
@@ -132,15 +138,45 @@ export async function fidelity(depth, renderBlob, aiBlob) {
 }
 
 // ─── the request ─────────────────────────────────────────────────────────
-async function jpegData(blob, long) {
-  const bmp = await createImageBitmap(blob), s = Math.min(1, long / Math.max(bmp.width, bmp.height));
-  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); bmp.close?.();
-  const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9)); c.width = c.height = 0;
-  return await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+// The model only returns a few fixed shapes (2K): sending a phone shot (≈1:2.2) and getting 9:16 back made it stretch or
+// reframe, and the badge fell to 33–69 %. Cropping our shot to the exact output shape first: 73–93 % (test 2026-11-27).
+// The crop is what gets sent, scored and shown next to the AI version.
+const OUT = { '21:9': [3168, 1344], '16:9': [2752, 1536], '3:2': [2528, 1696], '4:3': [2400, 1792], '5:4': [2304, 1856], '1:1': [2048, 2048],
+  '4:5': [1856, 2304], '3:4': [1792, 2400], '2:3': [1696, 2528], '9:16': [1536, 2752] };
+export function pickRatio(a) {
+  let best = '16:9';
+  for (const k in OUT) if (Math.abs(Math.log(OUT[k][0] / OUT[k][1] / a)) < Math.abs(Math.log(OUT[best][0] / OUT[best][1] / a))) best = k;
+  return best;
 }
-export async function enhance(renderBlob, depth, signal) {
-  const body = JSON.stringify({ image: await jpegData(renderBlob, 2048), depth: depthPNG(depth), aspect: depth.w / depth.h });
+function cropDepth({ z, w, h }, a) {   // centred crop to aspect a
+  const cw = w / h > a ? Math.round(h * a) : w, ch = w / h > a ? h : Math.round(w / a), x0 = (w - cw) >> 1, y0 = (h - ch) >> 1;
+  const out = new Float32Array(cw * ch);
+  for (let y = 0; y < ch; y++) out.set(z.subarray((y + y0) * w + x0, (y + y0) * w + x0 + cw), y * cw);
+  return { z: out, w: cw, h: ch };
+}
+async function cropBlob(blob, a, long) {
+  const bmp = await createImageBitmap(blob), W = bmp.width, H = bmp.height;
+  const cw = W / H > a ? Math.round(H * a) : W, ch = W / H > a ? H : Math.round(W / a);
+  const s = Math.min(1, long / Math.max(cw, ch)), c = document.createElement('canvas');
+  c.width = Math.round(cw * s); c.height = Math.round(ch * s);
+  c.getContext('2d').drawImage(bmp, (W - cw) / 2, (H - ch) / 2, cw, ch, 0, 0, c.width, c.height); bmp.close?.();
+  const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92)); const out = { blob: b, W: c.width, H: c.height }; c.width = c.height = 0;
+  return out;
+}
+export async function prepare(renderBlob, depth) {
+  const ratio = pickRatio(depth.w / depth.h), a = OUT[ratio][0] / OUT[ratio][1];
+  return { ratio, depth: cropDepth(depth, a), ...(await cropBlob(renderBlob, a, 2048)) };
+}
+// the exact outlines (silhouettes and creases from our depth), white on black: a third reference for the model
+function edgesPNG(depth) {
+  const { w, h } = depth, e = geoEdges(depth), c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(w, h);
+  for (let i = 0; i < e.length; i++) { const v = e[i] ? 255 : 0; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+  ctx.putImageData(img, 0, 0); return c.toDataURL('image/png');
+}
+const dataURL = (b) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+export async function enhance(prep, signal) {
+  const body = JSON.stringify({ image: await dataURL(prep.blob), depth: depthPNG(prep.depth), edges: edgesPNG(prep.depth), ratio: prep.ratio, aspect: prep.W / prep.H });
   const r = await fetch('/api/aiphoto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
   if (!r.ok) { let j = {}; try { j = await r.json(); } catch {} const e = new Error(j.error || `http ${r.status}`); e.code = j.error || r.status; e.scope = j.scope; throw e; }
   return await r.blob();
