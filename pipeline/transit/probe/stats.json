@@ -5,7 +5,7 @@
   "patterns": 314,
   "trips": 87079,
   "droppedTrips": 0,
-  "routeBytes": 5018568
+  "routeBytes": 5021708
  },
  "m": {
   "stops": 3565,
@@ -13,6 +13,6 @@
   "patterns": 885,
   "trips": 226999,
   "droppedTrips": 152130,
-  "routeBytes": 14885814
+  "routeBytes": 14909709
  }
 }

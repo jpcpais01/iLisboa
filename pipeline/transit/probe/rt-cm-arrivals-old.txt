@@ -1,2 +1,4 @@
-ERR The operation was aborted due to timeout
+200 application/json; charset=utf-8 2 bytes @ 2026-11-27T17:35:08.719Z
 https://api.carrismetropolitana.pt/stops/060001/realtime
+
+[]
