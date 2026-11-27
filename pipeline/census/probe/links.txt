@@ -1,10 +1,299 @@
-## https://mapas.ine.pt/download/index2011.phtml ERR HTTP Error 404: Not Found
-## https://mapas.ine.pt/download/index2021.phtml ERR HTTP Error 404: Not Found
-## https://mapas.ine.pt/download/index.phtml ERR HTTP Error 404: Not Found
-## https://mapas.ine.pt/download/index2001.phtml ERR HTTP Error 404: Not Found
-NO https://mapas.ine.pt/download/filesGPG/2021/BGRI21_CONT.zip Remote end closed connection without response
-NO https://mapas.ine.pt/download/filesGPG/2021/nuts3/BGRI21_170.zip Remote end closed connection without response
-NO https://mapas.ine.pt/download/filesGPG/2021/concelhos/BGRI21_1106.zip Remote end closed connection without response
-NO https://mapas.ine.pt/download/filesGPG/2011/BGRI11_CONT.zip Remote end closed connection without response
-NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI11_1106.zip Remote end closed connection without response
-NO https://mapas.ine.pt/download/filesGPG/2011/nuts3/BGRI11_170.zip Remote end closed connection without response
+## https://inspire.ine.pt/geoserver/BGRI2021/wfs?service=WFS&version=2.0.0&request=GetCapabilities 200
+﻿<!doctype html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Site em manutenção — INE</title>
+    <style>
+        :root {
+            --ine-blue: #0067a5;
+            --text: #27313a;
+            --muted: #5b6770;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 28px;
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(135deg, #f3f7f9 0%, #ffffff 56%, #eef5f8 100%);
+        }
+
+        main {
+            width: min(100%, 700px);
+            text-align: center;
+        }
+
+        .card {
+            padding: clamp(34px, 7vw, 64px);
+            background: #fff;
+            border-top: 5px solid var(--ine-blue);
+            border-radius: 8px;
+            box-shadow: 0 12px 35px rgba(0, 46, 73, .12);
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 38px;
+        }
+
+        h1 {
+            margin: 0 0 22px;
+            color: var(--ine-blue);
+            font-size: clamp(1.65rem, 4vw, 2.25rem);
+            line-height: 1.18;
+        }
+
+        p {
+            max-width: 530px;
+            margin: 0 auto 16px;
+            font-size: 1.05rem;
+            line-height: 1.65;
+        }
+
+        .contact {
+            margin-top: 30px;
+            color: var(--muted);
+        }
+
+        a {
+            color: var(--ine-blue);
+            font-weight: 700;
+        }
+
+        footer {
+            margin-top: 24px;
+            color: #71808a;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="card" aria-labelledby="titulo">
+            <img src="../Img/n_logotipo.gif" />
+            <!-- Logótipo INE em SVG, incorporado para a página funcionar num único ficheiro. -->
+           
+
+            <h1 id="titulo">Site temporariamente indisponível</h1>
+            <p>O site encontra-se temporariamente indisponível.</p>
+            <p>Estamos a trabalhar para repor o serviço com a maior brevidade possível.</p>
+            <p class="contact">Caso necessite de informação ou apoio, poderá contactar-nos através do endereço <a href="mailto:info@ine.pt">info@ine.pt</a>.</p>
+            <p>Lamentamos os eventuais transtornos causados e agradecemos a sua compreensão.</p>
+        </section>
+        <footer>Instituto Nacional de Estatística</footer>
+    </main>
+</body>
+</html>
+## https://inspire.ine.pt/geoserver/BGRI2021/wfs?service=WFS&version=2.0.0&request=DescribeFeatureType 200
+﻿<!doctype html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Site em manutenção — INE</title>
+    <style>
+        :root {
+            --ine-blue: #0067a5;
+            --text: #27313a;
+            --muted: #5b6770;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 28px;
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(135deg, #f3f7f9 0%, #ffffff 56%, #eef5f8 100%);
+        }
+
+        main {
+            width: min(100%, 700px);
+            text-align: center;
+        }
+
+        .card {
+            padding: clamp(34px, 7vw, 64px);
+            background: #fff;
+            border-top: 5px solid var(--ine-blue);
+            border-radius: 8px;
+            box-shadow: 0 12px 35px rgba(0, 46, 73, .12);
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 38px;
+        }
+
+        h1 {
+            margin: 0 0 22px;
+            color: var(--ine-blue);
+            font-size: clamp(1.65rem, 4vw, 2.25rem);
+            line-height: 1.18;
+        }
+
+        p {
+            max-width: 530px;
+            margin: 0 auto 16px;
+            font-size: 1.05rem;
+            line-height: 1.65;
+        }
+
+        .contact {
+            margin-top: 30px;
+            color: var(--muted);
+        }
+
+        a {
+            color: var(--ine-blue);
+            font-weight: 700;
+        }
+
+        footer {
+            margin-top: 24px;
+            color: #71808a;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="card" aria-labelledby="titulo">
+            <img src="../Img/n_logotipo.gif" />
+            <!-- Logótipo INE em SVG, incorporado para a página funcionar num único ficheiro. -->
+           
+
+            <h1 id="titulo">Site temporariamente indisponível</h1>
+            <p>O site encontra-se temporariamente indisponível.</p>
+            <p>Estamos a trabalhar para repor o serviço com a maior brevidade possível.</p>
+            <p class="contact">Caso necessite de informação ou apoio, poderá contactar-nos através do endereço <a href="mailto:info@ine.pt">info@ine.pt</a>.</p>
+            <p>Lamentamos os eventuais transtornos causados e agradecemos a sua compreensão.</p>
+        </section>
+        <footer>Instituto Nacional de Estatística</footer>
+    </main>
+</body>
+</html>
+## https://inspire.ine.pt/geoserver/BGRI2021/wfs?service=WFS&version=2.0.0&request=GetFeature&count=2&outputFormat=application/json&typeNames= 200
+﻿<!doctype html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Site em manutenção — INE</title>
+    <style>
+        :root {
+            --ine-blue: #0067a5;
+            --text: #27313a;
+            --muted: #5b6770;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 28px;
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(135deg, #f3f7f9 0%, #ffffff 56%, #eef5f8 100%);
+        }
+
+        main {
+            width: min(100%, 700px);
+            text-align: center;
+        }
+
+        .card {
+            padding: clamp(34px, 7vw, 64px);
+            background: #fff;
+            border-top: 5px solid var(--ine-blue);
+            border-radius: 8px;
+            box-shadow: 0 12px 35px rgba(0, 46, 73, .12);
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 38px;
+        }
+
+        h1 {
+            margin: 0 0 22px;
+            color: var(--ine-blue);
+            font-size: clamp(1.65rem, 4vw, 2.25rem);
+            line-height: 1.18;
+        }
+
+        p {
+            max-width: 530px;
+            margin: 0 auto 16px;
+            font-size: 1.05rem;
+            line-height: 1.65;
+        }
+
+        .contact {
+            margin-top: 30px;
+            color: var(--muted);
+        }
+
+        a {
+            color: var(--ine-blue);
+            font-weight: 700;
+        }
+
+        footer {
+            margin-top: 24px;
+            color: #71808a;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="card" aria-labelledby="titulo">
+            <img src="../Img/n_logotipo.gif" />
+            <!-- Logótipo INE em SVG, incorporado para a página funcionar num único ficheiro. -->
+           
+
+            <h1 id="titulo">Site temporariamente indisponível</h1>
+            <p>O site encontra-se temporariamente indisponível.</p>
+            <p>Estamos a trabalhar para repor o serviço com a maior brevidade possível.</p>
+            <p class="contact">Caso necessite de informação ou apoio, poderá contactar-nos através do endereço <a href="mailto:info@ine.pt">info@ine.pt</a>.</p>
+            <p>Lamentamos os eventuais transtornos causados e agradecemos a sua compreensão.</p>
+        </section>
+        <footer>Instituto Nacional de Estatística</footer>
+    </main>
+</body>
+</html>
+NO https://mapas.ine.pt/download/filesGPG/2021/concelhos/BGRI2021_1106.zip HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2021/concelhos/BGRI21_1106.zip HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2021/BGRI2021_1106.zip HTTP Error 404: Not Found
+NO http://mapas.ine.pt/download/filesGPG/2021/concelhos/BGRI2021_1106.zip HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI2011_1106.zip HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI11_1106.zip HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2011/BGRI2011_1106.zip HTTP Error 404: Not Found
+NO http://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI2011_1106.zip HTTP Error 404: Not Found
