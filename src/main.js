@@ -13,6 +13,7 @@ import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
 import { initLandmarks } from './landmarks.js';
+import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
 
@@ -248,6 +249,8 @@ function wake(a) {
 
 const tiles = AREAS.flatMap((a) => a.tiles.map((t) => ({ a, t, b: t.bounds, state: 0, mode: null, obj: null, bal: null })));   // state 0 idle, 1 loading, 2 shown; mode 'full' (own ground) or 'mid' (buildings over the far ground)
 for (const t of tiles) tileAt.set(`${t.a.area}:${t.t.i}_${t.t.j}`, t);
+// tiles that arrived before the landmark table: restyle them now
+lmReady.then(() => { for (const t of tiles) t.obj?.traverse((o) => { if (o.isMesh && o.name.startsWith('buildings')) restyle(o); }); try { invalidate(); } catch { /* not yet: the first frame draws it */ } });
 const areaDist = (a) => rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], controls.target.x, -controls.target.z);
 let farReady = null;   // started once the camera is placed: nearest area first, the loading screen waits only for the one under the view
 const startFar = () => { const order = [...AREAS].sort((p, q) => areaDist(p) - areaDist(q)); farReady = base(order[0]).catch((e) => console.error(e)); (async () => { for (const a of order.slice(1)) await base(a).catch((e) => console.error(e)); })(); };
@@ -267,6 +270,7 @@ function adopt(tile, gltf, mode) {
       g.setAttribute('aStyle', g.attributes._style); g.deleteAttribute('_style');
       o.material = matBuildings;
       o.castShadow = o.receiveShadow = true; bigCaster(o);
+      restyle(o);   // landmarks the generic rules drew as houses: palatial window grid, known colours (src/lmdetail.js)
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
       map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
@@ -319,15 +323,18 @@ function downgrade(tile) {
 function dropDetail(t) { if (t.detail) { scene.remove(t.detail); t.detail.traverse((m) => m.isMesh && m.geometry.dispose()); } t.detail = null; t.dstate = 0; }
 let DR = 900;   // façade relief and balconies: set per frame from the camera height (see stream)
 function detail(t, d) {
-  if (t.state !== 2 || !(t.t.detail || t.t.balconies)) return;
+  const lm = lmFile(t.a.area, t.t.i, t.t.j);   // landmark stonework (window surrounds, balconies, ridge and eave tiles): same range
+  if (t.state !== 2 || !(t.t.detail || t.t.balconies || lm)) return;
   if (!ready || inflight > 1) { if (d > DR + 400 && t.dstate) dropDetail(t); return; }   // near-only detail waits until the city is on screen and its tiles are in
   if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
   if (d > DR || t.dstate) return;
   t.dstate = 1; const gen = t.gen;
   Promise.all([t.t.detail ? loader.loadAsync(url(t.a, t.t.detail)) : null,
-    t.t.balconies && !t.bal ? fetch(url(t.a, t.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null]).then(([g, bal]) => {
-    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { g?.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
-    if (g) { g.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; } }); t.detail = g.scene; scene.add(g.scene); }
+    t.t.balconies && !t.bal ? fetch(url(t.a, t.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null,
+    lm ? loader.loadAsync(lm).catch(() => null) : null]).then(([g, bal, lg]) => {
+    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { for (const x of [g, lg]) x?.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
+    if (lg) { lg.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; m.castShadow = !isMobile; } }); if (g) g.scene.add(lg.scene); else g = lg; }
+    if (g) { g.scene.traverse((m) => { if (m.isMesh && m.material !== matDetail) { m.material = matDetail; m.receiveShadow = true; } }); t.detail = g.scene; scene.add(g.scene); }
     if (bal && !t.bal) { t.bal = balconies(bal); scene.add(t.bal); balconyChunks.push(t.bal); }
     t.dstate = 2;
   }).catch(() => { t.dstate = 0; });
