@@ -1,0 +1,10 @@
+## https://mapas.ine.pt/download/index2011.phtml ERR HTTP Error 404: Not Found
+## https://mapas.ine.pt/download/index2021.phtml ERR HTTP Error 404: Not Found
+## https://mapas.ine.pt/download/index.phtml ERR HTTP Error 404: Not Found
+## https://mapas.ine.pt/download/index2001.phtml ERR HTTP Error 404: Not Found
+NO https://mapas.ine.pt/download/filesGPG/2021/BGRI21_CONT.zip Remote end closed connection without response
+NO https://mapas.ine.pt/download/filesGPG/2021/nuts3/BGRI21_170.zip Remote end closed connection without response
+NO https://mapas.ine.pt/download/filesGPG/2021/concelhos/BGRI21_1106.zip Remote end closed connection without response
+NO https://mapas.ine.pt/download/filesGPG/2011/BGRI11_CONT.zip Remote end closed connection without response
+NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI11_1106.zip Remote end closed connection without response
+NO https://mapas.ine.pt/download/filesGPG/2011/nuts3/BGRI11_170.zip Remote end closed connection without response
