@@ -9,24 +9,26 @@ import { fwd, r1 } from './_lib/geo.js';
 
 const BOX = [[38.55, -9.55], [38.90, -8.85]];   // the bar to Alcochete, Cascais to Seixal
 const LISTEN = 6500, KEEP = 20 * 60 * 1000;
-const mem = (globalThis.__ais ??= { pos: new Map(), stat: new Map(), t: 0, err: '' });
+const mem = (globalThis.__ais ??= { pos: new Map(), stat: new Map(), t: 0, err: '', diag: {} });
 
 function listen(key) {
   return new Promise((resolve) => {
     let ws, done = false;
-    const finish = (err) => { if (done) return; done = true; clearTimeout(timer); try { ws?.close(); } catch { /* closed */ } if (err) mem.err = err; resolve(); };
+    const t0 = Date.now(), dg = (mem.diag = { opened: false, msgs: 0, types: {}, close: null, ms: 0 });
+    const finish = (err) => { if (done) return; done = true; clearTimeout(timer); dg.ms = Date.now() - t0; try { ws?.close(); } catch { /* closed */ } if (err) mem.err = err; resolve(); };
     const timer = setTimeout(() => finish(), LISTEN);
     try { ws = new WebSocket('wss://stream.aisstream.io/v0/stream'); } catch (e) { return finish(`websocket: ${e.message}`); }
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [BOX],
+    ws.onopen = () => (dg.opened = true) && ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [BOX],
       FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport', 'ShipStaticData', 'StaticDataReport'] }));
     ws.onerror = (e) => finish(`websocket error ${e?.message || ''}`);
-    ws.onclose = () => finish();
+    ws.onclose = (e) => { dg.close = [e?.code, e?.reason]; finish(); };
     const dec = new TextDecoder();
     ws.onmessage = (ev) => {
       let m;
       try { m = JSON.parse(typeof ev.data === 'string' ? ev.data : dec.decode(ev.data)); } catch { return; }
       if (m.error) return finish(`aisstream: ${m.error}`);
+      dg.msgs++; dg.types[m.MessageType] = (dg.types[m.MessageType] || 0) + 1;
       take(m);
     };
   });
@@ -73,5 +75,5 @@ export default async function handler(req, res) {
   for (const [mmsi, s] of mem.stat) if (now - s.t > 6 * KEEP) mem.stat.delete(mmsi);
   if (!out.length && mem.err) { res.setHeader('Cache-Control', 'public, s-maxage=20'); return res.status(502).send(JSON.stringify({ error: mem.err })); }
   res.setHeader('Cache-Control', 'public, s-maxage=25, stale-while-revalidate=60');
-  res.status(200).send(JSON.stringify({ t: Math.round(now / 1000), s: out, err: mem.err || undefined }));
+  res.status(200).send(JSON.stringify({ t: Math.round(now / 1000), s: out, err: mem.err || undefined, diag: req.query?.diag ? mem.diag : undefined }));
 }
