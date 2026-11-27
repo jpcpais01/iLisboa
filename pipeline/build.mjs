@@ -309,6 +309,13 @@ const isWaterAt = (x, y) => {
 // "deep" water: all of a 7 m neighbourhood is water (terrain vertices drop only there)
 const isDeepWater = (x, y) => { for (const [dx, dy] of [[0, 0], [7, 0], [-7, 0], [0, 7], [0, -7], [5, 5], [-5, 5], [5, -5], [-5, -5]]) if (!isWaterAt(x + dx, y + dy)) return false; return true; };
 const LAND_MIN = 1.6;
+// open sea: every node of the tile's 8 m grid is deep water → the flat seabed needs only its 4 corners (ocean areas were
+// 0.34 M triangles of flat -5 m; the edge nodes all sit at -5, so neighbouring shore tiles still meet it without a crack)
+const openSea = (x0, y0, x1, y1) => {
+  const cols = Math.max(2, Math.round((x1 - x0) / GRID) + 1), rows = Math.max(2, Math.round((y1 - y0) / GRID) + 1);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!isDeepWater(x0 + ((x1 - x0) * c) / (cols - 1), y1 - ((y1 - y0) * r) / (rows - 1))) return false;
+  return true;
+};
 const groundAt = (x, y) => (isDeepWater(x, y) ? -5 : Math.max(LAND_MIN, dem.ground(x, y)));
 // the height of the rendered terrain mesh (8 m grid per 500 m tile, split b–d like the index buffer): small things
 // (cars, lamps, trees, posts) sit on this so they neither float nor sink where the slope bends between grid nodes
@@ -2554,7 +2561,8 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
   const tex = doc.createTexture('ground').setImage(webp).setMimeType('image/webp');
   const gmat = doc.createMaterial('ground').setBaseColorTexture(tex).setRoughnessFactor(1).setMetallicFactor(0);
   // terrain grid
-  const cols = Math.max(2, Math.round((x1 - x0) / GRID) + 1), rows = Math.max(2, Math.round((y1 - y0) / GRID) + 1);
+  const sea = openSea(x0, y0, x1, y1);
+  const cols = sea ? 2 : Math.max(2, Math.round((x1 - x0) / GRID) + 1), rows = sea ? 2 : Math.max(2, Math.round((y1 - y0) / GRID) + 1);
   const pos = new Float32Array(cols * rows * 3), uv = new Float32Array(cols * rows * 2), H = new Float32Array(cols * rows);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const x = x0 + ((x1 - x0) * c) / (cols - 1), y = y1 - ((y1 - y0) * r) / (rows - 1), k = r * cols + c;
@@ -2709,7 +2717,8 @@ for (let j = 0; j < nj; j++) for (let i = 0; i < ni; i++) {
     const tw = Math.max(8, Math.round((FTEX * (x1 - x0)) / TILE)), th = Math.max(8, Math.round((FTEX * (y1 - y0)) / TILE));
     const webp = await sharp(ground1, { raw: { width: GW, height: GH, channels: 3 } }).extract({ left: px0, top: py0, width: px1 - px0, height: py1 - py0 }).resize(tw, th, { kernel: 'lanczos3' }).webp({ quality: 72 }).toBuffer();
     const gmat = doc.createMaterial(`fg_${i}_${j}`).setBaseColorTexture(doc.createTexture().setImage(webp).setMimeType('image/webp')).setRoughnessFactor(1).setMetallicFactor(0);
-    const cols = Math.max(2, Math.round((x1 - x0) / FG) + 1), rows = Math.max(2, Math.round((y1 - y0) / FG) + 1);
+    const sea = openSea(x0, y0, x1, y1);
+    const cols = sea ? 2 : Math.max(2, Math.round((x1 - x0) / FG) + 1), rows = sea ? 2 : Math.max(2, Math.round((y1 - y0) / FG) + 1);
     const pos = [], uv = [], idx = [], nrm = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const x = x0 + ((x1 - x0) * c) / (cols - 1), y = y1 - ((y1 - y0) * r) / (rows - 1);
