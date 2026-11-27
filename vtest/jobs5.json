@@ -1,0 +1,56 @@
+[
+ {
+  "name": "k060_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is. The fourth image is a real photograph of the same area taken a moment earlier from nearby: match its photographic look exactly (colour, light, haze, sharpness, real roof tiles, real window detail). The result must look like a real photograph, not a 3D model: real roof tile texture, chimneys, real windows and shutters, weathering, natural variation between buildings.",
+   "image_urls": [
+    "@k060_render.jpg",
+    "@k060_depth.png",
+    "@k060_edges.png",
+    "@style_k030.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 2
+  }
+ },
+ {
+  "name": "k090_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is. The fourth image is a real photograph of the same area taken a moment earlier from nearby: match its photographic look exactly (colour, light, haze, sharpness, real roof tiles, real window detail). The result must look like a real photograph, not a 3D model: real roof tile texture, chimneys, real windows and shutters, weathering, natural variation between buildings.",
+   "image_urls": [
+    "@k090_render.jpg",
+    "@k090_depth.png",
+    "@k090_edges.png",
+    "@style_k030.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 2
+  }
+ },
+ {
+  "name": "k120_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is. The fourth image is a real photograph of the same area taken a moment earlier from nearby: match its photographic look exactly (colour, light, haze, sharpness, real roof tiles, real window detail). The result must look like a real photograph, not a 3D model: real roof tile texture, chimneys, real windows and shutters, weathering, natural variation between buildings.",
+   "image_urls": [
+    "@k120_render.jpg",
+    "@k120_depth.png",
+    "@k120_edges.png",
+    "@style_k030.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 2
+  }
+ }
+]
