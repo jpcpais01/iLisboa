@@ -73,10 +73,15 @@ body.night .alf-panel { background: rgba(26, 31, 46, 0.86); }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Crect width='28' height='14' fill='%23f7f3ea'/%3E%3Cg fill='%231b4c9c'%3E%3Cpath d='M14 1.6c1.9 1.9 1.9 4 0 5.9-1.9-1.9-1.9-4 0-5.9zM14 12.4c1.9-1.9 1.9-4 0-5.9-1.9 1.9-1.9 4 0 5.9zM8.1 7c1.9-1.9 4-1.9 5.9 0-1.9 1.9-4 1.9-5.9 0zM19.9 7c-1.9-1.9-4-1.9-5.9 0 1.9 1.9 4 1.9 5.9 0z'/%3E%3Cpath d='M0 0h3.2A3.2 3.2 0 0 1 0 3.2zM28 0h-3.2A3.2 3.2 0 0 0 28 3.2zM0 14h3.2A3.2 3.2 0 0 0 0 10.8zM28 14h-3.2a3.2 3.2 0 0 1 3.2-3.2z'/%3E%3C/g%3E%3Cpath d='M0 13.5h28' stroke='%231b4c9c' stroke-width='1'/%3E%3C/svg%3E") repeat-x 0 0 / 28px 14px;
 }
 body.night .alf-head::before { opacity: 0.55; }
-.alf-perch { position: absolute; right: 108px; top: -19px; width: 1px; height: 1px; }   /* the swallow sits on the panel's top rim */
+.alf-perch { position: absolute; left: 58px; top: -16px; width: 1px; height: 1px; }   /* the swallow sits on the panel's top rim */
 .alf-bird.perched { width: 66px; height: 59px; }
 .alf-bird { transition: width 0.3s ease, height 0.3s ease; }
-@media (min-width: 1000px) { .alf-panel { right: max(312px, calc(50vw - 560px)); } }   /* left of the layer dock, toward the middle */
+/* wide screens: docked to the right edge, under the Camadas button (the layer dock folds while the chat is open) */
+@media (min-width: 641px) {
+  .alf-panel { right: max(12px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + 54px); bottom: max(16px, env(safe-area-inset-bottom)); height: auto; width: min(var(--alf-w), calc(100vw - 24px)); transform-origin: 100% 0; }
+}
+/* … and above the time slider where the two would meet (slider is 440 px wide, centred) */
+@media (min-width: 641px) and (max-width: 1290px) { .alf-panel { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 62px); } }
 .alf-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.1; }
 .alf-name b { font: italic 650 24px/1.05 'Lisboa Display', 'Fraunces', Georgia, serif; color: var(--azul); letter-spacing: -0.01em; }
 .alf-name small { color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -87,7 +92,26 @@ body.night .alf-head::before { opacity: 0.55; }
 .alf-head button:hover { background: var(--line); color: var(--ink); }
 .alf-head svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; scroll-behavior: smooth; }
+.alf-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.alf-log { scrollbar-width: none; -ms-overflow-style: none; }
+.alf-log::-webkit-scrollbar { display: none; }
+.alf-rail { position: absolute; top: 10px; bottom: 10px; right: 3px; width: 9px; cursor: pointer; opacity: 0; transition: opacity 0.35s ease; touch-action: none; }
+.alf-rail::before {   /* the rail: a dotted cobalt line, like the frieze's border */
+  content: ''; position: absolute; top: 2px; bottom: 2px; left: 4px; width: 1px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--azul) 45%, transparent) 0.7px, transparent 1px) 0 0 / 1px 5px repeat-y;
+}
+.alf-rail i {   /* the thumb: a little glazed cobalt pill with a highlight down its side */
+  position: absolute; left: 1.5px; top: 0; width: 6px; border-radius: 4px; cursor: grab;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--azul) 82%, white) 0 30%, var(--azul) 30% 100%);
+  box-shadow: 0 1px 2px rgba(20, 30, 70, 0.25), inset 0 0 0 0.5px rgba(255, 255, 255, 0.35);
+  transition: width 0.15s ease, left 0.15s ease;
+}
+.alf-body:hover .alf-rail, .alf-rail.on, .alf-rail.drag { opacity: 1; }
+.alf-rail:hover i, .alf-rail.drag i { width: 8px; left: 0.5px; }
+.alf-rail.drag i { cursor: grabbing; }
+.alf-rail.off { display: none; }
+@media (hover: none) { .alf-rail i { pointer-events: none; } .alf-rail { pointer-events: none; } }
+.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px 6px 14px; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; scroll-behavior: smooth; }
 .alf-m { max-width: 88%; font-size: 14.5px; line-height: 1.5; animation: alf-in 0.32s cubic-bezier(.2, .8, .2, 1); overflow-wrap: anywhere; }
 .alf-m p { margin: 0 0 6px; } .alf-m p:last-child { margin-bottom: 0; }
 .alf-m ul, .alf-m ol { margin: 4px 0 6px; padding-left: 20px; } .alf-m li { margin: 2px 0; }
