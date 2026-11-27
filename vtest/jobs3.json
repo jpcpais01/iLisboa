@@ -1,0 +1,28 @@
+[
+ {
+  "name": "a1_vace_first_last",
+  "endpoint": "fal-ai/wan-vace-14b/depth",
+  "max_min": 35,
+  "body": {
+   "prompt": "Real aerial drone footage of Lisbon, Portugal, filmed on a clear October afternoon: Pra\u00e7a do Com\u00e9rcio, the Baixa grid and the Alfama rooftops beside the Tagus. Photorealistic: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, cal\u00e7ada pavement, real trees, real cars, the river with natural reflections and small waves, soft atmospheric haze, natural sunlight and shadows. Smooth camera motion.",
+   "negative_prompt": "3D render, CGI, video game, cartoon, plastic, flat colours, blurry, smeared, distorted buildings, warped geometry, flicker, letterboxing, borders, black bars, overexposed, static, subtitles, painting, worst quality, low quality, JPEG compression residue",
+   "video_url": "@depth720.mp4",
+   "preprocess": false,
+   "match_input_num_frames": true,
+   "num_frames": 121,
+   "match_input_frames_per_second": true,
+   "frames_per_second": 24,
+   "resolution": "720p",
+   "aspect_ratio": "16:9",
+   "num_inference_steps": 30,
+   "guidance_scale": 5,
+   "seed": 1,
+   "video_quality": "maximum",
+   "first_frame_url": "@first_k000.jpg",
+   "ref_image_urls": [
+    "@first_k000.jpg"
+   ],
+   "last_frame_url": "@first_k120.jpg"
+  }
+ }
+]
