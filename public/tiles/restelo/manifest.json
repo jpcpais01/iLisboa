@@ -114,7 +114,7 @@
     -5958.470691318362,
     -915.3774698637371
    ],
-   "bytes": 400116,
+   "bytes": 400640,
    "balconies": "bal_6_0.bin",
    "detail": "d_6_0.glb"
   },
@@ -604,7 +604,7 @@
     -8458.470691318362,
     1415.377469864526
    ],
-   "bytes": 172572,
+   "bytes": 173536,
    "balconies": "bal_1_5.bin",
    "detail": "d_1_5.glb"
   },
@@ -706,20 +706,20 @@
   "skeletonFail": 13,
   "parts": 4,
   "skippedOutlines": 2,
-  "partyEdges": 6130,
-  "balconies": 25240,
+  "partyEdges": 6124,
+  "balconies": 25243,
   "statues": 17,
   "wallsM": 18863.83639496811,
   "pillars": 0,
   "chimneys": 185,
   "remainders": 3,
   "thinParts": 2,
-  "boxEdge": 913,
+  "boxEdge": 914,
   "massed": 4096,
-  "boxThin": 209,
+  "boxThin": 210,
   "massSplit": 305,
   "massCut": 188,
-  "roofBoxes": 463,
+  "roofBoxes": 462,
   "rims": 1157,
   "churches": 8,
   "dormers": 28,
@@ -749,14 +749,14 @@
   "lamps": 6812,
   "cars": 13339,
   "water": 0,
-  "bytes": 20476043,
-  "detailTris": 420962,
-  "triangles": 1026050
+  "bytes": 20478607,
+  "detailTris": 421042,
+  "triangles": 1026198
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-27T00:32:52.347Z",
+ "built": "2026-11-27T01:44:46.620Z",
  "far": {
-  "bytes": 1294856,
-  "tris": 119881
+  "bytes": 1294848,
+  "tris": 119878
  }
 }
