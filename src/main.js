@@ -5,6 +5,7 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { initTouch } from './touch.js';
 import { createChase } from './chase.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { addOcean } from './water.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { createSky, AO } from './sky.js';
@@ -97,6 +98,7 @@ const ok = (r) => { if (!r.ok) throw new Error(`${r.status} ${r.url}`); return r
 const index = await (await fetch('/tiles/index.json', { cache: 'no-cache' })).json();
 const AREAS = index.areas;
 const manifest = AREAS[0];   // origin, water level and attribution are shared by every area
+addOcean(scene, manifest.waterY);   // the open sea out to the horizon, past the areas (src/water.js)
 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 for (const a of AREAS) { minX = Math.min(minX, a.bounds.minX); minY = Math.min(minY, a.bounds.minY); maxX = Math.max(maxX, a.bounds.maxX); maxY = Math.max(maxY, a.bounds.maxY); }
 const center = new THREE.Vector3((minX + maxX) / 2, 0, -(minY + maxY) / 2);

@@ -304,19 +304,31 @@ export function railingMaterial() {
 }
 
 export const waterUniformTime = { value: 0 };
+// Shared by every water plane (main.js loads the river texture and feeds the wind; src/live/ships.js feeds the wakes).
+export const NWAKE = 24;
+export const waterUniforms = {
+  uRiver: { value: null },                               // public/water/river.png: R water, G √depth/40 m, B shore distance /4 m
+  uRiverBox: { value: new THREE.Vector4(0, 0, 1, 1) },   // minX, maxY, width m, height m
+  uWind: { value: new THREE.Vector4(0.8, -0.6, 4, 0) },  // downwind unit vector (x east, y north), 10 m wind m/s
+  uWakeA: { value: Array.from({ length: NWAKE }, () => new THREE.Vector4()) },   // boat centre x, y; heading unit vector
+  uWakeB: { value: Array.from({ length: NWAKE }, () => new THREE.Vector4()) },   // speed m/s, length m, beam m, straight run behind m
+  uWakes: { value: 0 },
+};
 
-// River: one mask-clipped plane. Everything is analytic, no textures beyond the mask:
-//  · waves: 9 directional trains, each faded out once it falls below ~2 pixels; the slope energy it
-//    loses goes into roughness, so the far river widens the sun's glitter instead of aliasing;
-//  · depth: the mask's own mipmaps measure distance to the shore (≈4 m, 25 m, 150 m), giving silty
-//    shallows at the quays, a teal middle and a deep slate channel;
-//  · body light: crests glow green where the sun shines through them; lapping foam on the shore;
-//  · night: the lit city smears into long warm streaks on the water near the banks.
+// River and sea: mask-clipped planes, all analytic but for the shared river texture.
+//  · colour from the real river: EMODnet depth sets how much clear Atlantic channel water vs turbid estuary water and
+//    shallow bottom shows (deep slate-blue channel, teal Mar da Palha, green-brown flats), plus drifting sediment plumes;
+//  · waves from the live wind: total slope variance by Cox & Munk (σ² = 0.003 + 0.00512 U, ×0.75 for the estuary's short
+//    fetch), sheltered near quays and in docks, thinned in wind slicks. The resolved trains (aligned to the wind) carry
+//    part of it; whatever the pixel can't resolve becomes GGX roughness, so the glitter is a physically sized glow;
+//  · whitecaps by Monahan's coverage law (≈1 % at 10 m/s), lapping foam at the shore;
+//  · boat wakes (up to 24): turbulent bubbly centreline that lingers about a minute, Kelvin arms and transverse waves;
+//  · night: the lit city smears into long warm streaks near the banks.
 export function waterMaterial(mask) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0.0, alphaMap: mask, alphaTest: 0.5 });
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = waterUniformTime;
-    s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms);
+    s.uniforms.uNight = cityUniforms.uNight; Object.assign(s.uniforms, overlayUniforms, waterUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -324,6 +336,9 @@ export function waterMaterial(mask) {
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vWPos; uniform float uTime; uniform float uNight;
+uniform sampler2D uRiver; uniform vec4 uRiverBox; uniform vec4 uWind;
+#define NWAKE ${NWAKE}
+uniform vec4 uWakeA[NWAKE]; uniform vec4 uWakeB[NWAKE]; uniform int uWakes;
 float wh(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   return mix(mix(wh(i), wh(i + vec2(1, 0)), f.x), mix(wh(i + vec2(0, 1)), wh(i + vec2(1, 1)), f.x), f.y); }`)
@@ -332,35 +347,98 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   vec2 p = vec2(vWPos.x, -vWPos.z);
   float t = uTime, dist = length(cameraPosition - vWPos);
   float fw = length(fwidth(p)) + 1e-4;                       // metres per pixel here
-  vec2 w = p + 6.0 * vec2(sin(p.y * 0.013 + t * 0.07), sin(p.x * 0.011 - t * 0.05));   // slow warp: chop, not stripes
-  const vec2 D[9] = vec2[9](vec2(.8,.6), vec2(-.5,.86), vec2(.97,-.24), vec2(-.2,-.98), vec2(.42,.91), vec2(-.93,.37), vec2(.6,-.8), vec2(.1,.99), vec2(-.7,-.71));
-  const float K[9] = float[9](.06, .095, .15, .24, .38, .6, .95, 1.5, 2.4);   // rad/m: 105 m … 2.6 m wavelengths
-  const float A[9] = float[9](.014, .02, .03, .042, .055, .065, .068, .064, .058);   // slope amplitude: long swell is gentle, wind chop is steep
-  float grpL = .35 + 1.3 * wn(p / 140. + vec2(t * .01, 0.)), grpS = .3 + 1.4 * wn(p / 31. - vec2(0., t * .03));   // wave groups, not an endless corrugation
-  float nL = wn(p / 60. + 11.3), nM = wn(p / 19. + 3.1), nS = wn(p / 6. + 7.7);
-  vec2 g = vec2(0.); float h = 0., lost = 0.;   // h: crest height of the short trains, ≈ -1…1
-  for (int i = 0; i < 9; i++) {
-    float k = K[i], a = A[i] * (i < 4 ? grpL : grpS);
-    float keep = 1. - smoothstep(.12, .45, fw * k / 6.2832);   // cycles per pixel → fade before it aliases
-    if (keep <= 0.) { lost += a * a; continue; }               // far water: the short trains cost nothing
-    // short-crested sea: each train's phase is bent by a noise field ~7 wavelengths across, so crests break up instead of running on forever
-    float nz = i < 3 ? nL : i < 6 ? nM : nS;
-    float ph = dot(D[i], w) * k + t * sqrt(9.81 * k) * .9 + float(i) * 1.7 + nz * (4.5 + float(i) * .9);   // deep-water dispersion
-    float c = cos(ph);
-    g += D[i] * c * a * keep; h += sin(ph) * keep * step(2.5, float(i)) * .3;
-    lost += a * a * (1. - keep);
+  vec2 ruv = vec2((p.x - uRiverBox.x) / uRiverBox.z, (uRiverBox.y - p.y) / uRiverBox.w);
+  vec4 rv = texture2D(uRiver, ruv);
+  float depth = rv.g * rv.g * 40., shoreD = rv.b * 1020.;
+  if (rv.r < .02 || any(lessThan(ruv, vec2(0.))) || any(greaterThan(ruv, vec2(1.)))) {
+    // outside the river texture: the open-sea plane carries its own depth in its mask's green (public/water/ocean.png)
+    float og = texture2D(alphaMap, vAlphaMapUv).g;
+    depth = og > .01 ? og * og * 40. : 3.; shoreD = og > .01 ? 900. : 60.;
   }
+
+  // ─── wind: frame, sea state ───
+  vec2 wd = normalize(uWind.xy + 1e-5), wc = vec2(-wd.y, wd.x);
+  float U = clamp(uWind.z, .3, 25.);
+  vec2 q = vec2(dot(p, wd), dot(p, wc));                     // along / across the wind
+  // wind slicks: thin meandering lines drawn out along the wind (surfactant gathered in the convergence lines)
+  float sl = wn(q / vec2(700., 55.) + vec2(-t * U * .001, 0.)) + .25 * wn(q / vec2(90., 14.));
+  float slick = (1. - smoothstep(.0, .07, abs(sl - .62))) * (.5 + .5 * wn(q / 400. + 3.3));
+  float shelter = mix(.3, 1., smoothstep(15., 260., shoreD));
+  float gust = wn(q / vec2(320., 170.) - vec2(t * U * .05, 0.)) * .7 + wn(q / vec2(90., 60.) - vec2(t * U * .08, 0.)) * .3;   // cat's-paws: gust patches running downwind
+  float var = (.003 + .00512 * U) * .75 * shelter * (1. - .5 * slick) * (.6 + .8 * gust);   // Cox–Munk total slope variance
+
+  // ─── boat wakes ───
+  float core = 0., foamW = 0.; vec2 gW = vec2(0.);
+  for (int i = 0; i < NWAKE; i++) {
+    if (i >= uWakes) break;
+    vec4 A = uWakeA[i], B = uWakeB[i];
+    vec2 r = p - A.xy; float al = dot(r, A.zw), ac = dot(r, vec2(-A.w, A.z));
+    float v = B.x, L = B.y, bm = B.z, a = -al - L * .5;      // a: metres behind the stern
+    if (al > L * .6 + 8. || a > B.w || abs(ac) > max(a, 0.) * .4 + bm * 2. + 6.) continue;
+    float fr = clamp(v / 6., 0., 1.);                          // how hard it is driving (a moored boat makes no wake)
+    float ab = max(a, 0.);
+    float w = bm * .55 + ab * .035;
+    float c = exp(-ac * ac / (w * w)) * exp(-ab / (v * 55. + 40.)) * smoothstep(-L * .45, 0., a) * fr;
+    c *= 1. - smoothstep(B.w * .7, B.w, a);                    // fades out where the straight run began
+    core = max(core, c);
+    float fn = wn(vec2(al, ac) * .45 + vec2(t * .7, 0.)) * .6 + wn(vec2(al, ac) * 1.3) * .4;
+    foamW = max(foamW, c * exp(-ab / (v * 6. + 12.)) * smoothstep(.25, .6, fn + c * .3));
+    // bow wave: a white roll either side of the stem
+    float bow = smoothstep(L * .3, L * .5, al) * exp(-pow((abs(ac) - bm * .55 - (L * .5 - al) * .35) / (1.2 + bm * .15), 2.)) * fr;
+    foamW = max(foamW, bow * smoothstep(.35, .6, fn));
+    // Kelvin arms (the visible V, just inside 19.5°) and transverse waves inside the wedge
+    float d = abs(ac) - ab * .34, aw = 2. + ab * .05;
+    float arm = exp(-d * d / (aw * aw)) * exp(-ab / (v * 45. + 90.)) * smoothstep(0., bm, a) * fr;
+    float k0 = 9.81 / max(1., v * v);
+    vec2 n = normalize(vec2(-.34, sign(ac)));                   // arm normal (in along/across)
+    float ph = (ab * n.x * -1. + abs(ac) * n.y) * k0 * 2.2 - t * sqrt(9.81 * k0 * 2.2);
+    vec2 gl = n * vec2(-1., sign(ac)) * cos(ph) * arm * .16;
+    float inW = smoothstep(.36, .2, abs(ac) / max(ab, 1.)) * exp(-ab / (v * 30. + 60.)) * smoothstep(0., L, a) * fr;
+    gl += vec2(-1., 0.) * cos(ab * k0 - t * sqrt(9.81 * k0)) * inW * .07;
+    gW += A.zw * gl.x + vec2(-A.w, A.z) * gl.y;
+    foamW = max(foamW, arm * smoothstep(.62, .85, fn) * exp(-ab / (v * 8. + 15.)));
+  }
+  var *= 1. - .6 * core;                                       // the turbulent trail is smooth water: dark in the glitter
+
+  // ─── resolved waves: 9 trains spread about the wind, short-crested ───
+  float amp = sqrt(var / .0286);
+  vec2 w = p + 6.0 * vec2(sin(p.y * 0.013 + t * 0.07), sin(p.x * 0.011 - t * 0.05));   // slow warp: chop, not stripes
+  const float TH[9] = float[9](.05, -.35, .4, -.6, .7, -.9, 1.1, -1.3, 1.6);   // radians off the wind: long trains follow it
+  const float K[9] = float[9](.06, .095, .15, .24, .38, .6, .95, 1.5, 2.4);   // rad/m: 105 m … 2.6 m wavelengths
+  const float A0[9] = float[9](.01, .016, .026, .038, .05, .06, .066, .064, .058);   // slope amplitude at the reference sea (≈7 m/s)
+  float grpL = .35 + 1.3 * wn(p / 140. + vec2(t * .01, 0.)), grpS = .3 + 1.4 * wn(p / 31. - vec2(0., t * .03));
+  float nL = wn(p / 60. + 11.3), nM = wn(p / 19. + 3.1), nS = wn(p / 6. + 7.7);
+  vec2 g = vec2(0.); float h = 0., lost = 0., res = 0.;
+  for (int i = 0; i < 9; i++) {
+    float k = K[i], a = A0[i] * amp * (i < 4 ? grpL : grpS);
+    // a light wind only raises the short wavelets: the long trains need a strong, steady wind to grow
+    a *= smoothstep(.0, 1., (U * U / 9.81) * k * 1.6);
+    float keep = 1. - smoothstep(.12, .45, fw * k / 6.2832);   // cycles per pixel → fade before it aliases
+    lost += a * a * .5 * (1. - keep);
+    if (keep <= 0.) continue;
+    float th = TH[i];
+    vec2 D = wd * cos(th) + wc * sin(th);
+    float nz = i < 3 ? nL : i < 6 ? nM : nS;
+    float ph = dot(D, w) * k - t * sqrt(9.81 * k) * .9 + float(i) * 1.7 + nz * (4.5 + float(i) * .9);   // deep-water dispersion, travelling downwind
+    g += D * cos(ph) * a * keep; h += sin(ph) * keep * step(2.5, float(i)) * .3;
+    res += a * a * .5 * keep;
+  }
+  g += gW;
   vec3 nW = normalize(vec3(-g.x, 1.0, g.y));
   normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
-  roughnessFactor = clamp(.045 + sqrt(lost) * 1.6 + smoothstep(600., 6000., dist) * .08, .04, .34);
+  float unres = max(var - res, var * .25);                     // what the resolved trains don't carry (the capillary end)
+  // sparkle: the capillary roughness itself is patchy at the metre scale, so the glitter breaks into grains instead of a flat sheet
+  float spk = wn(p / 2.7 + vec2(t * .9, -t * .6)) * .6 + wn(p / 9. - vec2(t * .3, 0.)) * .4;
+  float grain = mix(1., .6 + .8 * spk, 1. - smoothstep(.6, 3., fw));
+  roughnessFactor = clamp(pow(unres, .25) * .8 * grain, .06, .4);
 
-  // shore field from the mask's mipmaps (1 = open water at that scale)
-  float s1 = textureLod(alphaMap, vAlphaMapUv, 1.2).r, s2 = textureLod(alphaMap, vAlphaMapUv, 3.8).r, s3 = textureLod(alphaMap, vAlphaMapUv, 6.3).r;
-  float deep = smoothstep(.55, 1., s3) * smoothstep(.7, 1., s2);
-  vec3 shallow = vec3(.105, .135, .105), mid = vec3(.045, .095, .105), abyss = vec3(.022, .05, .068);
-  vec3 body = mix(shallow, mid, smoothstep(.75, 1., s2));
-  body = mix(body, abyss, deep);
-  body *= .92 + .16 * wn(p / 60. + t * .01);                  // slow turbidity patches
+  // ─── colour: clear channel water vs turbid estuary vs shallow bottom ───
+  float plume = wn(p / 900. + vec2(t * .0012, -t * .0007)) * .65 + wn(p / 260. - vec2(t * .002, 0.)) * .35;
+  float turb = clamp(mix(.15, .85, exp(-depth / 7.)) + (plume - .5) * .55, 0., 1.);
+  vec3 channel = vec3(.008, .1, .15), estuary = vec3(.028, .15, .14), flats = vec3(.09, .16, .12);
+  vec3 body = mix(channel, estuary, turb);
+  body = mix(body, flats, exp(-depth / 1.3) * .7);
+  body = mix(body, vec3(.08, .22, .2), core * .55);          // bubbles in the trail scatter light back up
   diffuseColor.rgb = body;
 
   // light through the crests: green-teal, strongest looking towards the sun at low angles
@@ -368,14 +446,21 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 #if NUM_DIR_LIGHTS > 0
   vec3 L = normalize((vec4(directionalLights[0].direction, 0.) * viewMatrix).xyz);   // view → world
   float back = pow(max(0., dot(-V.xz, L.xz) / max(1e-3, length(V.xz) * length(L.xz))), 3.);
-  float sss = clamp(h * .6 + .35, 0., 1.) * (.25 + .75 * back) * (1. - V.y * .6);
-  totalEmissiveRadiance += vec3(.05, .16, .13) * sss * directionalLights[0].color * .3 * (1. - smoothstep(1500., 5000., dist));
+  float sss = clamp(h * .6 + .35, 0., 1.) * (.25 + .75 * back) * (1. - V.y * .6) * amp;
+  totalEmissiveRadiance += vec3(.05, .16, .13) * sss * directionalLights[0].color * .25 * (1. - smoothstep(1500., 5000., dist));
 #endif
 
-  // foam: lapping against quays and banks, broken up and drifting
+  // ─── foam: shore lapping, whitecaps (Monahan: W = 3.84e-6 U^3.41), wakes ───
+  float s1 = textureLod(alphaMap, vAlphaMapUv, 1.2).r;
   float edge = 1. - smoothstep(.5, .97, s1);
   float fn = wn(p * .9 + vec2(t * .25, -t * .18)) * .6 + wn(p * 2.7 - vec2(t * .4, t * .3)) * .4;
-  float foam = edge * smoothstep(.62, .78, fn + edge * .45 + h * .15) * (1. - smoothstep(30., 140., fw * 400.));
+  float fine = 1. - smoothstep(30., 140., fw * 400.);
+  float foam = edge * smoothstep(.62, .78, fn + edge * .45 + h * .15) * fine * (.4 + .6 * amp);
+  float cover = clamp(3.84e-6 * pow(U, 3.41) * shelter, 0., .2);
+  float cap = wn(q / vec2(9., 5.) - vec2(t * 1.6, 0.)) * .7 + wn(p / 2.3 + t * .3) * .3;
+  float caps = smoothstep(1. - cover * 4., 1. - cover * 4. + .06, cap) * smoothstep(0., .5, h + .2);
+  foam = max(foam, caps * .85);
+  foam = max(foam, foamW);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .8, .78), foam);
   roughnessFactor = mix(roughnessFactor, .8, foam);
 
@@ -384,12 +469,12 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
     vec2 vd = normalize(vWPos.xz - cameraPosition.xz + 1e-4), vp = vec2(-vd.y, vd.x);
     float across = dot(vWPos.xz, vp), along = dot(vWPos.xz, vd);
     float streak = smoothstep(.55, .95, wn(vec2(across / 2.2, along / 35. + t * .05))) * (.6 + .8 * wn(vec2(across * 1.7, along * .6 - t * 1.3)));
-    float bank = 1. - smoothstep(.35, 1., s3 * .5 + s2 * .5);
+    float bank = 1. - smoothstep(60., 500., shoreD);
     totalEmissiveRadiance += vec3(1., .62, .3) * streak * bank * uNight * .35;
   }
-}`);   // (the environment is the real sky now, at full strength: the water mirrors it as it is)
+}`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-water-v4';
+  m.customProgramCacheKey = () => 'ilisboa-water-v5';
   return m;
 }
 

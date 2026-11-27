@@ -9,6 +9,7 @@ import { createTraffic } from './traffic.js';
 import { createTransit } from './transit.js';
 import { createPlanes } from './planes.js';
 import { createCars } from './cars.js';
+import { createShips } from './ships.js';
 import { claimTap, probe } from '../pick.js';
 import { registerLayer } from '../layers/registry.js';
 
@@ -20,9 +21,10 @@ const LAYERS = [
 
 export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, night = { value: 0 }, mobile = false, lod = () => 1 }) {
   const ground = createGround(scene, bounds);
-  const ctx = { scene, ground, ll, status: () => renderStatus() };
-  const layers = { traffic: createTraffic(ctx), transit: createTransit(ctx), planes: createPlanes(ctx) };
+  const ctx = { scene, ground, ll, camera, status: () => renderStatus() };
+  const layers = { traffic: createTraffic(ctx), transit: createTransit(ctx), planes: createPlanes(ctx), ships: createShips(ctx) };
   layers.planes.start();   // aircraft are always in the sky
+  layers.ships.set(true);   // and boats always on the river (no toggle: they're part of the scenery, like the ambient cars)
   // ambient cars: always on, no toggle; their numbers and speeds follow the live traffic
   const cars = createCars({ scene, ground, ll, camera, canvas, night, mobile, lod });
 
@@ -46,20 +48,20 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 400) return;
     const r = canvas.getBoundingClientRect(), v = new THREE.Vector3();
     let best = null, bd = e.pointerType === 'touch' ? 34 : 26;   // a fingertip is less precise than a cursor
-    for (const { key } of [...LAYERS, { key: 'cars' }]) {
+    for (const { key } of [...LAYERS, { key: 'ships' }, { key: 'cars' }]) {
       const src = key === 'cars' ? cars : layers[key];
       if (key !== 'cars' && !src.on) continue;
       for (const c of src.pickables()) {
         v.set(...c.pos).project(camera);
         if (v.z > 1) continue;
         const sx = r.left + ((v.x + 1) / 2) * r.width, sy = r.top + ((1 - v.y) / 2) * r.height, d = Math.hypot(sx - e.clientX, sy - e.clientY);
-        const dd = key === 'cars' ? d * 1.8 : d;   // a bus, tram or plane wins over a passing car
+        const dd = key === 'cars' || c.weak ? d * 1.8 : d;   // a bus, tram or plane wins over a passing car
         if (dd < bd) { bd = dd; best = { ...c, key }; }
       }
     }
     if (!best) { if (!followed) card.hidden = true; return; }   // while following, a stray tap on the map does not end it
     // a passing ambient car only wins over a landmark behind it when the tap is right on it
-    if (best.key === 'cars' && bd > 12 && probe('landmark', e.clientX, e.clientY)) return;
+    if ((best.key === 'cars' || best.weak) && bd > 12 && probe('landmark', e.clientX, e.clientY)) return;
     claimTap('live');   // a vehicle wins the tap over a landmark or the ground layers behind it (src/pick.js)
     if (best.id != null && layers[best.key]?.track) startFollow(best.key, best.id);
     else showCard(best.key, best.info(), false);
@@ -134,7 +136,7 @@ export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, n
       const dt = Math.min(0.5, last ? (now - last) / 1000 : 0); last = now;
       ground.scan(now);
       cars.update(dt, now);
-      const any = layers.traffic.on || layers.transit.on || layers.planes.on;
+      const any = layers.traffic.on || layers.transit.on || layers.planes.on || layers.ships.on;
       if (!any) return;
       // on-screen widths: metres per CSS pixel at unit distance
       ribbonUniforms.uPx.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, canvas.clientHeight);
