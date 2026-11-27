@@ -1,0 +1,74 @@
+## agency
+agency_id,agency_name,agency_url,agency_timezone,agency_lang,agency_phone,agency_fare_url,agency_email
+1,Carris,http://www.carris.pt,Europe/Lisbon,pt,,,
+
+(0.0 MB)
+
+## routes
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+165_0,1,703,Charneca - B. Sta. Cruz,,3,,,
+201_2,1,754,Estr. Benfica (Furnas) - Av. D. Luis I,,3,,,
+143_1,1,720,R. Prof. Mira Fernandes - Estrela,,3,,,
+116_3,1,726,Mal Penteada - Laranjeiras (Metro),,3,,,
+64_0,1,207,Cais Sodré - Fetais,,3,,,
+(0.0 MB)
+
+## trips
+route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed
+191_0,Inverno_Sabado_20260606,7365_20260606_191_0_5,,,0,,191_0_CIRC_shp,,
+150_0,Inverno_Util_20260606,6831_20260606_150_0_7,,,1,,150_0_DESC_shp,,
+250_0,Agosto_Util_20260606,22220_20260606_250_0_14,,,0,,250_0_CIRC_shp,,
+174_0,Ferias Escolares_Util_20260606,8130_20260606_174_0_5,,,0,,174_0_ASC_shp,,
+106_0,Agosto_Util_20260606,6281_20260606_106_0_6,,,0,,106_0_ASC_shp,,
+(6.8 MB)
+
+## stops
+stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,stop_timezone,wheelchair_boarding
+6713,6713,Pç. Flores,,38.71483290,-9.15158340,,,0,,,
+1517,1517,Pç. Espanha (Pq. Urbano),,38.73718620,-9.15783080,,,0,,,
+12812,12812,Estação Pontinha,,38.76063920,-9.19462580,,,0,,,
+8022,8022,R. Arco Carvalhão II,,38.72110470,-9.16914880,,,0,,,
+3713,3713,R. Salgueiro Maia,,38.74817070,-9.11293980,,,0,,,
+(0.1 MB)
+
+## stop_times
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,shape_dist_traveled,timepoint
+5975_20260606_108_0_16,14:51:00,14:51:00,11001,3,,,,1047,
+4790_20260606_104_0_5,11:38:18,11:38:18,12813,8,,,,2516,
+4831_20260606_104_0_6,12:31:10,12:31:10,14102,40,,,,16520,
+3840_20260606_170_0_5,11:14:04,11:14:04,16002,40,,,,14249,
+4704_20260606_204_0_8,15:09:11,15:09:11,2204,36,,,,14996,
+(143.7 MB)
+
+## shapes
+shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence,shape_dist_traveled
+143_1_ASC_shp,38.71404840,-9.16090900,371,6610
+100_3_ASC_shp,38.79440430,-9.10052300,260,4648
+143_1_DESC_shp,38.73540770,-9.13791460,371,6851
+147_3_ASC_shp,38.70753420,-9.13346800,13,82
+251_0_CIRC_shp,38.74220580,-9.13186090,235,4663
+(6.4 MB)
+
+## calendar
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+Inverno_Util_20260606,1,1,1,1,1,0,0,20260606,20261231
+Inverno_Sabado_20260606,0,0,0,0,0,1,0,20260606,20261231
+Inverno_DomingoFeriado_20260606,0,0,0,0,0,0,1,20260606,20261231
+
+(0.0 MB)
+
+## calendar_dates
+service_id,date,exception_type
+Verao_Util_20260606,20260902,1
+Inverno_Util_20260606,20260730,2
+Inverno_Util_20260606,20260907,2
+Inverno_Util_20260606,20260827,2
+Agosto_DomingoFeriado_20260606,20260830,1
+(0.0 MB)
+
+## feed_info
+feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version
+Carris,http://www.carris.pt,pt,20261126,20261211,20261126
+
+(0.0 MB)
+
