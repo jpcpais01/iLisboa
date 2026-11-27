@@ -82,6 +82,9 @@
     },
     "api/ships.js": {
       "maxDuration": 45
+    },
+    "api/aiphoto.js": {
+      "maxDuration": 120
     }
   }
 }
