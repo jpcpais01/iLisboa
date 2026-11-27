@@ -117,7 +117,7 @@ export function makeGenome({ proj, hash }) {
         frame = pickW([[FRAME.STONE, 5], [FRAME.WHITE, 4], [FRAME.ALU, 1]], ud('fr'));
         shut = pickW([[SHUT.ROLLER, 6], [SHUT.PERSIANA, 3], [SHUT.INNER, 1]], ud('sh'));
         shutC = pickW([[2, 4], [0, 2], [4, 2], [5, 2], [6, 1]], ud('sc'));
-        balc = pickW([[BALC.SLAB_BAY, 4], [BALC.IRON_NOBLE, 2], [BALC.LOGGIA, 2], [BALC.NONE, 2]], ud('ba'));
+        balc = pickW([[BALC.SLAB_BAY, 2], [BALC.IRON_NOBLE, 3], [BALC.LOGGIA, 2], [BALC.NONE, 4]], ud('ba'));
         trim = pickW([[TRIM.STONE_GF, 6], [TRIM.STONE, 3], [TRIM.WHITE, 1]], ud('tr'));
         if (ud('az') < 0.1) { fin = FIN.AZ_PLAIN; finC = Math.floor(ud('fc') * 8); }
         life = 1 + (ub('lf') < 0.5 ? 1 : 0); break;
@@ -125,7 +125,7 @@ export function makeGenome({ proj, hash }) {
         frame = pickW([[FRAME.WHITE, 4], [FRAME.ALU, 4], [FRAME.DARK, 1]], ud('fr'));
         shut = pickW([[SHUT.ROLLER, 8], [SHUT.VENETIAN, 1], [SHUT.NONE, 1]], ud('sh'));
         shutC = pickW([[4, 4], [6, 3], [2, 2], [0, 1], [5, 2], [7, 1]], ud('sc'));
-        balc = spec.sub8 === 1 ? BALC.SLAB_BAND : pickW([[BALC.SLAB_BAY, 4], [BALC.SLAB_BAND, 3], [BALC.LOGGIA, 3], [BALC.NONE, 1]], ud('ba'));
+        balc = spec.sub8 === 1 ? BALC.SLAB_BAND : pickW([[BALC.SLAB_BAY, 3], [BALC.SLAB_BAND, 2], [BALC.LOGGIA, 3], [BALC.NONE, 3]], ud('ba'));
         trim = pickW([[TRIM.SLABS, 4], [TRIM.TILE_GF, 3], [TRIM.NONE, 3], [TRIM.STONE_GF, 1]], ud('tr'));
         { const a = ud('az'); if (a < 0.3) { fin = FIN.PASTILHA; finC = Math.floor(ud('fc') * 8); } else if (a < 0.36) { fin = FIN.BRICK; } }
         life = 2 + (ub('lf') < 0.6 ? 1 : 0); break;
@@ -133,7 +133,7 @@ export function makeGenome({ proj, hash }) {
         frame = pickW([[FRAME.ALU, 5], [FRAME.DARK, 4], [FRAME.WHITE, 2]], ud('fr'));
         shut = pickW([[SHUT.ROLLER, 9], [SHUT.NONE, 1]], ud('sh'));
         shutC = pickW([[2, 5], [4, 3], [5, 3], [6, 1]], ud('sc'));
-        balc = pickW([[BALC.MARQUISE, 4], [BALC.SLAB_BAY, 4], [BALC.LOGGIA, 2], [BALC.NONE, 1]], ud('ba'));
+        balc = pickW([[BALC.MARQUISE, 4], [BALC.SLAB_BAY, 2], [BALC.LOGGIA, 2], [BALC.NONE, 3]], ud('ba'));
         trim = pickW([[TRIM.TILE_GF, 5], [TRIM.NONE, 3], [TRIM.STONE_GF, 2], [TRIM.SLABS, 1]], ud('tr'));
         { const a = ud('az'); if (a < 0.14) { fin = FIN.BRICK; } else if (a < 0.24) { fin = FIN.PASTILHA; finC = Math.floor(ud('fc') * 8); } }
         life = 1 + (ub('lf') < 0.7 ? 1 : 0) + (ub('lf2') < 0.3 ? 1 : 0); break;
@@ -141,7 +141,7 @@ export function makeGenome({ proj, hash }) {
         frame = pickW([[FRAME.DARK, 5], [FRAME.ALU, 4], [FRAME.WHITE, 1]], ud('fr'));
         shut = pickW([[SHUT.NONE, 4], [SHUT.VENETIAN, 3], [SHUT.ROLLER, 3]], ud('sh'));
         shutC = pickW([[6, 4], [7, 3], [4, 2]], ud('sc'));
-        balc = pickW([[BALC.SLAB_BAND, 4], [BALC.LOGGIA, 3], [BALC.SLAB_BAY, 2], [BALC.NONE, 2]], ud('ba'));
+        balc = pickW([[BALC.SLAB_BAND, 3], [BALC.LOGGIA, 3], [BALC.SLAB_BAY, 2], [BALC.NONE, 3]], ud('ba'));
         trim = pickW([[TRIM.NONE, 6], [TRIM.SLABS, 2], [TRIM.STONE_GF, 2]], ud('tr'));
         { const a = ud('az'); if (a < 0.3) fin = FIN.STONE; else if (a < 0.45) fin = FIN.PANEL; }
         life = ub('lf') < 0.6 ? 0 : 1;
