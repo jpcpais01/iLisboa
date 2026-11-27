@@ -403,6 +403,9 @@ function stream(force) {
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
   if (!OLDLOD) DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
   const FC = fullCap(), MC = midCap();
+  // an area's trees, parked cars and lamps come with its first tile; past the tiles' reach (far views draw only the far level)
+  // they are woken by distance instead, so a forest seen from afar still stands
+  if (!OLDLOD) for (const a of AREAS) if (!a.ready && a.far && rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], x, y) <= M + 900) wake(a).catch((e) => console.error(e));
   const want = [];
   for (const t of tiles) {
     const d = rectDist(t.b, x, y), dc = camDist(t.b);
@@ -659,6 +662,7 @@ let rainK = 0, fogK = 0, wxTarget = { rain: 0, fog: 0 };
 const rain = createRain({ mobile: isMobile }); scene.add(rain.mesh);
 const _rainLight = new THREE.Color();
 const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);   // always present: a light count change recompiles every shader
+const _bounce = new THREE.Color(), CITY_TINT = new THREE.Color(1.0, 0.92, 0.82);
 function setOvercast(c) {
   if (Math.abs(c - overcast) < 0.02) return;
   overcast = c; setTime(lastH, true);
@@ -697,7 +701,13 @@ function setTime(h, now = false) {
     // (the clear-sky environment is blue; under a full deck part of it hands over to that neutral light)
     const day = Math.max(0, sunDir.y + 0.05) / (Math.abs(sunDir.y) + 0.3);
     scene.environmentIntensity = 1 - 0.45 * c * c;
-    cloudLight.intensity = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
+    // one bounce of sunlight off the city (ground and sunlit walls, albedo ~0.25, half the hemisphere of a street-level
+    // point): without it a street in shade is lit by the blue sky alone and goes near-black navy. Warm, as the city is.
+    const cloudI = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
+    const sunH = (st.sunColor.r + st.sunColor.g + st.sunColor.b) / 3 * beam * Math.max(0, sunDir.y), bounceI = 0.28 * sunH;
+    cloudLight.color.setRGB(0.91, 0.93, 0.95).multiplyScalar(cloudI).add(_bounce.copy(st.sunColor).multiplyScalar(1 / Math.max(1e-3, (st.sunColor.r + st.sunColor.g + st.sunColor.b) / 3)).multiply(CITY_TINT).multiplyScalar(bounceI));
+    cloudLight.intensity = 1;
+    cityUniforms.uBounce.value.copy(_bounce);
     haze.density = 0.00009 * (1 + 3 * rainK + 30 * fogK);   // fog: ~1 km visibility
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
