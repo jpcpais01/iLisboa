@@ -1,0 +1,19 @@
+[
+ {
+  "name": "k000_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k000_render.jpg",
+    "@k000_depth.png",
+    "@k000_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ }
+]
