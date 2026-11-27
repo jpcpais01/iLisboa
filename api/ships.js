@@ -6,9 +6,10 @@
 // Needs AISSTREAM_KEY in the Vercel environment; without it answers { error: 'nokey' } (the boats layer then shows the
 // timetable ferries and illustrative traffic).
 import { fwd, r1 } from './_lib/geo.js';
+import WS from 'ws';   // (Node's built-in WebSocket never completed the handshake with aisstream from Vercel)
 
 const BOX = [[38.55, -9.55], [38.90, -8.85]];   // the bar to Alcochete, Cascais to Seixal
-const LISTEN = 6500, KEEP = 20 * 60 * 1000;
+const LISTEN = 6000, CONNECT = 7000, KEEP = 20 * 60 * 1000;
 const mem = (globalThis.__ais ??= { pos: new Map(), stat: new Map(), t: 0, err: '', diag: {} });
 
 function listen(key) {
@@ -16,12 +17,12 @@ function listen(key) {
     let ws, done = false;
     const t0 = Date.now(), dg = (mem.diag = { opened: false, msgs: 0, types: {}, close: null, ms: 0 });
     const finish = (err) => { if (done) return; done = true; clearTimeout(timer); dg.ms = Date.now() - t0; try { ws?.close(); } catch { /* closed */ } if (err) mem.err = err; resolve(); };
-    const timer = setTimeout(() => finish(), LISTEN);
-    try { ws = new WebSocket('wss://stream.aisstream.io/v0/stream'); } catch (e) { return finish(`websocket: ${e.message}`); }
+    let timer = setTimeout(() => finish('aisstream: no connection'), CONNECT);
+    try { ws = new WS('wss://stream.aisstream.io/v0/stream', { perMessageDeflate: true }); } catch (e) { return finish(`websocket: ${e.message}`); }
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => (dg.opened = true) && ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [BOX],
-      FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport', 'ShipStaticData', 'StaticDataReport'] }));
-    ws.onerror = (e) => finish(`websocket error ${e?.message || ''}`);
+    ws.onopen = () => { dg.opened = true; dg.openMs = Date.now() - t0; clearTimeout(timer); timer = setTimeout(() => finish(), LISTEN); ws.send(JSON.stringify({ APIKey: key, BoundingBoxes: [BOX],
+      FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport', 'ShipStaticData', 'StaticDataReport'] })); };
+    ws.onerror = (e) => finish(`websocket error ${e?.message || e?.error?.message || ''}`);
     ws.onclose = (e) => { dg.close = [e?.code, e?.reason]; finish(); };
     const dec = new TextDecoder();
     ws.onmessage = (ev) => {
@@ -59,7 +60,6 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   const key = process.env.AISSTREAM_KEY;
   if (!key) { res.setHeader('Cache-Control', 'public, s-maxage=300'); return res.status(200).send(JSON.stringify({ error: 'nokey' })); }
-  if (typeof WebSocket === 'undefined') { res.setHeader('Cache-Control', 'public, s-maxage=60'); return res.status(500).send(JSON.stringify({ error: 'no WebSocket in this Node runtime (needs Node 22+)' })); }
   mem.err = '';
   if (Date.now() - mem.t > 15000) { await listen(key); mem.t = Date.now(); }
   const now = Date.now(), out = [];
