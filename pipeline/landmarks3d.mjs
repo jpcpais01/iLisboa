@@ -22,6 +22,8 @@ import { Document, NodeIO, Logger } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { weld, meshopt } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
+import { fromFile } from 'geotiff';
+import { makeProjection } from './lib/osm.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 await MeshoptDecoder.ready; await MeshoptEncoder.ready;
@@ -146,6 +148,12 @@ for (const { A, t } of tileList) {
     const kind = Math.round(T.style[a * 4]), variant = Math.round(T.style[a * 4 + 1]);
     if (kind === 6 || (kind === 0 && variant === 5)) g.auth++;
     if (kind === 1 || kind === 2) g.wallV[variant] = (g.wallV[variant] || 0) + 1;
+    if (Math.abs(T.nrm[a * 3 + 1]) < 0.2 && (kind === 6 || kind === 0)) {   // stone / plain walls: big quads = bare massing, small = hand-built detail
+      const ax = T.pos[b * 3] - T.pos[a * 3], ay = T.pos[b * 3 + 1] - T.pos[a * 3 + 1], az = T.pos[b * 3 + 2] - T.pos[a * 3 + 2], bx = T.pos[c * 3] - T.pos[a * 3], by = T.pos[c * 3 + 1] - T.pos[a * 3 + 1], bz = T.pos[c * 3 + 2] - T.pos[a * 3 + 2];
+      const ar = Math.hypot(ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx) / 2;
+      g.sw = (g.sw || 0) + ar; g.sn = (g.sn || 0) + 1; if (ar > 12) g.sbig = (g.sbig || 0) + ar; if (ar < 1.5) g.ssmall = (g.ssmall || 0) + 1;
+    }
+    if (Math.abs(T.nrm[a * 3 + 1]) < 0.2) { const kk = 'k' + kind + 'v' + variant; (g.wk || (g.wk = {}))[kk] = (g.wk[kk] || 0) + 1; }
   }
   const key = `${A.area}:${t.i}_${t.j}`; cache.set(key, T); triGroups.set(key, tg);
 }
@@ -154,14 +162,16 @@ let nRestyle = 0;
 for (const g of gIndex) {
   if (!g.tris) continue;
   const wv = Object.entries(g.wallV).sort((a, b) => b[1] - a[1]), dom = wv.length ? +wv[0][0] : -1;
+  g.blank = /^(worship|church|chapel|monastery|basilica|cathedral|castle|palace|manor|museum|library|government|townhall|courthouse|university|hospital|theatre|building|)$/.test(g.kind || '') && LOOKS[g.key] !== null;   // bare walls get openings (decided per wall)   // stone massing with nothing on it (church-like buildings the rules drew bare)
   g.authored = g.auth / g.tris > 0.4;
+  g.churchy = /^(worship|church|chapel|basilica|cathedral)$/.test(g.kind || '');
   g.look = LOOKS[g.key] === null ? null : LOOKS[g.key] || null;
   g.palatial = !g.authored && PALATIAL.test(g.kind || '') && LOOKS[g.key] !== null;
   g.restyle = g.palatial && (dom === 1 || dom === 2) ? 4 : -1;   // vernacular / azulejo houses → palatial window grid
   g.formal = g.restyle === 4 || (!g.authored && (dom === 4 || dom === 0) && LOOKS[g.key] !== null);
   if (g.restyle >= 0 || g.look) nRestyle++;
 }
-if (process.env.LM_DBG) for (const g of gIndex) if (process.env.LM_DBG.split(',').includes(g.key)) log(g.name, g.kind, JSON.stringify(g.wallV), 'auth', g.auth, '/', g.tris, 'restyle', g.restyle, 'formal', g.formal);
+if (process.env.LM_DBG) for (const g of gIndex) if (process.env.LM_DBG.split(',').includes(g.key)) log(g.name, g.kind, JSON.stringify(g.wallV), JSON.stringify(g.wk), 'auth', g.auth, '/', g.tris, 'restyle', g.restyle, 'formal', g.formal);
 log(`landmarks in tiles: ${gIndex.filter((g) => g.tris).length}, authored ${gIndex.filter((g) => g.authored).length}, restyled ${nRestyle}, formal façades ${gIndex.filter((g) => g.formal).length}`);
 
 // ─── pass 2: stonework per tile ──────────────────────────────────────────
@@ -172,8 +182,9 @@ const written = new Set();
 const stats = { walls: 0, windows: 0, ridges: 0, eaves: 0, bal: 0, tris: 0, bytes: 0 };
 const K5 = (v) => Math.round(v * 20);   // 5 cm vertex key
 
+const sinks = new Map(), sinkFor = (key) => sinks.get(key) || sinks.set(key, sink()).get(key);
 for (const [key, T] of cache) {
-  const tg = triGroups.get(key), S = sink(), nT = T.idx.length / 3;
+  const tg = triGroups.get(key), S = sinkFor(key), nT = T.idx.length / 3;
   const V = (i) => [T.pos[i * 3], T.pos[i * 3 + 1], T.pos[i * 3 + 2]];
   // ── walls: façade triangles grouped into wall quads by their plan segment ──
   const walls = new Map();
@@ -273,6 +284,69 @@ for (const [key, T] of cache) {
       }
     }
   }
+  // ── bare walls: big stone / plain quads with nothing hand-built in front of them (churches and convents the rules drew
+  //    as plain massing) get openings: tall round-arched windows between pilaster strips on churches, rows of framed
+  //    windows on convents and palaces; a cornice and a socle on both ──
+  {
+    const bw = new Map(), small = new Map();   // per group: wall quads, and centroids of small (hand-built) triangles
+    for (let k = 0; k < nT; k++) {
+      const gi = tg[k]; if (gi < 0) continue; const g = gIndex[gi]; if (!g.blank) continue;
+      const ids = [T.idx[k * 3], T.idx[k * 3 + 1], T.idx[k * 3 + 2]], a = ids[0], kind = Math.round(T.style[a * 4]);
+      const P = ids.map(V), ex = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], ey = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+      const ar = Math.hypot(ex[1] * ey[2] - ex[2] * ey[1], ex[2] * ey[0] - ex[0] * ey[2], ex[0] * ey[1] - ex[1] * ey[0]) / 2;
+      if (ar < 4) { (small.get(gi) || small.set(gi, []).get(gi)).push([(P[0][0] + P[1][0] + P[2][0]) / 3, (P[0][1] + P[1][1] + P[2][1]) / 3, (P[0][2] + P[1][2] + P[2][2]) / 3]); continue; }
+      if (kind !== 6 || Math.abs(T.nrm[a * 3 + 1]) > 0.15) continue;   // stone massing only: blank (2) walls are blind on purpose
+      const pts = []; for (const p of P) if (!pts.some((q) => Math.hypot(q[0] - p[0], q[2] - p[2]) < 0.05)) pts.push(p);
+      if (pts.length !== 2) continue;
+      let [p, q] = pts; const nx = T.nrm[a * 3], nz = T.nrm[a * 3 + 2], tx = q[0] - p[0], ty = -(q[2] - p[2]);
+      if (ty * nx + tx * nz < 0) [p, q] = [q, p];
+      const wk = `${gi}|${K5(p[0])},${K5(p[2])},${K5(q[0])},${K5(q[2])}`;
+      let w = bw.get(wk); if (!w) { w = { gi, p: [p[0], -p[2]], q: [q[0], -q[2]], lo: Infinity, hi: -Infinity, col: [T.col[a * 3], T.col[a * 3 + 1], T.col[a * 3 + 2]], ground: Infinity }; bw.set(wk, w); }
+      for (const i of ids) { const y = T.pos[i * 3 + 1]; w.lo = Math.min(w.lo, y); w.hi = Math.max(w.hi, y); const sy = T.surf[i * 2 + 1]; if (sy > -2 && sy < 200) w.ground = Math.min(w.ground, y - sy); }
+    }
+    const DARK = LIN('#2a2c30');
+    for (const w of bw.values()) {
+      const g = gIndex[w.gi], Lw = Math.hypot(w.q[0] - w.p[0], w.q[1] - w.p[1]); if (Lw < 3) continue;
+      const t = [(w.q[0] - w.p[0]) / Lw, (w.q[1] - w.p[1]) / Lw], n = [t[1], -t[0]];
+      const g0 = isFinite(w.ground) && w.ground > w.lo - 0.5 ? w.ground : w.lo + 1.5, top = w.hi, H = top - g0;
+      if (H < 4) continue;
+      // anything hand-built in front of this wall? then it is not bare
+      let busy = 0;
+      for (const c of small.get(w.gi) || []) {
+        const dx = c[0] - w.p[0], dy = -c[2] - w.p[1], u = dx * t[0] + dy * t[1], d = dx * n[0] + dy * n[1];
+        if (u > -0.5 && u < Lw + 0.5 && d > -0.3 && d < 1.2 && c[1] > g0 && c[1] < top + 0.5) busy++;
+      }
+      if (process.env.LM_DBG && process.env.LM_DBG.split(',').includes(g.key)) log('bare?', g.name, Lw.toFixed(1), 'H', H.toFixed(1), 'busy', busy, 'g0', g0.toFixed(1), w.lo.toFixed(1), w.hi.toFixed(1));
+      if (busy > 2) continue;
+      stats.bare = (stats.bare || 0) + 1;
+      const trim = LIOZ, tall = g.churchy;
+      wboxF(S, w.p, t, n, -0.06, Lw + 0.06, 0, 0.09, w.lo, g0 + 0.8, LIOZ_D);                                 // socle
+      wboxF(S, w.p, t, n, -0.18, Lw + 0.18, 0, 0.26, top - 0.34, top - 0.04, trim, { bottom: true });         // cornice
+      wboxF(S, w.p, t, n, -0.1, Lw + 0.1, 0, 0.13, top - 0.64, top - 0.34, trim, { bottom: true });
+      if (Lw > 4) { wboxF(S, w.p, t, n, 0, 0.55, 0, 0.1, g0 + 0.8, top - 0.64, trim); wboxF(S, w.p, t, n, Lw - 0.55, Lw, 0, 0.1, g0 + 0.8, top - 0.64, trim); }
+      if (tall) {
+        // nave: bays of ~5.5 m, a pilaster strip between bays, one tall arched window high in each
+        const nb = Math.max(1, Math.round((Lw - 1.1) / 5.5)), bl = (Lw - 1.1) / nb;
+        for (let b = 0; b < nb; b++) {
+          const u = 0.55 + bl * (b + 0.5);
+          if (b > 0) wboxF(S, w.p, t, n, 0.55 + bl * b - 0.3, 0.55 + bl * b + 0.3, 0, 0.1, g0 + 0.8, top - 0.64, trim);
+          const ww = Math.min(1.6, bl * 0.34, H * 0.2), z0 = g0 + Math.max(H < 7 ? H * 0.34 : 2.6, H * 0.42 * (H < 7 ? 0.8 : 1)), z1 = Math.min(top - (H < 7 ? 0.9 : 1.3), z0 + Math.max(2.2, H * 0.36));
+          if (z1 - z0 < 1.2) continue;
+          archWindow(S, w.p, t, n, u, ww, z0, z1, DARK, trim);
+          stats.windows++;
+        }
+      } else {
+        // convent / palace ranges: storeys of ~4 m, a framed window every ~3.6 m
+        const nb = Math.max(1, Math.round((Lw - 1.1) / 3.6)), bl = (Lw - 1.1) / nb, fl = Math.max(1, Math.round((H - 0.6) / 4.2)), fh = (H - 0.6) / fl;
+        for (let f = 0; f < fl; f++) for (let b = 0; b < nb; b++) {
+          const u = 0.55 + bl * (b + 0.5), ww = Math.min(1.25, bl * 0.38), z0 = g0 + f * fh + (f === 0 ? 1.1 : fh * 0.22), z1 = g0 + f * fh + fh * 0.8;
+          if (z1 > top - 0.8 || z1 - z0 < 1) continue;
+          rectWindow(S, w.p, t, n, u, ww, z0, z1, DARK, trim);
+          stats.windows++;
+        }
+      }
+    }
+  }
   // ── roofs: ridge and hip tiles, eave tiles ──
   const edges = new Map();
   for (let k = 0; k < nT; k++) {
@@ -312,6 +386,13 @@ for (const [key, T] of cache) {
       stats.eaves++;
     }
   }
+}
+// modelled one by one in authored.mjs: their towers and domes are already there
+// domes only where one is known to stand (a residual blob elsewhere is as often a tower, a crane or trees)
+var DOMED = /^(Igreja da Memória|Igreja de Santo António de Lisboa|Igreja do Santíssimo Coração de Jesus)$/;
+var HANDMADE = /^(Sé de Lisboa|Sé Patriarcal|Catedral|Basílica da Estrela|Basílica de Nossa Senhora|Panteão|Igreja de Santa Engrácia|Convento do Carmo|Igreja do Convento do Carmo|Mosteiro dos Jerónimos|Igreja de Santa Maria de Belém)/;
+await crowns();
+for (const [key, S] of sinks) {
   if (!S.pos.length) continue;
   const [area, ij] = key.split(':'), file = `l_${ij}.glb`;
   fs.mkdirSync(path.join(OUT, area), { recursive: true });
@@ -329,7 +410,7 @@ for (const g of gIndex) {
   }
 }
 fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(out));
-log(`walls ${stats.walls}, windows ${stats.windows}, ridges ${stats.ridges}, eaves ${stats.eaves}; ${Object.keys(out.tiles).length} tiles, ${(stats.tris / 1e6).toFixed(2)} M tris, ${(stats.bytes / 1e6).toFixed(1)} MB; restyle ${out.restyle.length} outlines`);
+log(`domes ${stats.domes || 0}, towers ${stats.towers || 0}; bare walls ${stats.bare || 0}; walls ${stats.walls}, windows ${stats.windows}, ridges ${stats.ridges}, eaves ${stats.eaves}; ${Object.keys(out.tiles).length} tiles, ${(stats.tris / 1e6).toFixed(2)} M tris, ${(stats.bytes / 1e6).toFixed(1)} MB; restyle ${out.restyle.length} outlines`);
 
 // ─── pieces ──────────────────────────────────────────────────────────────
 function fixLast(S, nTri, n) {   // make the last nTri triangles face outward (+n in plan) or up
@@ -349,6 +430,35 @@ function railing(S, o, t, n, u0, u1, d, z0, z1) {
   for (let k = 1; k < nb; k++) { const u = u0 + ((u1 - u0) * k) / nb; plate(S, o, t, n, u - 0.016, u + 0.016, d - 0.015, z0, z1 - 0.05, IRON); }
   wboxF(S, o, t, n, u0 - 0.02, u0 + 0.02, 0.02, d, z0, z1, IRON); wboxF(S, o, t, n, u1 - 0.02, u1 + 0.02, 0.02, d, z0, z1, IRON);
   void P;
+}
+// a window opening on a bare wall: dark recessed pane (a panel just proud of the wall), lioz jambs, head and sill
+function rectWindow(S, o, t, n, u, ww, z0, z1, dark, trim) {
+  const hw = ww / 2, f = 0.18;
+  plate(S, o, t, n, u - hw, u + hw, 0.02, z0, z1, dark);
+  wboxF(S, o, t, n, u - hw - f, u - hw, 0, 0.12, z0, z1 + f, trim);
+  wboxF(S, o, t, n, u + hw, u + hw + f, 0, 0.12, z0, z1 + f, trim);
+  wboxF(S, o, t, n, u - hw, u + hw, 0, 0.12, z1, z1 + f, trim, { bottom: true });
+  wboxF(S, o, t, n, u - hw - f - 0.06, u + hw + f + 0.06, 0, 0.16, z0 - 0.12, z0, trim);
+}
+// a tall round-headed church window: dark pane with a semicircular head, a lioz surround following it
+function archWindow(S, o, t, n, u, ww, z0, z1, dark, trim) {
+  const hw = ww / 2, zs = z1 - hw, f = 0.2, N = 7;
+  const P = (uu, d, z) => [o[0] + t[0] * uu + n[0] * d, z, -(o[1] + t[1] * uu + n[1] * d)];
+  plate(S, o, t, n, u - hw, u + hw, 0.02, z0, zs, dark);
+  let s0 = S.pos.length;
+  for (let i = 0; i < N; i++) { const a0 = (Math.PI * i) / N, a1 = (Math.PI * (i + 1)) / N; tri(S, P(u, 0.02, zs), P(u + Math.cos(a0) * hw, 0.02, zs + Math.sin(a0) * hw), P(u + Math.cos(a1) * hw, 0.02, zs + Math.sin(a1) * hw), dark); }
+  orient(S, s0, P(u, -1, zs));
+  wboxF(S, o, t, n, u - hw - f, u - hw, 0, 0.12, z0, zs, trim);
+  wboxF(S, o, t, n, u + hw, u + hw + f, 0, 0.12, z0, zs, trim);
+  s0 = S.pos.length;
+  for (let i = 0; i < N; i++) {   // the arch's surround: a ring of quads, front and outer face
+    const a0 = (Math.PI * i) / N, a1 = (Math.PI * (i + 1)) / N, r0 = hw, r1 = hw + f;
+    const A = (r, a, d) => P(u + Math.cos(a) * r, d, zs + Math.sin(a) * r);
+    quad(S, A(r0, a0, 0.12), A(r1, a0, 0.12), A(r1, a1, 0.12), A(r0, a1, 0.12), trim);
+    quad(S, A(r1, a0, 0), A(r1, a1, 0), A(r1, a1, 0.12), A(r1, a0, 0.12), trim.map((v) => v * 0.92));
+  }
+  orient(S, s0, P(u, -1, zs));
+  wboxF(S, o, t, n, u - hw - f - 0.06, u + hw + f + 0.06, 0, 0.16, z0 - 0.14, z0, trim);
 }
 // a flat bar seen from outside only (balusters, iron bars): one quad facing +n
 function plate(S, o, t, n, u0, u1, d, z0, z1, col) {
@@ -397,6 +507,166 @@ function fixOutPlan(S, nTri, A, B, o) {   // up or outward (+o in x/z) faces
     for (let d = 0; d < 3; d++) { const t0 = S.pos[k + 3 + d]; S.pos[k + 3 + d] = S.pos[k + 6 + d]; S.pos[k + 6 + d] = t0; }
     for (let v = q; v < q + 3; v++) for (let d = 0; d < 3; d++) S.nrm[v * 3 + d] *= -1;
   }
+}
+
+// ─── domes and towers the tiles miss, from the 2024 LiDAR ────────────────
+// Where the survey's surface stands well above everything the tile draws inside a landmark's outline, in a compact blob,
+// something is missing: a dome over the crossing, a bell tower. Round and wide → drum and dome with a lantern; small →
+// a tower with belfry arches and a cap, its top at the measured height.
+async function crowns() {
+  const proj = makeProjection(IDX.areas[0].origin.lat, IDX.areas[0].origin.lon);
+  const rasters = new Map();
+  const lidar = async (area) => {
+    if (rasters.has(area)) return rasters.get(area);
+    const f = (k) => path.join(ROOT, 'data/lidar', `${area}_${k}.tif`);
+    if (!fs.existsSync(f('ndsm')) || !fs.existsSync(f('dtm'))) { rasters.set(area, null); return null; }
+    const rd = async (k) => { const img = await (await fromFile(f(k))).getImage(); const [r] = await img.readRasters(); const [ox, oy] = img.getOrigin(), [rx, ry] = img.getResolution(); return { r, ox, oy, rx, ry, w: img.getWidth(), h: img.getHeight() }; };
+    const N = await rd('ndsm'), D = await rd('dtm');
+    const at = (R, la, lo, bil) => { const fx = (lo - R.ox) / R.rx - (bil ? 0.5 : 0), fy = (la - R.oy) / R.ry - (bil ? 0.5 : 0), c = Math.floor(fx), k = Math.floor(fy); if (c < 0 || k < 0 || c + 1 >= R.w || k + 1 >= R.h) return NaN;
+      if (!bil) return R.r[k * R.w + c]; const tx = fx - c, ty = fy - k, v = [R.r[k * R.w + c], R.r[k * R.w + c + 1], R.r[(k + 1) * R.w + c], R.r[(k + 1) * R.w + c + 1]]; if (v.some((q) => q === 65535)) return NaN; return v[0] * (1 - tx) * (1 - ty) + v[1] * tx * (1 - ty) + v[2] * (1 - tx) * ty + v[3] * tx * ty; };
+    const fn = (x, y) => { const [la, lo] = proj.inv(x, y), n = at(N, la, lo, false), d = at(D, la, lo, true); return isFinite(n) && isFinite(d) ? d / 10 + n / 10 : NaN; };
+    rasters.set(area, fn); return fn;
+  };
+  // every landmark's up-facing triangles, across tiles, in world space
+  const roofs = new Map();
+  for (const [key, T] of cache) {
+    const tg = triGroups.get(key), nT = T.idx.length / 3;
+    for (let k = 0; k < nT; k++) {
+      const gi = tg[k]; if (gi < 0) continue;
+      const a = T.idx[k * 3], b = T.idx[k * 3 + 1], c = T.idx[k * 3 + 2];
+      if (T.nrm[a * 3 + 1] < 0.1) continue;
+      (roofs.get(gi) || roofs.set(gi, []).get(gi)).push([a, b, c].map((i) => [T.pos[i * 3], T.pos[i * 3 + 1], -T.pos[i * 3 + 2]]));
+    }
+  }
+  const area0 = (x, y) => IDX.areas.find((A) => x >= A.bounds.minX && x < A.bounds.maxX && y >= A.bounds.minY && y < A.bounds.maxY);
+  const tileKey = (x, y) => { const A = area0(x, y); if (!A) return null; const t = A.tiles.find((q) => x >= q.bounds[0] && x < q.bounds[2] && y >= q.bounds[1] && y < q.bounds[3]); return t && `${A.area}:${t.i}_${t.j}`; };
+  const DOME = LIN('#ddd6c8'), DOME_D = LIN('#b9b2a2'), CAP = LIN('#a35e48'), DARK = LIN('#2a2c30');
+  for (const [gi, tris] of roofs) {
+    const g = gIndex[gi]; if (process.env.LM_CDBG && g.name.includes(process.env.LM_CDBG)) log('grp', g.name, g.authored, g.kind, tris.length); if (!(g.churchy || /monastery|convent/.test(g.kind || '')) || HANDMADE.test(g.name)) continue;   // only churches carry domes and bell towers; elsewhere the residual is trees and plant rooms
+    // the rule-built parish churches (kind 6) already have their towers: they only lack the dome over the crossing
+    const A = area0((g.bb[0] + g.bb[2]) / 2, (g.bb[1] + g.bb[3]) / 2); if (!A) continue;
+    const L = await lidar(A.area); if (!L) continue;
+    // tile roof height on a 1 m grid
+    const x0 = Math.floor(g.bb[0]), y0 = Math.floor(g.bb[1]), W = Math.ceil(g.bb[2]) - x0 + 1, H = Math.ceil(g.bb[3]) - y0 + 1;
+    if (W * H > 250000) continue;
+    const top = new Float32Array(W * H).fill(-Infinity);
+    for (const [p, q, r] of tris) {
+      const mnx = Math.max(0, Math.floor(Math.min(p[0], q[0], r[0]) - x0)), mxx = Math.min(W - 1, Math.ceil(Math.max(p[0], q[0], r[0]) - x0));
+      const mny = Math.max(0, Math.floor(Math.min(p[2], q[2], r[2]) - y0)), mxy = Math.min(H - 1, Math.ceil(Math.max(p[2], q[2], r[2]) - y0));
+      const d = (q[0] - p[0]) * (r[2] - p[2]) - (r[0] - p[0]) * (q[2] - p[2]); if (Math.abs(d) < 1e-6) continue;
+      for (let j = mny; j <= mxy; j++) for (let i = mnx; i <= mxx; i++) {
+        const X = x0 + i + 0.5, Y = y0 + j + 0.5;
+        const l1 = ((q[0] - X) * (r[2] - Y) - (r[0] - X) * (q[2] - Y)) / d, l2 = ((r[0] - X) * (p[2] - Y) - (p[0] - X) * (r[2] - Y)) / d, l3 = 1 - l1 - l2;
+        if (l1 < -0.02 || l2 < -0.02 || l3 < -0.02) continue;
+        const z = l1 * p[1] + l2 * q[1] + l3 * r[1]; if (z > top[j * W + i]) top[j * W + i] = z;
+      }
+    }
+    // residual: survey surface − drawn roof, on a 2 m grid, inside the outline and clear of its edge
+    const S2 = 2, GW = Math.ceil(W / S2), GH = Math.ceil(H / S2), res = new Float32Array(GW * GH).fill(NaN), abs = new Float32Array(GW * GH), base = new Float32Array(GW * GH);
+    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+      const X = x0 + i * S2 + 1, Y = y0 + j * S2 + 1;
+      if (!g.parts.some((pp) => pip(X, Y, pp.ring))) continue;
+      let tz = -Infinity, ok = 0; for (let dj = 0; dj < S2; dj++) for (let di = 0; di < S2; di++) { const ii = i * S2 + di, jj = j * S2 + dj; if (ii < W && jj < H && isFinite(top[jj * W + ii])) { tz = Math.max(tz, top[jj * W + ii]); ok++; } }
+      if (ok < 3) continue;
+      const z = L(X, Y); if (!isFinite(z)) continue;
+      res[j * GW + i] = z - tz; abs[j * GW + i] = z; base[j * GW + i] = tz;
+    }
+    // blobs of residual > 3.5 m
+    const seen = new Uint8Array(GW * GH), cand = [];
+    for (let s0 = 0; s0 < GW * GH; s0++) {
+      if (seen[s0] || !(res[s0] > 3.5)) continue;
+      const blob = [], stack = [s0]; seen[s0] = 1;
+      while (stack.length) { const c = stack.pop(); blob.push(c); const ci = c % GW, cj = (c / GW) | 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= GW || nj >= GH) continue; const nk = nj * GW + ni; if (!seen[nk] && res[nk] > 3.5) { seen[nk] = 1; stack.push(nk); } } }
+      if (process.env.LM_CDBG && g.name.includes(process.env.LM_CDBG)) { let m = 0; for (const c of blob) m = Math.max(m, res[c]); log('blob', g.name, blob.length, m.toFixed(1)); }
+      if (blob.length < 3 || blob.length > 160) continue;
+      let pk = blob[0]; for (const c of blob) if (res[c] > res[pk]) pk = c;
+      if (res[pk] < 5.5) continue;
+      const cx = blob.reduce((a, c) => a + x0 + (c % GW) * S2 + 1, 0) / blob.length, cy = blob.reduce((a, c) => a + y0 + ((c / GW) | 0) * S2 + 1, 0) / blob.length;
+      const area = blob.length * S2 * S2, r = Math.sqrt(area / Math.PI);
+      const zBase = Math.min(...blob.map((c) => base[c])), zTop = abs[pk];
+      // a tree over the roof is soft and lumpy: towers and domes have a crisp top (the peak's neighbours fall away evenly)
+      // compact: fills its bounding box, not a long strip (a row of trees along the nave)
+      let bi0 = 1e9, bi1 = -1e9, bj0 = 1e9, bj1 = -1e9; for (const c of blob) { const ci = c % GW, cj = (c / GW) | 0; bi0 = Math.min(bi0, ci); bi1 = Math.max(bi1, ci); bj0 = Math.min(bj0, cj); bj1 = Math.max(bj1, cj); }
+      const bw = bi1 - bi0 + 1, bh = bj1 - bj0 + 1; if (blob.length / (bw * bh) < 0.5 || Math.max(bw, bh) / Math.min(bw, bh) > 2.5) continue;
+      cand.push({ cx, cy, area, r, zBase, zTop, h: res[pk], dome: r >= 4.2 && res[pk] < r * 3.2 });
+    }
+    // at most one dome (the widest) and two towers (the tallest)
+    const domes = DOMED.test(g.name) ? cand.filter((c) => c.dome && c.h < c.r * 2.6) : [].sort((a, b) => b.r - a.r).slice(0, 1), towers = g.authored ? [] : cand.filter((c) => !c.dome && c.area <= 80).sort((a, b) => b.h - a.h).slice(0, 2);
+    for (const { cx, cy, area, r, zBase, zTop, h, dome } of [...domes, ...towers]) {
+      void h; const key = tileKey(cx, cy); if (!key) continue;
+      const S = sinkFor(key);
+      if (dome) {
+        const R = Math.max(3, Math.min(r * 0.6, 8)), lan = Math.max(1.6, R * 0.45), rise = Math.min(R * 1.05, Math.max(2, zTop - zBase - lan - 2)), zs = Math.min(zTop - lan - rise, zBase + R * 0.9);   // a squat drum: better a little short of the survey than a silo
+        const zd = Math.max(zBase - 0.6, zs - 0.01);
+        drumDome(S, cx, cy, R, zBase - 0.6, Math.max(zBase + 0.5, zs), rise, lan, DOME, DOME_D, DARK);
+        stats.domes = (stats.domes || 0) + 1;
+        if (process.env.LM_CROWNS) log('dome', g.name, cx.toFixed(0), cy.toFixed(0), 'r', R.toFixed(1), 'base', zBase.toFixed(1), 'top', zTop.toFixed(1)); void zd;
+      } else {
+        // orient with the landmark's longest wall
+        let ux = 1, uy = 0, best = 0; for (const pp of g.parts) for (let k = 0; k < pp.ring.length; k++) { const a = pp.ring[k], b = pp.ring[(k + 1) % pp.ring.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l > best) { best = l; ux = (b[0] - a[0]) / l; uy = (b[1] - a[1]) / l; } }
+        const side = Math.max(3.6, Math.min(8, Math.sqrt(area) * 0.9));
+        bellTower(S, cx, cy, ux, uy, side, zBase - 0.6, zTop, g.blank ? LIN('#efebe3') : LIN('#ece6da'), LIOZ, CAP, DARK);
+        stats.towers = (stats.towers || 0) + 1;
+        if (process.env.LM_CROWNS) log('tower', g.name, cx.toFixed(0), cy.toFixed(0), 'side', side.toFixed(1), 'base', zBase.toFixed(1), 'top', zTop.toFixed(1), 'area', area);
+      }
+    }
+  }
+}
+// drum (with arched windows and pilasters) + dome + lantern + cross
+function drumDome(S, cx, cy, R, z0, zs, rise, lan, stone, ribC, dark) {
+  const N = 20, P = (a, r, z) => [cx + Math.cos(a) * r, z, -(cy + Math.sin(a) * r)];
+  let s0 = S.pos.length;
+  for (let i = 0; i < N; i++) { const a0 = (2 * Math.PI * i) / N, a1 = (2 * Math.PI * (i + 1)) / N; quad(S, P(a0, R, z0), P(a1, R, z0), P(a1, R, zs), P(a0, R, zs), stone); }
+  orient(S, s0, [cx, (z0 + zs) / 2, -cy]);
+  // cornice ring at the spring
+  s0 = S.pos.length;
+  for (let i = 0; i < N; i++) { const a0 = (2 * Math.PI * i) / N, a1 = (2 * Math.PI * (i + 1)) / N; quad(S, P(a0, R + 0.35, zs - 0.4), P(a1, R + 0.35, zs - 0.4), P(a1, R + 0.35, zs), P(a0, R + 0.35, zs), ribC); quad(S, P(a0, R, zs), P(a1, R, zs), P(a1, R + 0.35, zs), P(a0, R + 0.35, zs), stone); }
+  orient(S, s0, [cx, zs - 3, -cy]);
+  // drum windows: dark arched panels between pilasters
+  if (zs - z0 > 2.5) for (let i = 0; i < 8; i++) {
+    const a = (2 * Math.PI * (i + 0.5)) / 8, t = [-Math.sin(a), Math.cos(a)], n = [Math.cos(a), Math.sin(a)], o = [cx + n[0] * R, cy + n[1] * R];
+    const h = Math.min(3.2, (zs - z0) * 0.55), zb = zs - 0.6 - h;
+    archWindow(S, o, t, n, 0, Math.min(1.2, R * 0.25), zb, zs - 0.6, dark, LIOZ);
+    const ap = (2 * Math.PI * i) / 8, tp = [-Math.sin(ap), Math.cos(ap)], np = [Math.cos(ap), Math.sin(ap)];
+    wboxF(S, [cx + np[0] * R, cy + np[1] * R], tp, np, -0.3, 0.3, -0.1, 0.18, z0 + 0.5, zs - 0.4, LIOZ);
+  }
+  // dome: ribs every 1/8, cap
+  const M = 6; s0 = S.pos.length;
+  for (let i = 0; i < N; i++) for (let k = 0; k < M; k++) {
+    const a0 = (2 * Math.PI * i) / N, a1 = (2 * Math.PI * (i + 1)) / N, e0 = (Math.PI / 2) * (k / M), e1 = (Math.PI / 2) * ((k + 1) / M);
+    const Q = (a, e) => P(a, R * Math.cos(e), zs + rise * Math.sin(e));
+    const col = i % (N / 8 | 0) === 0 ? ribC : stone;
+    if (k === M - 1) tri(S, Q(a0, e0), Q(a1, e0), Q(a0, e1), col); else quad(S, Q(a0, e0), Q(a1, e0), Q(a1, e1), Q(a0, e1), col);
+  }
+  orient(S, s0, [cx, zs, -cy]);
+  // lantern
+  const lr = Math.max(0.7, R * 0.16), lz = zs + rise - 0.2; s0 = S.pos.length;
+  for (let i = 0; i < 8; i++) { const a0 = (2 * Math.PI * i) / 8, a1 = (2 * Math.PI * (i + 1)) / 8, Pl = (a, z) => [cx + Math.cos(a) * lr, z, -(cy + Math.sin(a) * lr)]; quad(S, Pl(a0, lz), Pl(a1, lz), Pl(a1, lz + lan * 0.6), Pl(a0, lz + lan * 0.6), i % 2 ? dark : stone); tri(S, Pl(a0, lz + lan * 0.6), Pl(a1, lz + lan * 0.6), [cx, lz + lan * 0.92, -cy], ribC); }
+  orient(S, s0, [cx, lz + lan * 0.3, -cy]);
+  wboxF(S, [cx, cy], [1, 0], [0, 1], -0.05, 0.05, -0.05, 0.05, lz + lan * 0.9, lz + lan * 0.9 + 1.2, dark);
+  wboxF(S, [cx, cy], [1, 0], [0, 1], -0.35, 0.35, -0.05, 0.05, lz + lan * 0.9 + 0.75, lz + lan * 0.9 + 0.85, dark);
+}
+// bell tower: square shaft with pilasters and cornices, a belfry with an arched opening on each face, a cap to the measured top
+function bellTower(S, cx, cy, ux, uy, side, z0, zTop, wall, trim, capC, dark) {
+  const h = side / 2, vx = -uy, vy = ux, capH = Math.min(side * 0.9, Math.max(1.8, (zTop - z0) * 0.22)), zc = zTop - capH, bel = Math.min(4.2, side * 0.8);
+  if (zc - z0 < bel + 1.5) return;
+  const faces = [[ux, uy, vx, vy], [vx, vy, -ux, -uy], [-ux, -uy, -vx, -vy], [-vx, -vy, ux, uy]];   // outward n, along t
+  for (const [nx, ny, tx, ty] of faces) {
+    const o = [cx + nx * h - tx * h, cy + ny * h - ty * h], t = [tx, ty], n = [nx, ny];
+    wboxF(S, o, t, n, 0, side, -h, 0, z0, zc, wall);                                         // the shaft (one face each; ends overlap)
+    wboxF(S, o, t, n, 0, 0.45, 0, 0.1, z0 + 0.6, zc - 0.4, trim); wboxF(S, o, t, n, side - 0.45, side, 0, 0.1, z0 + 0.6, zc - 0.4, trim);   // corner pilasters
+    wboxF(S, o, t, n, -0.15, side + 0.15, 0, 0.25, zc - 0.35, zc, trim, { bottom: true });   // crowning cornice
+    wboxF(S, o, t, n, -0.08, side + 0.08, 0, 0.15, zc - bel - 0.5, zc - bel - 0.3, trim, { bottom: true });   // belfry string course
+    archWindow(S, o, t, n, side / 2, Math.min(1.5, side * 0.34), zc - bel, zc - 0.6, dark, trim);
+  }
+  // cap: a tiled pyramid when squat, a stone cupola when tall, finial cross
+  const P = (a, b, z) => [cx + ux * a + vx * b, z, -(cy + uy * a + vy * b)];
+  const s0 = S.pos.length, hh = h + 0.15, corners = [[-hh, -hh], [hh, -hh], [hh, hh], [-hh, hh]];
+  if (capH < side * 0.6) for (let k = 0; k < 4; k++) { const [a0, b0] = corners[k], [a1, b1] = corners[(k + 1) % 4]; tri(S, P(a0, b0, zc), P(a1, b1, zc), P(0, 0, zTop - 0.9), capC); }
+  else { const N = 12, M = 5; for (let i = 0; i < N; i++) for (let k = 0; k < M; k++) { const a0 = (2 * Math.PI * i) / N, a1 = (2 * Math.PI * (i + 1)) / N, e0 = (Math.PI / 2) * (k / M), e1 = (Math.PI / 2) * ((k + 1) / M), rr = h * 0.92, rise = capH - 0.9; const Q = (a, e) => [cx + Math.cos(a) * rr * Math.cos(e), zc + rise * Math.sin(e), -(cy + Math.sin(a) * rr * Math.cos(e))]; if (k === M - 1) tri(S, Q(a0, e0), Q(a1, e0), Q(a0, e1), wall); else quad(S, Q(a0, e0), Q(a1, e0), Q(a1, e1), Q(a0, e1), wall); } }
+  orient(S, s0, [cx, zc, -cy]);
+  wboxF(S, [cx, cy], [1, 0], [0, 1], -0.05, 0.05, -0.05, 0.05, zTop - 1.0, zTop, dark);
+  wboxF(S, [cx, cy], [ux, uy], [vx, vy], -0.3, 0.3, -0.04, 0.04, zTop - 0.4, zTop - 0.3, dark);
 }
 
 async function writeGlb(S, file) {
