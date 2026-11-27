@@ -1,0 +1,2 @@
+feed_publisher_name,feed_publisher_url,feed_contact_email,feed_contact_url,feed_lang,feed_start_date,feed_end_date,feed_version
+TTSL - Transtejo Soflusa,https://ttsl.pt,apoio.cliente@ttsl.pt,https://ttsl.pt,PT,20260816,20270801,20260816
