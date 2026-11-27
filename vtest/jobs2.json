@@ -1,0 +1,121 @@
+[
+ {
+  "name": "k000_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k000_render.jpg",
+    "@k000_depth.png",
+    "@k000_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ },
+ {
+  "name": "k030_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k030_render.jpg",
+    "@k030_depth.png",
+    "@k030_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ },
+ {
+  "name": "k060_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k060_render.jpg",
+    "@k060_depth.png",
+    "@k060_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ },
+ {
+  "name": "k090_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k090_render.jpg",
+    "@k090_depth.png",
+    "@k090_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ },
+ {
+  "name": "k120_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a real photograph. It is a pixel-aligned retouch, not a new photo: same camera, same framing, same field of view and same horizon line. Do not zoom, crop, rotate or extend the view. Every building, roof, street, square, quay, bridge and the shoreline stay exactly where they are, with the same shapes and sizes. Do not add, remove, move or resize any building or landmark. Keep the same time of day, sun direction, light, weather and season as the render. Replace the flat 3D-render look with real-world materials: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, Portuguese cal\u00e7ada pavement, real trees, real cars, natural water with reflections, light atmospheric haze. Photorealistic, sharp. The second image is the exact depth map of the first: the geometry must match it. The third image shows the exact outlines of every building, roof and street of the first: every edge must stay exactly where it is.",
+   "image_urls": [
+    "@k120_render.jpg",
+    "@k120_depth.png",
+    "@k120_edges.png"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 1
+  }
+ },
+ {
+  "name": "a2_wan22_s050",
+  "endpoint": "fal-ai/wan/v2.2-a14b/video-to-video",
+  "max_min": 30,
+  "body": {
+   "video_url": "@render720.mp4",
+   "prompt": "Real aerial drone footage of Lisbon, Portugal, filmed on a clear October afternoon: Pra\u00e7a do Com\u00e9rcio, the Baixa grid and the Alfama rooftops beside the Tagus. Photorealistic: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, cal\u00e7ada pavement, real trees, real cars, the river with natural reflections and small waves, soft atmospheric haze, natural sunlight and shadows. Smooth camera motion. Every building, street, square and the shoreline stay exactly where they are.",
+   "strength": 0.5,
+   "num_frames": 121,
+   "frames_per_second": 24,
+   "resolution": "720p",
+   "aspect_ratio": "16:9",
+   "num_inference_steps": 27,
+   "interpolator_model": "none",
+   "num_interpolated_frames": 0,
+   "adjust_fps_for_interpolation": false,
+   "video_quality": "maximum",
+   "seed": 1,
+   "negative_prompt": "3D render, CGI, video game, cartoon, plastic, flat colours, blurry, distorted buildings, warped geometry"
+  }
+ },
+ {
+  "name": "a3_kling_o1",
+  "endpoint": "fal-ai/kling-video/o1/standard/video-to-video/edit",
+  "max_min": 30,
+  "body": {
+   "video_url": "@render1080.mp4",
+   "image_urls": [
+    "@style_k0.jpg"
+   ],
+   "prompt": "Turn @Video1 into real aerial drone footage, photographed for real, with the look of @Image1. Keep the camera motion, the framing and every building, roof, street, square, quay and the shoreline exactly as they are in @Video1. Only change materials, textures and light so it looks like a real photograph: weathered terracotta roof tiles, real plaster fa\u00e7ades with windows, real trees, natural water with reflections, light haze. Same sun direction and time of day.",
+   "keep_audio": false
+  }
+ }
+]
