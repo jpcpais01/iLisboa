@@ -395,7 +395,9 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
 
 // Terrain: ground-map texture; fragments under the river are dropped so the water plane
 // and the terrain share one crisp shoreline (same mask, same threshold).
-export function terrainMaterial(map, mask, bounds, surf = false) {
+// wet = false: ground that lies nowhere near water (see splitWet in main.js) skips the mask: a shader that may discard loses the
+// GPU's early depth test, and on the far ground that alone was ~40 % of its cost
+export function terrainMaterial(map, mask, bounds, surf = false, wet = true) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
   m.onBeforeCompile = (s) => {
     s.uniforms.uMask = { value: mask }; s.uniforms.uNight = cityUniforms.uNight; s.uniforms.uBounce = cityUniforms.uBounce; Object.assign(s.uniforms, overlayUniforms);
@@ -404,10 +406,12 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight; uniform vec3 uBounce;${surf ? '\n#define SURF' : ''}`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWPos; uniform sampler2D uMask; uniform vec4 uBounds; uniform float uNight; uniform vec3 uBounce;${surf ? '\n#define SURF' : ''}${wet ? '\n#define WET' : ''}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   vec2 muv = vec2((vWPos.x - uBounds.x) / (uBounds.z - uBounds.x), (-vWPos.z - uBounds.y) / (uBounds.w - uBounds.y));
+#ifdef WET
   if (texture2D(uMask, muv).r > 0.5) discard;
+#endif
   float tLit = 0.;`)
       .replace('#include <map_fragment>', `#include <map_fragment>
   {   // close-up surface: the ground map is 0.5 m a pixel, so the pavement texture itself comes from here, by world position
@@ -479,7 +483,7 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
     // between the 0.5 m map and the few-cm patterns: three octaves of surface variation (1.6, 0.6, 0.22 m), each fading out
     // before it would alias, stronger on grass and earth than on asphalt or paving. Up close a texel no longer reads as a blur.
     float mAmp = .13 + .08 * wGrass - .05 * wAsph - .05 * wPave;
-    macro *= 1. + mAmp * ((tvn(p / 1.6 + 3.1) - .5) * (1. - smoothstep(.2, .45, fw)) + (tvn(p / .6 + 7.7) - .5) * (1. - smoothstep(.08, .16, fw)) + .8 * (tvn(p / .22 + 1.3) - .5) * (1. - smoothstep(.03, .06, fw)));
+    if (fw < .45) macro *= 1. + mAmp * ((tvn(p / 1.6 + 3.1) - .5) * (1. - smoothstep(.2, .45, fw)) + (tvn(p / .6 + 7.7) - .5) * (1. - smoothstep(.08, .16, fw)) + .8 * (tvn(p / .22 + 1.3) - .5) * (1. - smoothstep(.03, .06, fw)));
     float k = 1.;
     if (fw < .15) {   // beyond ~15 cm a pixel none of this shows: skip it (most of the screen in a city view)
     // calçada portuguesa: small limestone setts with dark joints
@@ -526,7 +530,7 @@ export function terrainMaterial(map, mask, bounds, surf = false) {
 float th(vec2 p) { uvec2 q = uvec2(ivec2(p) + 32768); q = q * 1664525u + 1013904223u; q.x += q.y * 1664525u; q.y += q.x * 1664525u; q ^= q >> 16u; q.x += q.y * 1664525u; q.y += q.x * 1664525u; q ^= q >> 16u; return float(q.x) * 2.3283064e-10; }
 float tvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(th(i), th(i + vec2(1, 0)), f.x), mix(th(i + vec2(0, 1)), th(i + vec2(1, 1)), f.x), f.y); }`);
   };
-  m.customProgramCacheKey = () => `ilisboa-terrain-v12${surf ? 's' : ''}`;
+  m.customProgramCacheKey = () => `ilisboa-terrain-v12${surf ? 's' : ''}${wet ? 'w' : ''}`;
   return m;
 }
 

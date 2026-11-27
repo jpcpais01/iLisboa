@@ -5,7 +5,7 @@
 //  · Metro de Lisboa: the Metro publishes no train positions, so trains run on a timetable model (real track and
 //    stations from OSM, typical headways by time of day, dwell at every station). Labelled "estimado".
 import * as THREE from 'three';
-import { busGeometry, tramGeometry, metroGeometry } from './models.js';
+import { busGeometry, tramGeometry, metroCarGeometry, METRO_CARS, METRO_PITCH } from './models.js';
 import { createBeacons } from './beacons.js';
 import { buildRibbons, drape, ribbonMaterial } from './ribbons.js';
 import { lisbonNow } from './clock.js';
@@ -51,31 +51,46 @@ export function createTransit(ctx) {
       seen.add(id); counts[kind] = (counts[kind] || 0) + 1;
       const rail = railOf(kind), elevator = line === '54E';   // Santa Justa goes up, not along anything
       // onto the network: rail for trams (falls back to streets where the rail isn't mapped), streets for buses
-      let sn = net && !elevator ? net.snap(x, y, rail, rail ? 30 : 45) || (rail ? net.snap(x, y, false, 45) : null) : null;
-      const tx = sn ? sn.x : x, ty = sn ? sn.y : y;
       let v = vehicles.get(id);
+      // which way it is going: the feed's bearing (Carris Metropolitana), else the way it has been seen driving.
+      // A guess (first sighting of a Carris bus, which has no bearing) is never used as evidence.
+      const brg = bearing >= 0 ? (bearing * Math.PI) / 180 : NaN, sure = Number.isFinite(brg) || !!(v && v.headOk);
+      const hint = Number.isFinite(brg) ? brg : sure ? v.head : NaN, hw = Number.isFinite(brg) ? 14 : 6;
+      let sn = net && !elevator ? net.snap(x, y, rail, rail ? 30 : 45, hint, hw) || (rail ? net.snap(x, y, false, 45, hint, hw) : null) : null;
+      const tx = sn ? sn.x : x, ty = sn ? sn.y : y;
       if (!v) {
-        v = { id, x: tx, y: ty, path: [[tx, ty], [tx, ty]], cum: [0, 0], t0: now, dur: 1, snap: sn, head: bearing >= 0 ? (bearing * Math.PI) / 180 : NaN };
+        v = { id, x: tx, y: ty, path: [[tx, ty], [tx, ty]], cum: [0, 0], t0: now, dur: 1, snap: sn, head: brg };
         vehicles.set(id, v);
       } else if (Math.hypot(tx - v.path[v.path.length - 1][0], ty - v.path[v.path.length - 1][1]) > 2) {
         const straight = Math.hypot(tx - v.x, ty - v.y);
-        let path = null;
+        let path = null, hintJump = NaN;
         if (net && sn && straight < 1500) {
           const onRail = rail && edgesRail(sn), from = net.snap(v.x, v.y, onRail, 12) || v.snap;
           if (from) path = net.route(from, sn, onRail, Math.max(400, straight * 3));
+          if (!path && straight >= 60) hintJump = Math.atan2(tx - v.x, ty - v.y);
         }
         if (!path) path = straight < 60 ? [[v.x, v.y], [tx, ty]] : [[tx, ty], [tx, ty]];   // no way along the network: short hop or reappear
         const cum = measure(path), L = cum[cum.length - 1];
         // GPS jitter backwards along the street: hold position rather than U-turn on the spot
-        const back = L < 25 && isFinite(v.head) && path.length > 1 && Math.sin(v.head) * (path[path.length - 1][0] - path[0][0]) + Math.cos(v.head) * (path[path.length - 1][1] - path[0][1]) < 0;
-        if (!back) { v.path = path; v.cum = cum; v.t0 = now; v.dur = POLL / 1000 + 1; v.snap = sn; }
+        const back = L < 25 && sure && path.length > 1 && Math.sin(v.head) * (path[path.length - 1][0] - path[0][0]) + Math.cos(v.head) * (path[path.length - 1][1] - path[0][1]) < 0;
+        if (!back) { v.path = path; v.cum = cum; v.t0 = now; v.dur = POLL / 1000 + 1; v.snap = sn; if (Number.isFinite(hintJump)) v.head = hintJump; if (L > 5) v.headOk = true; }
+      } else if (sn && !v.headOk && v.cum[v.cum.length - 1] < 1) {
+        v.snap = sn;   // parked and still unsure which street: take the newest fix's reading
       }
-      if (bearing >= 0 && v.cum[v.cum.length - 1] < 1) v.head = (bearing * Math.PI) / 180;
+      // standing still (first sighting, at a stop, or after a jump): lie along the street, never across it.
+      // Carris sends no bearing, so this used to leave a new bus facing north (heading 0) whatever the street did.
+      if (v.cum[v.cum.length - 1] < 1 && v.snap) v.head = roadHead(v.snap, Number.isFinite(brg) ? brg : v.head);
       Object.assign(v, { kind, line, name, speed, age, fixAt: now - age, seen: now, rail });
       if (pattern && v.pattern !== pattern) { v.pattern = pattern; v.dest = null; }
       v.deck = !!(net && ((sn && net.edges[sn.e].z) || (v.snap && net.edges[v.snap.e].z)));   // on (or onto) a bridge deck
     }
     for (const [k, v] of vehicles) if (!seen.has(k) && now - v.seen > 60) vehicles.delete(k);
+  }
+  // the street's own direction at a snap (compass radians), turned to agree with hint; with no hint the edge's
+  // own direction, which on a one-way street is the way traffic flows (and on a two-way one a guess the first move fixes)
+  function roadHead(sn, hint) {
+    const t = Math.atan2(sn.ux, sn.uy);
+    return Number.isFinite(hint) && Math.cos(hint - t) < 0 ? t + Math.PI : t;
   }
   // a snap found on the street fallback means the tram has to drive the streets there too
   const edgesRail = (sn) => !!net && !!net.snap(sn.x, sn.y, true, 1);
@@ -88,7 +103,7 @@ export function createTransit(ctx) {
       { vec4 w = modelMatrix * instanceMatrix * vec4(transformed, 1.); float d = distance(cameraPosition, w.xyz);
         vec4 mv2 = viewMatrix * w; mv2.xyz *= 1. - min(.5, (6. + d * .006) / max(d, 1.)); gl_Position = projectionMatrix * mv2; }`);
   };
-  const trains = new THREE.InstancedMesh(metroGeometry(), metroMat, 160);
+  const MAXT = 160, trains = new THREE.InstancedMesh(metroCarGeometry(), metroMat, MAXT * METRO_CARS);
   trains.count = 0; trains.frustumCulled = false; trains.renderOrder = 11; group.add(trains);
   const stationPins = createBeacons(200, { size: 7.5, lift: 1 }), trainPins = createBeacons(160, { size: 13, lift: 3 });
   group.add(stationPins.obj, trainPins.obj);
@@ -155,17 +170,20 @@ export function createTransit(ctx) {
     if (dir) s = l.L - s;   // the return trip runs the same track backwards
     const { x, y, head } = pointAt(l, s);
     const stop = atStop == null ? null : l.stops[dir ? l.stops.length - 1 - atStop : atStop];
-    return { x, y, head: head + (dir ? Math.PI : 0), stop };
+    return { x, y, head: head + (dir ? Math.PI : 0), stop, s };
   }
-  function pointAt(l, s) {
-    const c = l.cum; let i = 1; while (i < c.length - 1 && c[i] < s) i++;
+  function pointAt(l, s, out = {}) {
+    const c = l.cum; let lo = 1, hi = c.length - 1;   // first i with c[i] >= s
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (c[mid] < s) lo = mid + 1; else hi = mid; }
+    const i = lo;
     const f = Math.max(0, Math.min(1, (s - c[i - 1]) / ((c[i] - c[i - 1]) || 1))), A = l.track[i - 1], B = l.track[i];
-    return { x: A[0] + (B[0] - A[0]) * f, y: A[1] + (B[1] - A[1]) * f, head: Math.atan2(B[0] - A[0], B[1] - A[1]) };
+    out.x = A[0] + (B[0] - A[0]) * f; out.y = A[1] + (B[1] - A[1]) * f; out.head = Math.atan2(B[0] - A[0], B[1] - A[1]);
+    return out;
   }
   let metroNow = [];
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YZX'), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color(), cb = new THREE.Color();
-  const lift = new THREE.Vector3(0.72, 0.72, 0.72), WHITE = new THREE.Color(1, 1, 1);
+  const lift = new THREE.Vector3(0.72, 0.72, 0.72), WHITE = new THREE.Color(1, 1, 1), ca = {}, cf = {}, bf = {}, br = {};
   function update(dt, nowMs) {
     if (!on) return;
     const now = nowMs / 1000;
@@ -173,10 +191,16 @@ export function createTransit(ctx) {
     beacons.begin();
     for (const v of vehicles.values()) {
       const f = Math.min(1, (now - v.t0) / v.dur), ef = f * f * (3 - 2 * f) * 0.6 + f * 0.4, L = v.cum[v.cum.length - 1];
-      along(v.path, v.cum, L * ef, v);
-      // the path turns sharply at every street vertex: the body (and a following camera) turns smoothly instead
+      const s = L * ef, h0 = v.head;
+      along(v.path, v.cum, s, v); v.head = h0;
+      // heading = the chord across the bus's own wheelbase (±5 m along its path), so it bends round corners instead of
+      // snapping at every street vertex; then eased so a following camera turns smoothly
+      if (L > 1) {
+        along(v.path, v.cum, Math.max(0, s - 5), ca); along(v.path, v.cum, Math.min(L, s + 5), cf);
+        if (Math.hypot(cf.x - ca.x, cf.y - ca.y) > 0.5) v.head = Math.atan2(cf.x - ca.x, cf.y - ca.y);
+      }
       const hr = isFinite(v.head) ? v.head : 0;
-      v.hs = v.hs == null ? hr : v.hs + Math.atan2(Math.sin(hr - v.hs), Math.cos(hr - v.hs)) * Math.min(1, dt * 5);
+      v.hs = v.hs == null ? hr : v.hs + Math.atan2(Math.sin(hr - v.hs), Math.cos(hr - v.hs)) * Math.min(1, dt * 6);
       const h = v.hs, sx = Math.sin(h), sy = Math.cos(h);
       // drive on the right: buses keep to their lane, trams sit on the rail
       const off = v.rail ? 0 : 1.7, dx = v.x + sy * off, dy = v.y - sx * off;
@@ -206,19 +230,27 @@ export function createTransit(ctx) {
         stationPins.end();
       }
       metroNow = trainPositions();
-      let i = 0;
+      let i = 0, n = 0;
       trainPins.begin();
       for (const t of metroNow) {
         const a = trainAt(t.l, t.dir, t.age); t.pos = a; t.key = `${t.l.name}|${t.dir}|${t.n}`;
-        const z = ground.at(a.x, a.y) + 1.5;
-        e.set(0, Math.PI / 2 - a.head, 0); q.setFromEuler(e);
-        m.compose(p.set(a.x, z, -a.y), q, one);
-        trains.setMatrixAt(i, m); trains.setColorAt(i, t.l.col); t.z = z; i++;
+        const z = ground.at(a.x, a.y) + 1.5, l = t.l, fw = t.dir ? -1 : 1;
+        // articulated: each car rides its own two bogies (±7 m) on the track, so the train bends through curves
+        // instead of a rigid 105 m stick cutting the corner; the car sits on the chord between them, as real ones do
+        for (let c = 0; c < METRO_CARS; c++) {
+          const sc = a.s + fw * (c - (METRO_CARS - 1) / 2) * METRO_PITCH;
+          pointAt(l, Math.max(0, Math.min(l.L, sc + fw * 7)), bf); pointAt(l, Math.max(0, Math.min(l.L, sc - fw * 7)), br);
+          const cx = (bf.x + br.x) / 2, cy = (bf.y + br.y) / 2;
+          e.set(0, Math.PI / 2 - Math.atan2(bf.x - br.x, bf.y - br.y), 0); q.setFromEuler(e);
+          m.compose(p.set(cx, ground.at(cx, cy) + 1.5, -cy), q, one);
+          trains.setMatrixAt(n, m); trains.setColorAt(n, l.col); n++;
+        }
+        t.z = z; i++;
         trainPins.push(a.x, z, -a.y, t.l.col, 1);
-        if (i >= 160) break;
+        if (i >= MAXT) break;
       }
       trainPins.end();
-      trains.count = i; trains.instanceMatrix.needsUpdate = true; if (trains.instanceColor) trains.instanceColor.needsUpdate = true;
+      trains.count = n; trains.instanceMatrix.needsUpdate = true; if (trains.instanceColor) trains.instanceColor.needsUpdate = true;
     }
   }
 
@@ -234,8 +266,45 @@ export function createTransit(ctx) {
     return { icon: 'Ⓜ', title: `Metro · ${t.l.name}`, sub: `sentido ${dest}`, lines: [t.pos.stop ? `parado em ${t.pos.stop.name}` : 'em circulação'], src: 'estimado · horário típico (o Metro não publica posições)', speedKnown: true };
   }
 
+  // ─── Metro stations and next trains, for the station cards (src/stations): same timetable model as the trains ───
+  function metroStations() {
+    if (!metro) return null;
+    const by = new Map();
+    for (const l of metro) for (const st of l.stops) {
+      const a = pointAt(l, st.s); let g = by.get(st.name);
+      if (!g) by.set(st.name, (g = { name: st.name, x: 0, y: 0, n: 0, lines: [] }));
+      g.x += a.x; g.y += a.y; g.n++; if (!g.lines.some((x) => x.name === l.name)) g.lines.push({ name: l.name, colour: l.colour });
+    }
+    return [...by.values()].map((g) => ({ name: g.name, x: g.x / g.n, y: g.y / g.n, lines: g.lines }));
+  }
+  // next trains at a station, per line and direction: [{ line, colour, dest, inS }] (seconds from now)
+  function metroArrivals(name, per = 3) {
+    if (!metro) return [];
+    const { sec, weekend } = lisbonNow(), out = [];
+    metro.forEach((l, li) => {
+      const n = l.stops.length, i = l.stops.findIndex((s) => s.name === name);
+      if (i < 0) return;
+      for (const dir of [0, 1]) {
+        const k = dir ? n - 1 - i : i;
+        if (k >= n - 1) continue;   // the terminus for this direction: the train ends here
+        const dest = dir ? l.stops[0].name : l.stops[n - 1].name, arr = l.trip.t[k].arr;
+        let dep = 6.5 * 3600 + ((li * 97 + dir * 151) % 240), got = 0;
+        while (got < per) {
+          const t = dep + arr;
+          if (t > sec + 3600) break;
+          if (t >= sec - 15) { out.push({ line: l.name, colour: l.colour, dest, inS: t - sec }); got++; }
+          const hw = headway(l.name, dep / 3600, weekend); if (!hw) break;
+          dep += hw;
+        }
+      }
+    });
+    return out;
+  }
+
   return {
+    metroStations, metroArrivals,
     get on() { return on; },
+    debug: { vehicles, net: () => net, trains, get metro() { return metroNow; } },   // checks: headings vs streets, car placement
     set(v) { on = v; group.visible = v; clearTimeout(timer); if (v) poll(); else vehicles.clear(); },
     update,
     status() {

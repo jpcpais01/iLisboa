@@ -42,6 +42,7 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
   const pinned = new URLSearchParams(location.search).has('clouds');
   let cover = null, coverT = 0;
   function cloudTarget() {
+    const pick = hud?.weatherPick?.(); if (pick) return pick.cover;   // the HUD's weather picker overrides the real cover
     const d = weather.data; if (!d) return null;
     if (!hud || hud.live()) return d.current?.cloud_cover ?? null;
     const hr = d.hourly; if (!hr?.cloud_cover) return d.current?.cloud_cover ?? null;

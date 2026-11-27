@@ -44,9 +44,12 @@ async function parseNetwork() {
   }
   const ok = (k, rail) => (rail ? k === 2 : k !== 2);
 
-  // nearest point on the network (rail: tram rails only); { e, s, x, y, d } or null beyond maxD metres
-  function snap(x, y, rail, maxD = 45) {
-    let best = null, bd = maxD;
+  // nearest point on the network (rail: tram rails only); { e, s, x, y, d, ux, uy } or null beyond maxD metres.
+  // head (optional, compass radians): prefer streets running that way, so a fix at a junction lands on the street the
+  // vehicle is driving along rather than the cross street a metre closer.
+  function snap(x, y, rail, maxD = 45, head = NaN, w = 14) {
+    let best = null, bd = maxD, bs = Infinity;
+    const hx = Math.sin(head), hy = Math.cos(head), aligned = Number.isFinite(head);
     const r = Math.ceil(maxD / CELL), cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
     for (let gx = cx - r; gx <= cx + r; gx++) for (let gy = cy - r; gy <= cy + r; gy++) {
       const c = grid.get(gx * 100003 + gy); if (!c) continue;
@@ -54,7 +57,9 @@ async function parseNetwork() {
         const E = edges[c[i]]; if (!ok(E.k, rail)) continue;
         const j = c[i + 1], [ax, ay] = E.pts[j], [bx, by] = E.pts[j + 1], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
         const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)), px = ax + dx * t, py = ay + dy * t, d = Math.hypot(px - x, py - y);
-        if (d < bd) { bd = d; const l = Math.sqrt(L2); best = { e: c[i], s: E.cum[j] + t * l, x: px, y: py, d, ux: dx / l, uy: dy / l }; }
+        if (d >= bd) continue;
+        const l = Math.sqrt(L2), c2 = aligned ? ((dx * hx + dy * hy) / l) ** 2 : 1, score = d + w * (1 - c2);   // w metres per 90° off
+        if (score < bs) { bs = score; best = { e: c[i], s: E.cum[j] + t * l, x: px, y: py, d, ux: dx / l, uy: dy / l }; }
       }
     }
     return best;

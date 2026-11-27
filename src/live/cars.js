@@ -48,7 +48,7 @@ export function createCars(ctx) {
   let net = null, info = null;   // per edge: { cls, nl (lanes per direction), mid, rad, sens, seed, r: [fwd, back] live relative speed or NaN }
   let liveK = 1, source = '', flowT = 0, matching = false;
   const lanes = new Map();       // key edge*16 + dir*8 + lane → lane
-  let names = null, dbg = {}, total = 0, lastActive = -1e9, lastCam = new THREE.Vector3(1e9, 0, 0), demand = 0.5, pModel = 0.3;
+  let names = null, dbg = {}, total = 0, lastActive = -1e9, lastCam = new THREE.Vector3(1e9, 0, 0), lastQ = new THREE.Quaternion(), demand = 0.5, pModel = 0.3;
   const hot = HOT.map(([lon, lat, r, k]) => { const v = ll(lat, lon); return [v.x, -v.z, r, k]; });
 
   // the street graph (1.5 MB) downloads once the city around the camera has drawn its ground, not before
@@ -152,7 +152,7 @@ export function createCars(ctx) {
   // which streets to simulate: in front of the camera, out to where a car is still worth a couple of pixels
   const frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), sph = new THREE.Sphere(), cp = new THREE.Vector3();
   function activate(now) {
-    lastActive = now; lastCam.copy(camera.position);
+    lastActive = now; lastCam.copy(camera.position); lastQ.copy(camera.quaternion);
     const { h, weekend } = lisbonNow(), hh = h % 24, i0 = Math.floor(hh), f = hh - i0, T = weekend ? END : DAY;
     demand = T[i0] * (1 - f) + T[(i0 + 1) % 24] * f; pModel = pressure();
     camera.updateMatrixWorld(); pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pm);
@@ -242,8 +242,21 @@ export function createCars(ctx) {
     return opts[opts.length - 2];
   }
 
-  function step(dt) {
+  // Far streets are stepped less often: a lane advances when its fastest car would have moved ~0.5 px on screen since its
+  // last step (at most every 12th frame), so a city-wide view of 30k sub-pixel cars costs a fraction of the CPU with no
+  // visible difference; near streets step every frame as before. Their cars keep the pose drawn at their last step.
+  let frame = 0;
+  function cadence() {
+    const f = canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    for (const l of lanes.values()) { const pxPerFrame = (l.v * 1.3 * f) / Math.max(1, l.d) / 60; l.k = Math.max(1, Math.min(12, Math.floor(0.5 / Math.max(1e-6, pxPerFrame)))); l.tiny = (CAR_L * f) / Math.max(1, l.d) < 2.5; }
+  }
+  function step(dtF) {
+    frame++;
     for (const l of lanes.values()) {
+      l.acc = (l.acc || 0) + dtF;
+      l.stepped = l.k <= 1 || (frame + (l.key % 12)) % l.k === 0;
+      if (!l.stepped) continue;
+      const dt = Math.min(0.25, l.acc); l.acc = 0;
       const cars = l.cars;
       // keep the lane near its target: top up gently (all at once when it first comes into view), thin the excess
       const deficit = l.target - cars.length;
@@ -300,8 +313,18 @@ export function createCars(ctx) {
     let nn = 0, nf = 0;
     for (const l of lanes.values()) {
       if (l.tunnel) continue;
+      // a far lane between steps whose cars sit in the same slots as last frame: they are already in the buffer
+      const nc = l.cars.length;
+      if (!l.stepped && l.allFar && l.at === nf && l.nc === nc && nf + nc <= BUDGET) { nf += nc; continue; }
+      const nn0 = nn; l.at = nf; l.nc = nc;
       for (const c of l.cars) {
         if (nf >= BUDGET) break;
+        if (!l.stepped && c.pose) {   // (a far lane between its steps: the car stands where it was drawn)
+          const q = c.pose, T = q[6] && nn < NEAR_MAX ? near : far, n = T === near ? nn++ : nf++, P = T.pose.array, X = T.ext.array;
+          P[n * 4] = q[0]; P[n * 4 + 1] = q[1]; P[n * 4 + 2] = q[2]; P[n * 4 + 3] = q[3];
+          X[n * 4] = q[4]; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
+          continue;
+        }
         const a = at(l, c);
         let x = a.x, y = a.y;
         if (c.jx || c.jy) {
@@ -315,12 +338,14 @@ export function createCars(ctx) {
           if (Number.isFinite(dz)) { const f = net.deckAt(l.e, es + 2.5), b = net.deckAt(l.e, es - 2.5); if (Number.isFinite(f) && Number.isFinite(b)) pitch = Math.atan2((f - b) * (l.dir ? -1 : 1), 5); }
         } else z = ground.at(x, y);
         // pitch along the slope (Lisbon's hills), looked up 2.5 m ahead and behind
-        if (!Number.isFinite(pitch)) pitch = l.deck && l.vg ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
+        if (!Number.isFinite(pitch)) pitch = (l.deck && l.vg) || l.tiny ? 0 : Math.atan2(ground.at(x + a.hx * 2.5, y + a.hy * 2.5) - ground.at(x - a.hx * 2.5, y - a.hy * 2.5), 5);
         const d = Math.hypot(x - cx, z - cy, -y - cz);
         const T = d < NEAR && nn < NEAR_MAX ? near : far, n = T === near ? nn++ : nf++, P = T.pose.array, X = T.ext.array;
         P[n * 4] = x; P[n * 4 + 1] = z + 0.05; P[n * 4 + 2] = -y; P[n * 4 + 3] = Math.atan2(a.hx, a.hy);
         X[n * 4] = pitch; X[n * 4 + 1] = c.fade; X[n * 4 + 2] = c.kind; X[n * 4 + 3] = c.col;
+        if (l.k > 1) { const q = c.pose || (c.pose = new Float32Array(7)); q[0] = x; q[1] = z + 0.05; q[2] = -y; q[3] = P[n * 4 + 3]; q[4] = pitch; q[6] = T === near ? 1 : 0; } else c.pose = null;
       }
+      l.allFar = nn === nn0 && l.k > 1;
     }
     for (const [T, n] of [[near, nn], [far, nf]]) {
       T.g.instanceCount = n;
@@ -335,9 +360,12 @@ export function createCars(ctx) {
       if (!booted) { if (ground.version > 0) { booted = true; boot(); } return; }
       if (!net || !info) return;
       // re-pick the streets in view twice a second, or at once after a big camera move
-      if (now - lastActive > 500 || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) activate(now);
-      step(Math.min(0.25, dt));
-      shown = draw();
+      // (a still camera re-picks every 4 s: the streets in view are the same, only demand drifts; a whole-city pick costs ~30 ms)
+      const still = camera.position.distanceToSquared(lastCam) < 1 && camera.quaternion.angleTo(lastQ) < 1e-3;
+      if (now - lastActive > (still ? 4000 : 500) || camera.position.distanceToSquared(lastCam) > Math.max(400, camera.position.y * camera.position.y * 0.01)) { const ta = performance.now(); const keep = { stepMs: dbg.stepMs, drawMs: dbg.drawMs }; activate(now); cadence(); Object.assign(dbg, keep, { activateMs: +(performance.now() - ta).toFixed(1) }); }
+      const t0 = performance.now(); step(dt); const t1 = performance.now();
+      shown = draw(); const t2 = performance.now();
+      dbg.stepMs = +(0.9 * (dbg.stepMs || 0) + 0.1 * (t1 - t0)).toFixed(2); dbg.drawMs = +(0.9 * (dbg.drawMs || 0) + 0.1 * (t2 - t1)).toFixed(2);   // (smoothed, for window.__live.cars.stats)
     },
     get count() { return shown; },
     get total() { return total; },

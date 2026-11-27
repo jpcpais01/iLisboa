@@ -51,13 +51,11 @@ export function tramGeometry() {
 }
 
 // Metro de Lisboa six-car set, ~105 m, drawn as one glowing capsule chain (it runs underground: the map shows it x-ray)
-export function metroGeometry() {
-  const p = [];
-  for (let c = 0; c < 6; c++) {
-    const x = -52.5 + 8.75 + c * 17.5;
-    p.push(paint(new THREE.CapsuleGeometry(1.5, 14.2, 2, 8).rotateZ(Math.PI / 2).translate(x, 1.6, 0), 0xffffff));
-  }
-  return done(p);
+// one Metro car (17.2 m capsule); a train is six of these, each placed on the track by its own bogies so the
+// train bends through curves (src/live/transit.js)
+export const METRO_CARS = 6, METRO_PITCH = 17.5;
+export function metroCarGeometry() {
+  return done([paint(new THREE.CapsuleGeometry(1.5, 14.2, 2, 8).rotateZ(Math.PI / 2).translate(0, 1.6, 0), 0xffffff)]);
 }
 
 // airliner (A320-ish proportions, 38 m): fuselage, swept wings, tailplane, fin, engines

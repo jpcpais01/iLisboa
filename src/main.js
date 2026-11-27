@@ -8,14 +8,17 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { createSky, AO } from './sky.js';
+import { createRain } from './weatherfx.js';
 import { initLive } from './live/index.js';
 import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
 import { initDrive } from './drive/index.js';
 import { initLandmarks } from './landmarks.js';
+import { initStations } from './stations/index.js';
 import { lmReady, lmFile, restyle } from './lmdetail.js';
 import { initHud } from './ui/hud.js';
 import { initDock } from './ui/dock.js';
+import { initAssistant } from './ui/assistant.js';
 
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
@@ -52,7 +55,7 @@ sun.shadow.mapSize.setScalar(+Q.get('shadow') || (isMobile ? 2048 : 4096));
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 1.0;
 sun.shadow.radius = 2;
-const sunFar = new THREE.DirectionalLight(0x000000, 0);
+const sunFar = new THREE.DirectionalLight(0x000000, 1);   // never shaded: its colour carries the cloud deck (cover, drift) for sky.js's cloud shadows
 sunFar.castShadow = true;
 sunFar.shadow.mapSize.setScalar(isMobile ? 1024 : 2048);
 sunFar.shadow.bias = -0.0004;
@@ -142,6 +145,35 @@ async function loadMask(u) {
   t.userData.px = W * H / 4;   // (for the memory check: one byte a pixel)
   return t;
 }
+const freeMat = (m, map = true) => { for (const x of [].concat(m)) { if (x === matBuildings) continue; if (map) { x.map?.image?.close?.(); x.map?.dispose(); } x.dispose(); } };   // (ground meshes carry a [dry, wet] pair)
+// Ground triangles nowhere near the water mask are drawn by a variant of the ground material without the mask test: one that
+// may discard costs the GPU its early depth test (measured: ~40 % of the far ground's cost). Triangles are sorted into two
+// groups, dry then wet, against a coarse "any water within 16 m" grid of the mask; the wet ones keep the per-pixel shoreline.
+function wetGrid(a) {
+  if (a.wet) return a.wet;
+  const img = a.mask.image, W = img.width, H = img.height, d = img.data, C = 16, gw = Math.ceil(W / C), gh = Math.ceil(H / C), g = new Uint8Array(gw * gh);
+  for (let y = 0; y < H; y++) { const row = y * W, gr = ((y / C) | 0) * gw; for (let x = 0; x < W; x++) if (d[row + x]) g[gr + ((x / C) | 0)] = 1; }
+  return (a.wet = { g, gw, gh, sx: W / (a.bounds.maxX - a.bounds.minX) / C, sy: H / (a.bounds.maxY - a.bounds.minY) / C });
+}
+const _wv = new THREE.Vector3();
+function splitWet(geo, a, mw) {   // → [dry, wet] triangle counts; the index is reordered in place (dry first) and two groups set
+  if (LEGACY) { geo.clearGroups(); geo.addGroup(0, Infinity, 1); return; }
+  const G = wetGrid(a), P = geo.attributes.position, n = P.count, idx = geo.index ? geo.index.array : Uint32Array.from({ length: n }, (_, i) => i);
+  const cx = new Float32Array(n), cy = new Float32Array(n);
+  for (let i = 0; i < n; i++) { _wv.fromBufferAttribute(P, i); if (mw) _wv.applyMatrix4(mw); cx[i] = (_wv.x - a.bounds.minX) * G.sx; cy[i] = (-_wv.z - a.bounds.minY) * G.sy; }
+  const dry = [], wet = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const i0 = idx[t], i1 = idx[t + 1], i2 = idx[t + 2];
+    const x0 = Math.max(0, Math.floor(Math.min(cx[i0], cx[i1], cx[i2])) - 1), x1 = Math.min(G.gw - 1, Math.floor(Math.max(cx[i0], cx[i1], cx[i2])) + 1);
+    const y0 = Math.max(0, Math.floor(Math.min(cy[i0], cy[i1], cy[i2])) - 1), y1 = Math.min(G.gh - 1, Math.floor(Math.max(cy[i0], cy[i1], cy[i2])) + 1);
+    let w = x0 > x1 || y0 > y1;   // (outside the mask: keep the test)
+    for (let y = y0; y <= y1 && !w; y++) for (let x = x0; x <= x1; x++) if (G.g[y * G.gw + x]) { w = true; break; }
+    (w ? wet : dry).push(i0, i1, i2);
+  }
+  const out = new (n > 65535 ? Uint32Array : Uint16Array)(dry.length + wet.length); out.set(dry); out.set(wet, dry.length);
+  geo.setIndex(new THREE.BufferAttribute(out, 1)); geo.clearGroups(); geo.addGroup(0, dry.length, 0); geo.addGroup(dry.length, wet.length, 1);
+  return [dry.length / 3, wet.length / 3];
+}
 // every area starts with its water, its skirt and its far level of detail (a coarse terrain and plain blocks per tile)
 const tileAt = new Map();
 
@@ -211,7 +243,9 @@ function mergeFar(a, root) {
     const tex = new THREE.CanvasTexture(cv);
     tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.userData.px = W * Hh; tex.onUpdate = () => { cv.width = cv.height = 1; };   // uploaded: let the canvas go
-    add(mergeGeometries(geos), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t), `ft_${a.area}`, H.t);
+    const fg = mergeGeometries(geos); splitWet(fg, a);
+    const ftm = add(fg, [hideable(terrainMaterial(tex, a.mask, a.bounds, false, false), H.t), hideable(terrainMaterial(tex, a.mask, a.bounds), H.t)], `ft_${a.area}`, H.t);
+    ftm.renderOrder = LEGACY ? 0 : 1;   // ground after the buildings: whatever they cover is rejected by the depth test before it is shaded
     free(parts.t);
   }
   if (parts.b.length) { add(mergeGeometries(parts.b.map((p) => bake(p, ['position', 'color']))), hideable(farBuildingMaterial(), H.b), `fb_${a.area}`, H.b); free(parts.b); }
@@ -274,7 +308,8 @@ function adopt(tile, gltf, mode) {
     } else if (o.name.startsWith('terrain')) {
       const map = o.material.map;
       map.anisotropy = maxAniso; map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping; map.needsUpdate = true;   // glTF defaults to REPEAT: tile edges bled the opposite edge in
-      o.material = terrainMaterial(map, a.mask, a.bounds, !!a.surf);
+      o.updateWorldMatrix(true, false); splitWet(o.geometry, a, o.matrixWorld);
+      o.material = [terrainMaterial(map, a.mask, a.bounds, !!a.surf, false), terrainMaterial(map, a.mask, a.bounds, !!a.surf)]; o.renderOrder = LEGACY ? 0 : 1;
       o.receiveShadow = true; o.castShadow = true; bigCaster(o);   // hills shade the valleys at a low sun (back faces only: no acne)
     }
   });
@@ -291,7 +326,7 @@ function dispose(tile) {
       if (m.isInstancedMesh) { m.dispose(); return; }
       if (!m.isMesh) return;
       m.geometry.dispose();
-      if (m.material !== matBuildings) { m.material.map?.dispose(); m.material.dispose(); }
+      freeMat(m.material);
     });
   }
   const i = balconyChunks.indexOf(tile.bal); if (i >= 0) balconyChunks.splice(i, 1);
@@ -301,7 +336,7 @@ function dispose(tile) {
 async function load(tile, mode) {
   const upgrade = tile.state === 2;   // mid → full: the mid copy stays on screen until the full one is in
   tile.state = upgrade ? 2 : 1; tile.loading = mode; const gen = (tile.gen = (tile.gen || 0) + 1);
-  const drop = (o) => o.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); if (m.material !== matBuildings) { m.material.map?.dispose(); m.material.dispose(); } } });
+  const drop = (o) => o.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); freeMat(m.material); } });
   try {
     await wake(tile.a);
     const gltf = await loader.loadAsync(url(tile.a, tile.t.file));
@@ -316,7 +351,7 @@ async function load(tile, mode) {
 // full → mid when the view moves away: drop the ground and its texture, keep the buildings
 function downgrade(tile) {
   const strip = []; tile.obj.traverse((o) => { if (o.isMesh && o.name.startsWith('terrain')) strip.push(o); });
-  for (const o of strip) { o.parent.remove(o); o.geometry.dispose(); o.material.map?.dispose(); o.material.dispose(); }
+  for (const o of strip) { o.parent.remove(o); o.geometry.dispose(); freeMat(o.material); }
   tile.mode = 'mid'; showFar(tile); invalidate(true);
 }
 // façade relief (cornices, string courses, cunhais) and balconies: separate files per tile, only within ~900 m of the camera
@@ -350,7 +385,7 @@ const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (is
 // the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
 // ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
 // exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
-const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default)
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2', LEGACY = Q.get('lodv') === '1';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default; ?lodv=1 = all as before 2026-11-27)
 const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
 const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
@@ -619,8 +654,12 @@ let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today
 // paler shadows. Global light under cloud follows Kasten & Czeplak (G = G_clear·(1 − 0.75·c^3.4)); the direct beam goes
 // first (broken cloud hides the sun part of the time), the sky's diffuse share grows.
 let overcast = 0, lastH = 12;
-const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);
-const _bounce = new THREE.Color(), CITY_TINT = new THREE.Color(1.0, 0.92, 0.82);   // always present: a light count change recompiles every shader
+// the weather's scenery (the HUD's pick, or the real weather): rain streaks and a thicker haze in rain, a sea fog in fog
+let rainK = 0, fogK = 0, wxTarget = { rain: 0, fog: 0 };
+const rain = createRain({ mobile: isMobile }); scene.add(rain.mesh);
+const _rainLight = new THREE.Color();
+const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);   // always present: a light count change recompiles every shader
+const _bounce = new THREE.Color(), CITY_TINT = new THREE.Color(1.0, 0.92, 0.82);
 function setOvercast(c) {
   if (Math.abs(c - overcast) < 0.02) return;
   overcast = c; setTime(lastH, true);
@@ -638,9 +677,11 @@ function setTime(h, now = false) {
     const st = sky.update(sunDir, { night });
     // the sun is the air's transmittance of sunlight; once it has set, a dim cool moon takes over the same light (and its shadows)
     const moon = THREE.MathUtils.smoothstep(elev, -0.06, -0.14) * 0.75;
-    const c = overcast, beam = 1 - 0.85 * c ** 1.6, glob = 1 - 0.75 * c ** 3.4;
-    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = beam; }
-    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon * beam; }
+    // the beam's mean loss under cloud is 1 − 0.85·c^1.6; most of it is now the clouds' own drifting shadows (sky.js
+    // cloudShadow), so the uniform part is only what thin veils and the deck's soft edges take everywhere
+    const c = overcast, beam = 1 - 0.85 * c ** 1.6, glob = 1 - 0.75 * c ** 3.4, veil = (1 - 0.3 * c ** 1.6) * (1 - 0.6 * fogK);
+    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = veil; }
+    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon * veil; }
     for (const l of [sun, sunFar]) { l.shadow.radius = 2 + 7 * c; l.shadow.intensity = 1 - 0.35 * c; }
     sunLit = sun.intensity * Math.max(sun.color.r, sun.color.g, sun.color.b) > 1e-3;   // (never toggle .visible: a light count change recompiles every shader)
     // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
@@ -648,7 +689,11 @@ function setTime(h, now = false) {
     // in daylight the exposure is photographic: a sunlit horizontal albedo comes out of ACES as itself (E is ~3.95× the
     // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain; +10 % for its toe, which crushes asphalt and shade), so photos and measured colours read true instead
     // of ~2.5× brighter and milky. Dusk and night keep the eye's partial adaptation (the min hands over smoothly).
-    renderer.toneMappingExposure = EXPOSURE * Math.min(1.9 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
+    // the season: the eye does not adapt all the way either, so a July noon reads brighter and harsher than a December one
+    // (the day's noon sun height against the equinox's, to the 0.35: about +7 % in summer, −15 % in winter, at every hour; ^0.25 → about +5 % / −11 %)
+    const dec = 0.4091 * Math.sin((2 * Math.PI / 365) * (sunDay - 81)), noonEl = Math.PI / 2 - THREE.MathUtils.degToRad(manifest.origin.lat) + dec;
+    const season = THREE.MathUtils.lerp(Math.pow(Math.sin(noonEl) / Math.sin(Math.PI / 2 - THREE.MathUtils.degToRad(manifest.origin.lat)), 0.25), 1, night);
+    renderer.toneMappingExposure = EXPOSURE * season * Math.min(1.9 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
     // the light the beam loses (beyond what the cloud absorbs) comes back from the cloud deck: grey-white, from everywhere
     // (the clear-sky environment is blue; under a full deck part of it hands over to that neutral light)
     const day = Math.max(0, sunDir.y + 0.05) / (Math.abs(sunDir.y) + 0.3);
@@ -660,6 +705,7 @@ function setTime(h, now = false) {
     cloudLight.color.setRGB(0.91, 0.93, 0.95).multiplyScalar(cloudI).add(_bounce.copy(st.sunColor).multiplyScalar(1 / Math.max(1e-3, (st.sunColor.r + st.sunColor.g + st.sunColor.b) / 3)).multiply(CITY_TINT).multiplyScalar(bounceI));
     cloudLight.intensity = 1;
     cityUniforms.uBounce.value.copy(_bounce);
+    haze.density = 0.00009 * (1 + 3 * rainK + 30 * fogK);   // fog: ~1 km visibility
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
   };
@@ -719,7 +765,7 @@ function fitShadow(now) {
 let needRender = 3;
 const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = aoDirty = true; };
 // the clock: Lisbon's real time and date by default (the HUD keeps it ticking); the slider picks any hour of today. ?t=hour pins it.
-const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); } }); window.__hud = hud;
+const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); }, onWeather: (fx) => { wxTarget = fx; } }); window.__hud = hud;
 initDock();
 { const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
@@ -760,8 +806,12 @@ const live = initLive({ scene, camera, renderer, canvas, ll, bounds: { minX, min
 const layers = initLayers({ scene, camera, controls, canvas, ground: live.ground, bounds: { minX, minY, maxX, maxY }, mobile: isMobile, night: cityUniforms.uNight, sky, hud, onCloud: setOvercast, invalidate }); window.__layers = layers;
 // drive mode: a car on the real streets (src/drive), filmed by the shared chase camera (or from the bonnet)
 const drive = initDrive({ scene, camera, controls, canvas, chase, live, waterY: manifest.waterY, uNight: cityUniforms.uNight, home: ll(38.7086, -9.1366), ll }); window.__drive = drive;
+// bus stops + Metro stations: tap one for the next arrivals per line (src/stations); before the landmarks so a stop pin wins the tap
+const stations = initStations({ scene, camera, canvas, live, mobile: isMobile, invalidate }); window.__stations = stations;
 // landmarks: hover lights a famous building, a tap flies to it and opens its Wikipedia card (src/landmarks.js)
 const marks = initLandmarks({ scene, camera, controls, canvas, ground: live.ground, chase, drive, invalidate, mobile: isMobile }); window.__marks = marks;
+// Alfacinha, the Lisbon guide: a swallow in the corner that opens a chat (src/ui/assistant.js → /api/assistant)
+window.__alf = initAssistant({ camera, controls, marks, live, hud, ll, mobile: isMobile });
 window.__scene = scene; if (SHOW_STATS) window.__dbg = { renderer, scene, camera, controls, sun, sunFar, THREE }; window.__view = (arr) => { camera.position.fromArray(arr, 0); controls.target.fromArray(arr, 3); introT = 1; };
 
 // ─── loop ───────────────────────────────────────────────────────────────
@@ -786,7 +836,7 @@ renderer.setAnimationLoop((now) => {
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
-  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy || layers.busy;   // live layers that are on want every frame
+  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy || layers.busy || rainK > 0;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
   idleN = active ? 0 : idleN + 1;
   // motion resolution: while the view moves, draw at ~2/3 the pixel ratio (≈2.2× fewer pixels); full sharpness ~0.15 s after it settles
@@ -801,7 +851,16 @@ renderer.setAnimationLoop((now) => {
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
-  fitShadow(now); sky.tick(now / 1000);
+  const skyS = (now / 1000) % 2e5;   // (wrapped every ~2 days so the drift stays precise in float32)
+  fitShadow(now); sky.tick(skyS);
+  sunFar.color.setRGB(sky.dome.material.uniforms.uCover.value, skyS * 0.004, skyS * 0.0011);   // the deck's drift, as in the dome
+  if (Math.abs(wxTarget.rain - rainK) > 1e-3 || Math.abs(wxTarget.fog - fogK) > 1e-3) {   // ease in over ~2 s
+    const k = Math.min(1, dt * 1.5);
+    rainK += (wxTarget.rain - rainK) * k; fogK += (wxTarget.fog - fogK) * k;
+    if (Math.abs(wxTarget.rain - rainK) < 2e-3) rainK = wxTarget.rain; if (Math.abs(wxTarget.fog - fogK) < 2e-3) fogK = wxTarget.fog;
+    rain.amount = rainK; setTime(lastH); needRender = Math.max(needRender, 2);
+  }
+  if (rainK > 0) { _rainLight.copy(haze.color).multiplyScalar(1.6); rain.update(skyS, camera, live.ground.at(camera.position.x, -camera.position.z) || 0, _rainLight); }
   if (++nf % (chase.active ? 4 : 12) === 0 || !ready) stream(!ready);   // a followed plane crosses a tile in seconds
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;
@@ -814,6 +873,7 @@ renderer.setAnimationLoop((now) => {
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
   { lampUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)); }
   live.update(dt, now);
+  stations.update();
   layers.update(dt, now);
   renderer.render(scene, camera);
 

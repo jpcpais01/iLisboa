@@ -2,7 +2,9 @@
 // It also owns the clock: by default the scene follows Lisbon's real time (and today's real sun); dragging the
 // time slider leaves "live" for any hour of today, and "Agora" goes back. The weather follows the slider too:
 // the hour shown is the hour forecast (Open-Meteo, keyless), "agora" when live.
-//   const hud = initHud({ onTime(h, now) }) → hud.sunDay(), hud.utcOffset(), hud.hour()
+// The card under the line also holds two pickers, both "Ao vivo" by default: the time of year (the sun of the 15th of any
+// month, ?mes=1…12) and the weather (?tempo=limpo|pouco|parcial|nublado|chuva|nevoeiro), which overrides the real one.
+//   const hud = initHud({ onTime(h, now, L), onWeather(fx) }) → hud.sunDay(), hud.utcOffset(), hud.hour(), hud.weatherPick()
 const TZ = 'Europe/Lisbon';
 const LAT = 38.7223, LON = -9.1393;
 const Q = new URLSearchParams(location.search);
@@ -70,7 +72,20 @@ const TILE = `<svg class="tile" viewBox="0 0 32 32" aria-hidden="true">
   <rect x="1" y="1" width="30" height="30" rx="3.2" class="rim"/>
 </svg>`;
 
-export function initHud({ onTime }) {
+// the weather picker: cloud cover (%) for the sky and the light, rain (0…1) and fog (0…1) for the scenery, a WMO code for the icon
+const PICKS = {
+  limpo: { label: 'Limpo', cover: 0, rain: 0, fog: 0, code: 0 },
+  pouco: { label: 'Pouco nublado', cover: 22, rain: 0, fog: 0, code: 1 },
+  parcial: { label: 'Parcialmente nublado', cover: 50, rain: 0, fog: 0, code: 2 },
+  nublado: { label: 'Nublado', cover: 96, rain: 0, fog: 0, code: 3 },
+  chuva: { label: 'Chuva', cover: 100, rain: 1, fog: 0.25, code: 63 },
+  nevoeiro: { label: 'Nevoeiro', cover: 88, rain: 0, fog: 1, code: 45 },
+};
+const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+// what the live weather code means for the scenery
+const fxOf = (code) => ({ rain: code >= 95 || (code >= 80 && code <= 82) || (code >= 61 && code <= 67) ? 1 : code >= 51 && code <= 57 ? 0.45 : 0, fog: code === 45 || code === 48 ? 1 : 0 });
+
+export function initHud({ onTime, onWeather = () => {} }) {
   const el = document.createElement('header');
   el.className = 'hud';
   el.innerHTML = `
@@ -79,10 +94,24 @@ export function initHud({ onTime }) {
       <span class="hud-day"></span><i class="dot-sep"></i><span class="hud-time"><b></b><em class="live-dot" title="ao vivo"></em></span>
       <span class="hud-wx" hidden><i class="dot-sep"></i><svg viewBox="0 0 24 24" aria-hidden="true"></svg><b class="hud-temp"></b></span>
     </button>
-    <div class="hud-more" hidden></div>`;
+    <div class="hud-more" hidden><div class="wx-info"></div>
+      <div class="hud-picks">
+        <label><span>Época do ano</span><select class="pick-mes"><option value="">Ao vivo</option>${MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}</select></label>
+        <label><span>Tempo</span><select class="pick-tempo"><option value="">Ao vivo</option>${Object.entries(PICKS).map(([k, p]) => `<option value="${k}">${p.label}</option>`).join('')}</select></label>
+      </div></div>`;
   document.body.appendChild(el);
   const $ = (s) => el.querySelector(s);
-  const line = $('.hud-line'), more = $('.hud-more'), wxEl = $('.hud-wx');
+  const line = $('.hud-line'), more = $('.hud-more'), info = $('.wx-info'), wxEl = $('.hud-wx');
+  const mesSel = $('.pick-mes'), tempoSel = $('.pick-tempo');
+  // the time-of-year pick: the sun of the 15th of that month (summer time from April to October), today's clock
+  let mes = Math.round(+Q.get('mes')); if (!(mes >= 1 && mes <= 12)) mes = 0;
+  let tempo = PICKS[Q.get('tempo')] ? Q.get('tempo') : '';
+  mesSel.value = mes ? String(mes) : ''; tempoSel.value = tempo;
+  const sunL = () => {
+    if (!mes) return L;
+    const date = new Date(Date.UTC(L.year, mes - 1, 15, 12));
+    return { ...L, month: mes, day: 15, date, doy: Math.round((date - Date.UTC(L.year, 0, 0)) / 86400000 - 0.5), offset: mes >= 4 && mes <= 10 ? 1 : 0 };
+  };
 
   // ─── the clock ───
   const slider = document.getElementById('time'), sunBox = slider.closest('.sun');
@@ -102,11 +131,11 @@ export function initHud({ onTime }) {
   };
   function apply(now) {
     slider.value = hour;
-    onTime(hour, now, L);
+    onTime(hour, now, sunL());
     paintTime(); paintWeather();
   }
   function paintTime() {
-    $('.hud-day').innerHTML = dayLabel(L.date);
+    $('.hud-day').innerHTML = dayLabel(sunL().date);
     $('.hud-time b').textContent = hhmm(hour);
     const pct = (hour / 24) * 100;
     bubble.textContent = hhmm(hour); bubble.style.left = `calc(${pct}% + ${((0.5 - hour / 24) * 18).toFixed(1)}px)`;   // the thumb's centre (18 px thumb)
@@ -118,11 +147,14 @@ export function initHud({ onTime }) {
     slider.style.setProperty('--trk', `linear-gradient(90deg, ${night} 0 ${p(rise - 0.7)}, ${glow} ${p(rise)}, ${day} ${p(rise + 1.2)} ${p(set - 1.2)}, ${glow} ${p(set)}, ${night} ${p(set + 0.7)} 100%)`);
   }
   // until the forecast says otherwise, sunrise/sunset come from the sun model itself (via main's onTime): estimate from the date
-  { const dec = 23.44 * Math.sin(((2 * Math.PI) / 365) * (L.doy - 81)) * Math.PI / 180, lat = LAT * Math.PI / 180;
+  function modelTrack() {
+    const S = sunL(), dec = 23.44 * Math.sin(((2 * Math.PI) / 365) * (S.doy - 81)) * Math.PI / 180, lat = LAT * Math.PI / 180;
     const H = Math.acos(Math.max(-1, Math.min(1, (Math.sin(-0.0145) - Math.sin(lat) * Math.sin(dec)) / (Math.cos(lat) * Math.cos(dec))))) * 12 / Math.PI;
-    const noon = 12 - LON / 15 + L.offset; paintTrack(noon - H, noon + H); }
+    const noon = 12 - LON / 15 + S.offset; paintTrack(noon - H, noon + H);
+  }
+  modelTrack();
 
-  slider.addEventListener('input', () => { if (live) setLive(false); hour = +slider.value; sunBox.classList.add('drag'); onTime(hour, false, L); paintTime(); paintWeather(); });
+  slider.addEventListener('input', () => { if (live) setLive(false); hour = +slider.value; sunBox.classList.add('drag'); onTime(hour, false, sunL()); paintTime(); paintWeather(); });
   slider.addEventListener('change', () => { hour = +slider.value; sunBox.classList.remove('drag'); apply(true); });
   for (const ev of ['pointerup', 'pointercancel', 'blur']) slider.addEventListener(ev, () => sunBox.classList.remove('drag'));
   nowBtn.addEventListener('click', () => { L = lisbon(); hour = L.h; setLive(true); apply(true); });
@@ -142,7 +174,7 @@ export function initHud({ onTime }) {
     W = w; try { localStorage.setItem('ilisboa.wx', JSON.stringify({ t: Date.now(), w })); } catch { /* full */ }
     const d = W.daily, today = `${L.year}-${String(L.month).padStart(2, '0')}-${String(L.day).padStart(2, '0')}`;
     const k = d?.time?.indexOf(today) ?? -1, hm = (s) => { const m = /T(\d+):(\d+)/.exec(s || ''); return m ? +m[1] + m[2] / 60 : null; };
-    if (k >= 0 && hm(d.sunrise?.[k]) != null) paintTrack(hm(d.sunrise[k]), hm(d.sunset[k]));
+    if (!mes && k >= 0 && hm(d.sunrise?.[k]) != null) paintTrack(hm(d.sunrise[k]), hm(d.sunset[k]));
     paintWeather();
   };
   addEventListener('weather', (e) => take(e.detail || window.__weather));
@@ -156,6 +188,7 @@ export function initHud({ onTime }) {
       + '&timezone=Europe%2FLisbon&forecast_days=2&wind_speed_unit=kmh';
     try { const r = await fetch(url); if (r.ok) take(await r.json()); } catch { /* offline: keep the cached forecast */ }
   }
+  let lastFx = '';   // (declared before the first paint: a cached forecast paints at once)
   // the weather layers thread may publish first; otherwise fetch ourselves
   if (window.__weather) take(window.__weather);
   if (W) paintWeather();
@@ -174,10 +207,14 @@ export function initHud({ onTime }) {
     return { temp: lerp(hr.temperature_2m), code: hr.weather_code?.[near], day: hr.is_day?.[near], pop: hr.precipitation_probability?.[near], wind: lerp(hr.wind_speed_10m) };
   }
   function paintWeather() {
-    if (!W) return;
-    const c = W.current, useNow = live && c && c.temperature_2m != null;
-    const x = useNow ? { temp: c.temperature_2m, code: c.weather_code, day: c.is_day, wind: c.wind_speed_10m } : at(hour);
-    if (!x || x.temp == null) { wxEl.hidden = true; return; }
+    const P = PICKS[tempo];
+    const c = W?.current, useNow = live && c && c.temperature_2m != null;
+    const x = W ? (useNow ? { temp: c.temperature_2m, code: c.weather_code, day: c.is_day, wind: c.wind_speed_10m } : at(hour)) : null;
+    // the scenery follows the pick, or the real weather at the slider's hour
+    const fx = P ? { cover: P.cover, rain: P.rain, fog: P.fog, pick: tempo } : { cover: null, ...fxOf(x?.code ?? 0), pick: '' };
+    const key = JSON.stringify(fx); if (key !== lastFx) { lastFx = key; onWeather(fx); }
+    if (!x || x.temp == null) { wxEl.hidden = true; info.innerHTML = ''; return; }
+    if (P) x.code = P.code;
     const [icon, words] = wmo(x.code);
     wxEl.hidden = false;
     wxEl.querySelector('svg').innerHTML = ICONS[icon](x.day !== 0);
@@ -186,7 +223,7 @@ export function initHud({ onTime }) {
     line.title = words;
     // the expanded card
     const rows = [];
-    const when = useNow ? 'agora' : hour > L.h ? `previsão às ${hhmm(Math.round(hour))}` : `às ${hhmm(Math.round(hour))}`;
+    const when = P ? 'escolhido abaixo' : useNow ? 'agora' : hour > L.h ? `previsão às ${hhmm(Math.round(hour))}` : `às ${hhmm(Math.round(hour))}`;
     rows.push(`<p class="cond"><b>${words}</b><span>${when}</span></p>`);
     if (useNow && c.apparent_temperature != null) rows.push(`<p><span>Sensação</span><b>${Math.round(c.apparent_temperature)}°</b></p>`);
     const wind = useNow ? c.wind_speed_10m : x.wind;
@@ -200,17 +237,19 @@ export function initHud({ onTime }) {
       if (d.sunrise) rows.push(`<p><span>Nascer · pôr do sol</span><b>${t(d.sunrise[k])} · ${t(d.sunset[k])}</b></p>`);
     }
     rows.push('<small>Open-Meteo</small>');
-    more.innerHTML = rows.join('');
+    info.innerHTML = rows.join('');
   }
+  mesSel.addEventListener('change', () => { mes = +mesSel.value || 0; modelTrack(); if (!mes && W) take(W); apply(true); });
+  tempoSel.addEventListener('change', () => { tempo = tempoSel.value; paintWeather(); });
   line.addEventListener('click', () => {
-    if (!W) return;
     const open = more.hidden; more.hidden = !open; line.setAttribute('aria-expanded', String(open));
   });
   addEventListener('pointerdown', (e) => { if (!more.hidden && !el.contains(e.target)) { more.hidden = true; line.setAttribute('aria-expanded', 'false'); } });
 
   apply(true);
   return {
-    sunDay: () => L.doy, utcOffset: () => L.offset, hour: () => hour, live: () => live,
+    sunDay: () => sunL().doy, utcOffset: () => sunL().offset, hour: () => hour, live: () => live,
+    weatherPick: () => PICKS[tempo] || null, month: () => mes || null,
     el,
   };
 }

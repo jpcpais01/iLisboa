@@ -341,6 +341,21 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     // for checks: select by name or Wikidata id, pick at a screen point
     select: (q) => { const g = groups.find((x) => x.key === q || x.name === q || x.wd === q); if (g) select(g); return !!g; },
     pick: (x, y) => pick(x, y)?.name || null,
+    // fly to any point (x east, y north, metres) from `dist` away, keeping the viewer's bearing (the assistant uses it)
+    flyTo(x, y, dist = 900) {
+      if (blocked()) return false;
+      const target = new THREE.Vector3(x, ground.at(x, y), -y);
+      const off = new THREE.Vector3().subVectors(camera.position, controls.target); off.y = 0;
+      if (off.lengthSq() < 1) off.set(0, 0, 1);
+      off.normalize();
+      dist = THREE.MathUtils.clamp(dist, Math.max(controls.minDistance, 120), controls.maxDistance * 0.9);
+      const pitch = THREE.MathUtils.degToRad(dist > 3000 ? 55 : 42);
+      const pos = target.clone().addScaledVector(off, Math.cos(pitch) * dist); pos.y += Math.sin(pitch) * dist;
+      const from = { p: camera.position.clone(), t: controls.target.clone() }, travel = from.t.distanceTo(target);
+      fly = { from, to: { p: pos, t: target }, u: 0, dur: THREE.MathUtils.clamp(0.9 + travel / 2500, 1.1, 2.6), arc: Math.min(1400, travel * 0.25) };
+      invalidate();
+      return true;
+    },
     deselect,
     get count() { return groups.length; },
   };

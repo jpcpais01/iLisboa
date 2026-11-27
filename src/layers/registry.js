@@ -11,6 +11,8 @@ const fromUrl = Q.get('layers') ?? Q.get('live');
 let saved;
 try { saved = JSON.parse(localStorage.getItem(KEY) ?? localStorage.getItem('ilisboa.live') ?? '[]'); } catch { saved = []; }
 const initial = new Set(fromUrl != null ? fromUrl.split(',').filter(Boolean) : saved);
+// layers this browser has already been offered: a default-on layer that ships later switches on once for everyone
+let known; try { known = new Set(JSON.parse(localStorage.getItem('ilisboa.layers.known') || '[]')); } catch { known = new Set(); }
 const emit = (id) => { for (const f of subs) try { f(id); } catch (e) { console.error(e); } };
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify([...layers.values()].filter((l) => l.on).map((l) => l.id))); } catch { /* private mode */ } };
 
@@ -31,7 +33,8 @@ export function registerLayer(def) {
   layers.set(l.id, l);
   const handle = { id: l.id, setOn: (v) => setLayer(l.id, v), refresh: () => emit(l.id), get on() { return l.on; } };
   emit(l.id);
-  if (initial.has(l.id) || (def.on && fromUrl == null && !saved.length)) setLayer(l.id, true);
+  if (initial.has(l.id) || (def.on && fromUrl == null && (!saved.length || !known.has(l.id)))) setLayer(l.id, true);
+  if (!known.has(l.id)) { known.add(l.id); try { localStorage.setItem('ilisboa.layers.known', JSON.stringify([...known])); } catch { /* private mode */ } }
   return handle;
 }
 
