@@ -1,0 +1,91 @@
+name: build-tiles
+# Rebuild city tiles on GitHub's runners instead of one sandbox: the areas listed in pipeline/build_queue.txt ("all" = every
+# area in pipeline/areas.txt) are split over up to 22 parallel jobs (2 builds per 4-core runner), then one job lays every
+# result on top of the latest main, regenerates public/tiles/index.json and the landmark stonework overlay (landmarks3d),
+# and pushes. Triggered by a change to pipeline/build_queue.txt on main (or by hand). Same code, same data, same output
+# as a local `node pipeline/build.mjs <area>` (detail sources come from the detail-city release, as get_detail.mjs does).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [pipeline/build_queue.txt]
+concurrency: build-tiles
+permissions:
+  contents: write
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      chunks: ${{ steps.p.outputs.chunks }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "pipeline", sparse-checkout-cone-mode: true }
+      - id: p
+        run: |
+          q=$(grep -v '^#' pipeline/build_queue.txt | awk 'NF{print $1}')
+          if [ "$q" = "all" ]; then q=$(grep -v '^#' pipeline/areas.txt | awk 'NF{print $1}'); fi
+          # land areas first (they take ~10 min), open sea last (~1 min); dealt round-robin into up to 22 chunks
+          land=$(echo "$q" | grep -v '^mar-' || true); sea=$(echo "$q" | grep '^mar-' || true)
+          n=$(printf "%s\n%s\n" "$land" | grep -c . || true); k=$(( n < 22 ? (n > 0 ? n : 1) : 22 ))
+          chunks=$(printf "%s\n%s\n" "$land" "$sea" | grep . | awk -v k=$k '{c[(NR-1)%k]=c[(NR-1)%k]" "$1} END{for(i=0;i<k;i++) if(c[i]!="") print c[i]}' | sed 's/^ //' | jq -R . | jq -cs .)
+          echo "chunks=$chunks" >> "$GITHUB_OUTPUT"; echo "$chunks"
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 22
+      matrix:
+        chunk: ${{ fromJSON(needs.plan.outputs.chunks) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1, sparse-checkout: "pipeline\ndata\nsrc", sparse-checkout-cone-mode: true }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install
+        run: npm ci --no-audit --no-fund --ignore-scripts=false > /dev/null 2>&1 || npm ci --no-audit --no-fund
+      - name: Detail sources
+        run: node pipeline/get_detail.mjs $(echo "${{ matrix.chunk }}" | tr ' ' '\n' | grep -v '^mar-' | tr '\n' ' ')
+      - name: Build
+        run: |
+          echo "${{ matrix.chunk }}" | tr ' ' '\n' | grep . | xargs -P 2 -I{} sh -c 'node --max-old-space-size=7000 pipeline/build.mjs {} > /tmp/build-{}.log 2>&1 && tail -1 /tmp/build-{}.log || (echo "FAILED {}"; tail -30 /tmp/build-{}.log; exit 1)'
+      - name: Pack
+        if: always()
+        run: |
+          mkdir -p /tmp/out; for a in ${{ matrix.chunk }}; do [ -f public/tiles/$a/manifest.json ] && cp -r public/tiles/$a /tmp/out/; done
+          cp /tmp/build-*.log /tmp/out/ 2>/dev/null || true; du -sh /tmp/out
+          echo "name=tiles-$(echo '${{ matrix.chunk }}' | md5sum | cut -c1-8)" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: "${{ env.name }}", path: /tmp/out, retention-days: 2, compression-level: 0 }
+  commit:
+    needs: build
+    if: always() && needs.build.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --no-audit --no-fund > /dev/null 2>&1 || npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with: { path: /tmp/art, pattern: tiles-*, merge-multiple: true }
+      - name: Lay the new tiles on the latest main and push
+        run: |
+          set -e
+          git config user.name "ilisboa-build-bot"; git config user.email "actions@users.noreply.github.com"
+          mkdir -p /tmp/logs; mv /tmp/art/*.log /tmp/logs/ 2>/dev/null || true
+          built=$(ls /tmp/art); echo "built: $built"; grep -l "FAILED\|Error" /tmp/logs/*.log || true
+          for i in 1 2 3 4 5 6; do
+            git fetch -q --depth 1 origin main && git reset -q --hard FETCH_HEAD
+            for a in $built; do rm -rf public/tiles/$a; cp -r /tmp/art/$a public/tiles/$a; done
+            node -e "const fs=require('fs');const A=fs.readFileSync('pipeline/areas.txt','utf8').split('\n').filter(l=>l.trim()&&!l.startsWith('#')).map(l=>l.trim().split(/\s+/)[0]);fs.writeFileSync('public/tiles/index.json',JSON.stringify({areas:A.map(n=>'public/tiles/'+n+'/manifest.json').filter(f=>fs.existsSync(f)).map(f=>JSON.parse(fs.readFileSync(f,'utf8')))}))"
+            node pipeline/landmarks3d.mjs > /tmp/logs/landmarks3d.log 2>&1 || (tail -20 /tmp/logs/landmarks3d.log; exit 1)
+            git add -A public/tiles public/lm
+            git commit -q -m "Tiles rebuilt on the build farm: $(echo $built | wc -w) areas" -m "$(echo $built | tr '\n' ' ')" || { echo "nothing to commit"; exit 0; }
+            git push -q origin HEAD:main && exit 0
+            echo "push lost a race, retrying"; sleep $((i * 20))
+          done
+          exit 1

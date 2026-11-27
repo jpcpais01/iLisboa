@@ -1,0 +1,4 @@
+# Areas the build-tiles workflow rebuilds when this file changes on main (one per line, or 'all').
+oeste
+norte
+amadora
