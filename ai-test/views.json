@@ -1,0 +1,57 @@
+[
+ {
+  "id": "praca",
+  "name": "Pra\u00e7a do Com\u00e9rcio",
+  "cam": "38.7076,-9.1365,900,0,62",
+  "place": "Pra\u00e7a do Com\u00e9rcio",
+  "refq": [
+   "Pra\u00e7a do Com\u00e9rcio aerial",
+   "Pra\u00e7a do Com\u00e9rcio from above",
+   "Terreiro do Pa\u00e7o Lisboa vista"
+  ]
+ },
+ {
+  "id": "alfama",
+  "name": "Alfama roofs",
+  "cam": "38.7118,-9.1300,650,315,68",
+  "place": "the Alfama rooftops below S\u00e3o Jorge Castle",
+  "refq": [
+   "Alfama rooftops Lisbon",
+   "Alfama from Miradouro",
+   "Lisboa Alfama telhados"
+  ]
+ },
+ {
+  "id": "ponte",
+  "name": "Ponte 25 de Abril",
+  "cam": "38.6930,-9.1770,2400,255,74",
+  "place": "the 25 de Abril Bridge over the Tagus",
+  "refq": [
+   "Ponte 25 de Abril aerial",
+   "Ponte 25 de Abril Alc\u00e2ntara",
+   "25 de Abril Bridge Lisbon from above"
+  ]
+ },
+ {
+  "id": "wide",
+  "name": "Wide city",
+  "cam": "38.7230,-9.1450,6500,195,58",
+  "place": "central Lisbon looking south over Avenida da Liberdade to the river",
+  "refq": [
+   "Lisbon aerial view",
+   "Lisboa vista a\u00e9rea Avenida da Liberdade",
+   "Lisbon skyline from above"
+  ]
+ },
+ {
+  "id": "street",
+  "name": "Rua Augusta street level",
+  "cam": "38.7082,-9.1366,230,180,84",
+  "place": "Rua Augusta and its triumphal arch",
+  "refq": [
+   "Rua Augusta Arch Lisbon",
+   "Rua Augusta Lisboa",
+   "Arco da Rua Augusta street"
+  ]
+ }
+]

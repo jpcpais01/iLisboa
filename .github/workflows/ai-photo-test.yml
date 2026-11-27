@@ -1,0 +1,29 @@
+name: ai-photo-test
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['ai-test/go']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: ai-test, fetch-depth: 1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: run
+        env:
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+        run: |
+          set -a; [ -f ai-test/go ] && . ai-test/go; set +a
+          node ai-test/run.mjs
+      - name: commit results
+        run: |
+          git config user.name "ai-photo-test"; git config user.email "actions@users.noreply.github.com"
+          git add ai-test/out ai-test/ref
+          git commit -m "ai-test: results [skip ci]" || exit 0
+          git pull --rebase origin ${GITHUB_REF_NAME} && git push origin HEAD:${GITHUB_REF_NAME}
