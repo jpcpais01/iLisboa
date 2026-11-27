@@ -309,6 +309,19 @@ body.night .hud-wx .cloud { fill: #4a5470; stroke: #aab4c8; }
 .hud-more p.cond b { font: italic 650 19px/1.2 'Lisboa Display', Georgia, serif; color: var(--azul); }
 .hud-more p.cond span { font-size: 11.5px; }
 .hud-more small { display: block; margin-top: 5px; font-size: 10px; color: var(--muted); opacity: 0.8; }
+.hud-picks { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.wx-info:empty + .hud-picks { margin-top: 0; padding-top: 0; border-top: 0; }
+.hud-picks label { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.hud-picks label span { color: var(--muted); }
+.hud-picks select {
+  font: inherit; font-weight: 600; color: var(--azul); background: transparent; border: 1px solid var(--line); border-radius: 9px;
+  padding: 3px 22px 3px 8px; appearance: none; -webkit-appearance: none; cursor: pointer; max-width: 200px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 10px top 55%, right 6px top 55%; background-size: 4px 4px; background-repeat: no-repeat;
+}
+body.night .hud-picks select { color: var(--ink); }
+.hud-picks option { color: #222; background: #fff; }
+.hud-picks select:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 
 /* ─── time slider: the track is today's sky, the button returns to now ─── */

@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildingMaterial, farBuildingMaterial, waterMaterial, terrainMaterial, waterUniformTime, cityUniforms, balconyGeometry, railingMaterial } from './materials.js';
 import { sunDirection } from './sun.js';
 import { createSky, AO } from './sky.js';
+import { createRain } from './weatherfx.js';
 import { initLive } from './live/index.js';
 import { initLayers } from './layers/index.js';
 import { carGeometries, carPaint } from './cars.js';
@@ -54,7 +55,7 @@ sun.shadow.mapSize.setScalar(+Q.get('shadow') || (isMobile ? 2048 : 4096));
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 1.0;
 sun.shadow.radius = 2;
-const sunFar = new THREE.DirectionalLight(0x000000, 0);
+const sunFar = new THREE.DirectionalLight(0x000000, 1);   // never shaded: its colour carries the cloud deck (cover, drift) for sky.js's cloud shadows
 sunFar.castShadow = true;
 sunFar.shadow.mapSize.setScalar(isMobile ? 1024 : 2048);
 sunFar.shadow.bias = -0.0004;
@@ -653,6 +654,10 @@ let sunDay = 135, sunUtc = 1;   // the date's real sun (the HUD sets them: today
 // paler shadows. Global light under cloud follows Kasten & Czeplak (G = G_clear·(1 − 0.75·c^3.4)); the direct beam goes
 // first (broken cloud hides the sun part of the time), the sky's diffuse share grows.
 let overcast = 0, lastH = 12;
+// the weather's scenery (the HUD's pick, or the real weather): rain streaks and a thicker haze in rain, a sea fog in fog
+let rainK = 0, fogK = 0, wxTarget = { rain: 0, fog: 0 };
+const rain = createRain({ mobile: isMobile }); scene.add(rain.mesh);
+const _rainLight = new THREE.Color();
 const cloudLight = new THREE.AmbientLight(0xe9edf2, 0); scene.add(cloudLight);   // always present: a light count change recompiles every shader
 function setOvercast(c) {
   if (Math.abs(c - overcast) < 0.02) return;
@@ -671,9 +676,11 @@ function setTime(h, now = false) {
     const st = sky.update(sunDir, { night });
     // the sun is the air's transmittance of sunlight; once it has set, a dim cool moon takes over the same light (and its shadows)
     const moon = THREE.MathUtils.smoothstep(elev, -0.06, -0.14) * 0.75;
-    const c = overcast, beam = 1 - 0.85 * c ** 1.6, glob = 1 - 0.75 * c ** 3.4;
-    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = beam; }
-    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon * beam; }
+    // the beam's mean loss under cloud is 1 − 0.85·c^1.6; most of it is now the clouds' own drifting shadows (sky.js
+    // cloudShadow), so the uniform part is only what thin veils and the deck's soft edges take everywhere
+    const c = overcast, beam = 1 - 0.85 * c ** 1.6, glob = 1 - 0.75 * c ** 3.4, veil = (1 - 0.3 * c ** 1.6) * (1 - 0.6 * fogK);
+    if (sunDir.y > -0.035) { lightDir.copy(sunDir); sun.color.copy(st.sunColor); sun.intensity = veil; }
+    else { lightDir.copy(MOON); sun.color.setRGB(0.55, 0.68, 1.0); sun.intensity = moon * veil; }
     for (const l of [sun, sunFar]) { l.shadow.radius = 2 + 7 * c; l.shadow.intensity = 1 - 0.35 * c; }
     sunLit = sun.intensity * Math.max(sun.color.r, sun.color.g, sun.color.b) > 1e-3;   // (never toggle .visible: a light count change recompiles every shader)
     // exposure: the eye adapts most (not all) of the way from noon to dusk; night stays night
@@ -681,12 +688,17 @@ function setTime(h, now = false) {
     // in daylight the exposure is photographic: a sunlit horizontal albedo comes out of ACES as itself (E is ~3.95× the
     // ground's irradiance; ACES maps 0.13 to 0.18 after its 1/0.6 gain; +10 % for its toe, which crushes asphalt and shade), so photos and measured colours read true instead
     // of ~2.5× brighter and milky. Dusk and night keep the eye's partial adaptation (the min hands over smoothly).
-    renderer.toneMappingExposure = EXPOSURE * Math.min(1.9 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
+    // the season: the eye does not adapt all the way either, so a July noon reads brighter and harsher than a December one
+    // (the day's noon sun height against the equinox's, to the 0.35: about +7 % in summer, −15 % in winter, at every hour; ^0.25 → about +5 % / −11 %)
+    const dec = 0.4091 * Math.sin((2 * Math.PI / 365) * (sunDay - 81)), noonEl = Math.PI / 2 - THREE.MathUtils.degToRad(manifest.origin.lat) + dec;
+    const season = THREE.MathUtils.lerp(Math.pow(Math.sin(noonEl) / Math.sin(Math.PI / 2 - THREE.MathUtils.degToRad(manifest.origin.lat)), 0.25), 1, night);
+    renderer.toneMappingExposure = EXPOSURE * season * Math.min(1.9 / Math.max(E, 1e-3), THREE.MathUtils.clamp(Math.pow(3.6 / E, 0.5), 1, THREE.MathUtils.lerp(2.7, 1.8, night)));
     // the light the beam loses (beyond what the cloud absorbs) comes back from the cloud deck: grey-white, from everywhere
     // (the clear-sky environment is blue; under a full deck part of it hands over to that neutral light)
     const day = Math.max(0, sunDir.y + 0.05) / (Math.abs(sunDir.y) + 0.3);
     scene.environmentIntensity = 1 - 0.45 * c * c;
     cloudLight.intensity = (Math.max(0, glob - beam) * 1.2 + 0.9 * c * c) * day;
+    haze.density = 0.00009 * (1 + 3 * rainK + 30 * fogK);   // fog: ~1 km visibility
     haze.color.setRGB(0.6, 0.66, 0.75).multiplyScalar(0.02 + 0.9 * THREE.MathUtils.smoothstep(sunDir.y, -0.15, 0.3));
     invalidate(true);
   };
@@ -746,7 +758,7 @@ function fitShadow(now) {
 let needRender = 3;
 const invalidate = (shadow = false) => { needRender = Math.max(needRender, 2); if (shadow) shadowDirty = farDirty = aoDirty = true; };
 // the clock: Lisbon's real time and date by default (the HUD keeps it ticking); the slider picks any hour of today. ?t=hour pins it.
-const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); } }); window.__hud = hud;
+const hud = initHud({ onTime: (h, now, d) => { sunDay = d.doy; sunUtc = d.offset; setTime(h, now); }, onWeather: (fx) => { wxTarget = fx; } }); window.__hud = hud;
 initDock();
 { const add = scene.add.bind(scene), remove = scene.remove.bind(scene); scene.add = (...o) => { invalidate(true); return add(...o); }; scene.remove = (...o) => { invalidate(true); return remove(...o); }; }
 
@@ -817,7 +829,7 @@ renderer.setAnimationLoop((now) => {
   if (chase.busy) { introT = 1; chase.update(dt); }   // after the controls: the chase keeps their orbit and carries it along
   if (driving) drive.afterCamera(dt);
   // render on demand: full rate while anything moves or loads; when the view is still, a quarter rate keeps the river alive
-  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy || layers.busy;   // live layers that are on want every frame
+  const active = moved || introT < 1 || needRender > 0 || !ready || SHOW_STATS || !!live.busy || layers.busy || rainK > 0;   // live layers that are on want every frame
   if (needRender > 0) needRender--;
   idleN = active ? 0 : idleN + 1;
   // motion resolution: while the view moves, draw at ~2/3 the pixel ratio (≈2.2× fewer pixels); full sharpness ~0.15 s after it settles
@@ -832,7 +844,16 @@ renderer.setAnimationLoop((now) => {
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
-  fitShadow(now); sky.tick(now / 1000);
+  const skyS = (now / 1000) % 2e5;   // (wrapped every ~2 days so the drift stays precise in float32)
+  fitShadow(now); sky.tick(skyS);
+  sunFar.color.setRGB(sky.dome.material.uniforms.uCover.value, skyS * 0.004, skyS * 0.0011);   // the deck's drift, as in the dome
+  if (Math.abs(wxTarget.rain - rainK) > 1e-3 || Math.abs(wxTarget.fog - fogK) > 1e-3) {   // ease in over ~2 s
+    const k = Math.min(1, dt * 1.5);
+    rainK += (wxTarget.rain - rainK) * k; fogK += (wxTarget.fog - fogK) * k;
+    if (Math.abs(wxTarget.rain - rainK) < 2e-3) rainK = wxTarget.rain; if (Math.abs(wxTarget.fog - fogK) < 2e-3) fogK = wxTarget.fog;
+    rain.amount = rainK; setTime(lastH); needRender = Math.max(needRender, 2);
+  }
+  if (rainK > 0) { _rainLight.copy(haze.color).multiplyScalar(1.6); rain.update(skyS, camera, live.ground.at(camera.position.x, -camera.position.z) || 0, _rainLight); }
   if (++nf % (chase.active ? 4 : 12) === 0 || !ready) stream(!ready);   // a followed plane crosses a tile in seconds
   for (const g of balconyChunks) g.visible = camera.position.distanceTo(g.userData.c) < DR;
   carU.uHiR.value = 180 * lodK;

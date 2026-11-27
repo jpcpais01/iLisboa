@@ -242,6 +242,9 @@ vec3 CustomToneMapping( vec3 color ) {
 			if ( w < 1. ) { s1 = getShadow( directionalShadowMap[ 1 ], directionalLightShadows[ 1 ].shadowMapSize, directionalLightShadows[ 1 ].shadowIntensity, directionalLightShadows[ 1 ].shadowBias, directionalLightShadows[ 1 ].shadowRadius, c1 );
 				s1 = mix( 1., s1, smoothstep( 0., .06, min( e1.x, e1.y ) ) ); }
 			directLight.color *= mix( s1, s0, w );
+			#if NUM_DIR_LIGHT_SHADOWS == 3
+			directLight.color *= cloudShadow( geometryPosition );
+			#endif
 		}
 		#elif defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )
 		directionalLightShadow = directionalLightShadows[ i ];
@@ -282,6 +285,21 @@ function installAO(mobile) {
   AO.R = R; AO.size = mobile ? 1024 : 2048;
   THREE.ShaderChunk.shadowmap_pars_fragment += /* glsl */`
 #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS == 3
+// cloud shadows: the sky's own cloud deck (same noise, same drift, see DOME_FRAG), followed from each fragment up the sun ray.
+// The deck's cover and drift ride in the colour of light 1 (a twin that is never shaded): no extra uniforms on any material.
+float csH( vec2 p ) { vec3 q = fract( vec3( p.xyx ) * .1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
+float csN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3. - 2. * f );
+  return mix( mix( csH( i ), csH( i + vec2( 1, 0 ) ), f.x ), mix( csH( i + vec2( 0, 1 ) ), csH( i + vec2( 1, 1 ) ), f.x ), f.y ); }
+float cloudShadow( vec3 posV ) {
+  vec3 cd = directionalLights[ 1 ].color;   // ( cover, drift x, drift z )
+  if ( cd.x <= 0. ) return 1.;
+  vec3 L = ( vec4( directionalLights[ 0 ].direction, 0. ) * viewMatrix ).xyz;
+  if ( L.y < .03 ) return 1.;
+  vec3 wp = cameraPosition + ( vec4( posV, 0. ) * viewMatrix ).xyz;
+  vec2 q = ( wp.xz + L.xz * ( 1800. - wp.y ) / L.y ) / 2600. + cd.yz;
+  float n = csN( q ) * .5 + csN( q * 2.03 + 1.7 ) * .25 + ${mobile ? '.09' : 'csN( q * 4.1 + 3.1 ) * .125 + .03'};
+  return 1. - .86 * smoothstep( 1. - cd.x, 1.15 - cd.x * .7, n );
+}
 float heightAO( sampler2D map, vec4 c, vec3 nw ) {
   vec3 p = c.xyz / c.w; vec2 e = min( p.xy, 1. - p.xy ); float edge = smoothstep( 0., .04, min( e.x, e.y ) );
   if ( edge <= 0. ) return 1.;
