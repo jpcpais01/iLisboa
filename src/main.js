@@ -457,7 +457,7 @@ function addTrees(buf) {
   }
   // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city)
   if (!OLDLOD && chunks.length) {
-    const agg = cellsOf(1e7).map(({ kind, ids }) => { const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, ids.length); place([a], K, ids); fin(a).castShadow = false; a.visible = false; return a; });
+    const agg = [...cellsOf(1e7)].map(({ kind, ids }) => { const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, ids.length); place([a], K, ids); fin(a).castShadow = false; a.visible = false; return a; });
     const b = new THREE.Box3(); for (const a of agg) b.union(new THREE.Box3().setFromCenterAndSize(a.boundingSphere.center, new THREE.Vector3().setScalar(a.boundingSphere.radius * 2)));
     const sph = b.getBoundingSphere(new THREE.Sphere());
     const A = { agg, chunks, c: sph.center, r: sph.radius, far: false }; for (const t of chunks) t.area = A; treeAreas.push(A);
