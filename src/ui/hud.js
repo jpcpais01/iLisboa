@@ -188,6 +188,7 @@ export function initHud({ onTime, onWeather = () => {} }) {
       + '&timezone=Europe%2FLisbon&forecast_days=2&wind_speed_unit=kmh';
     try { const r = await fetch(url); if (r.ok) take(await r.json()); } catch { /* offline: keep the cached forecast */ }
   }
+  let lastFx = '';   // (declared before the first paint: a cached forecast paints at once)
   // the weather layers thread may publish first; otherwise fetch ourselves
   if (window.__weather) take(window.__weather);
   if (W) paintWeather();
@@ -205,7 +206,6 @@ export function initHud({ onTime, onWeather = () => {} }) {
     const lerp = (a) => (a ? a[i0] + (a[i1] - a[i0]) * f : null);
     return { temp: lerp(hr.temperature_2m), code: hr.weather_code?.[near], day: hr.is_day?.[near], pop: hr.precipitation_probability?.[near], wind: lerp(hr.wind_speed_10m) };
   }
-  let lastFx = '';
   function paintWeather() {
     const P = PICKS[tempo];
     const c = W?.current, useNow = live && c && c.temperature_2m != null;
