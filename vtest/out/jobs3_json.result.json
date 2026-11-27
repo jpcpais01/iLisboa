@@ -1,0 +1,12 @@
+[
+ {
+  "name": "a1_vace_first_last",
+  "endpoint": "fal-ai/wan-vace-14b/depth",
+  "ok": true,
+  "ms": 258607,
+  "inference_s": 174.04699993133545,
+  "request": "01a21f5a-12b3-7292-b3fd-cc15bae4e120",
+  "seed": 1,
+  "file": "a1_vace_first_last.mp4"
+ }
+]
