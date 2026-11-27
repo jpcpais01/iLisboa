@@ -42,6 +42,7 @@ const haloMat = () => new THREE.ShaderMaterial({
   side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false,
 });
 
+const ORBIT_W = (2 * Math.PI) / 100;   // rad/s
 export function initLandmarks({ scene, camera, controls, canvas, ground, chase, drive, invalidate, mobile = false }) {
   // ─── data ───
   let groups = [], grid = new Map();
@@ -159,6 +160,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
 
   // ─── state ───
   let hover = null, pressed = null, selected = null, ptr = null, ptrDirty = false, fly = null;
+  let orbit = null;   // after an assistant fly-to: a slow turn around the place until the viewer takes the camera
   const blocked = () => chase.active || drive.active;
   const setHover = (g) => {
     if (g === hover) return;
@@ -172,11 +174,13 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     if (e.pointerType !== 'mouse') { if (pressed && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) { unlightPress(); } return; }
     ptr = e.buttons ? null : { x: e.clientX, y: e.clientY }; ptrDirty = true;
   });
+  canvas.addEventListener('wheel', () => { orbit = null; }, { passive: true });
+  addEventListener('keydown', (e) => { if (orbit && !/^(Shift|Control|Alt|Meta)$/.test(e.key) && !e.target.closest?.('textarea, input')) orbit = null; });
   canvas.addEventListener('pointerleave', () => { ptr = null; ptrDirty = true; });
   let down = null, fingers = 0;
   const unlightPress = () => { if (pressed && pressed !== selected && pressed !== hover) unlight(pressed); pressed = null; };
   canvas.addEventListener('pointerdown', (e) => {
-    fly = null;   // any touch takes the camera back
+    fly = null; orbit = null;   // any touch takes the camera back
     if (e.pointerType === 'touch') fingers++;
     down = { x: e.clientX, y: e.clientY, t: e.timeStamp };
     if (e.pointerType === 'mouse') { setHover(null); return; }
@@ -202,7 +206,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && selected) deselect(); });
 
   // ─── fly to frame it ───
-  function frame(g) {
+  function frame(g, spin = false) {
     const box = g.glow && g.glow.wash ? g.glow.box : null;
     const c = new THREE.Vector3(), size = new THREE.Vector3();
     if (box) { box.getCenter(c); box.getSize(size); }
@@ -219,6 +223,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     const pitch = THREE.MathUtils.degToRad(tall > 1.2 ? 22 : tall > 0.6 ? 30 : 38);
     const target = c.clone(); target.y = (box ? box.min.y : c.y) + size.y * (tall > 1.2 ? 0.5 : 0.35);
     const pos = target.clone().addScaledVector(off, Math.cos(pitch) * dist); pos.y += Math.sin(pitch) * dist;
+    const pivot = target.clone();
     // the card covers part of the screen: aim off-centre so the building sits in the free space
     // (phone: the sheet takes the bottom, so the building goes up; desktop: the card is on the left, so it goes right)
     const fwd = new THREE.Vector3().subVectors(target, pos).normalize(), perPx = (2 * Math.tan(vf) * dist) / Math.max(1, canvas.clientHeight);
@@ -232,7 +237,8 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     pos.y = Math.max(pos.y, ground.at(pos.x, -pos.z) + 25);
     const from = { p: camera.position.clone(), t: controls.target.clone() };
     const travel = from.t.distanceTo(target);
-    fly = { from, to: { p: pos, t: target }, u: 0, dur: THREE.MathUtils.clamp(0.9 + travel / 2500, 1.1, 2.4), arc: Math.min(1200, travel * 0.25) };
+    fly = { from, to: { p: pos, t: target }, u: 0, dur: THREE.MathUtils.clamp(0.9 + travel / 2500, 1.1, 2.4), arc: Math.min(1200, travel * 0.25), pivot: spin ? pivot : null };
+    orbit = null;
   }
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
 
@@ -241,11 +247,11 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
   card.className = 'lm-card'; card.hidden = true; card.setAttribute('aria-live', 'polite');
   document.body.appendChild(card);
   const cache = new Map();
-  function select(g) {
+  function select(g, spin = false) {
     if (selected && selected !== g) unlight(selected);
     selected = g; if (pressed === g) pressed = null;
     light(g, 1, true);
-    frame(g);
+    frame(g, spin);
     document.querySelector('.live-card:not(.follow)')?.setAttribute('hidden', '');
     render(g, null);
     info(g).then((i) => { if (selected === g) render(g, i); });
@@ -310,7 +316,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
       const dt = Math.min(0.1, lastT ? (now - lastT) / 1000 : 0); lastT = now;
       // a landmark chosen before its tile was in (a far tap, ?landmark=): light it once its buildings arrive
       if (selected && !(selected.glow && selected.glow.wash) && now - retryT > 1000) { retryT = now; selected.glow = null; light(selected, 1, true); }
-      if (blocked()) { if (hover) setHover(null); if (selected) deselect(); fly = null; }
+      if (blocked()) { if (hover) setHover(null); if (selected) deselect(); fly = null; orbit = null; }
       else if (ptrDirty && !fly) { ptrDirty = false; setHover(ptr ? pick(ptr.x, ptr.y) : null); }
       // fades and the selection sweep
       let anim = false;
@@ -326,6 +332,13 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
         if (k <= 1e-3 && L.want === 0) { gl.wash.parent?.remove(gl.wash); gl.halo.parent?.remove(gl.halo); lit.delete(g); }
       }
       if (anim) invalidate();
+      if (orbit) {   // one turn in ~100 s, easing in over 2 s: both camera and target rotate about the place, so it stays put on screen
+        orbit.age += dt;
+        const a = dt * ORBIT_W * Math.min(1, orbit.age / 2), c = Math.cos(a), sn = Math.sin(a), P = orbit.p;
+        for (const v of [camera.position, controls.target]) { const x = v.x - P.x, z = v.z - P.z; v.x = P.x + x * c - z * sn; v.z = P.z + x * sn + z * c; }
+        camera.lookAt(controls.target);
+        return true;
+      }
       if (!fly) return false;
       fly.u = Math.min(1, fly.u + dt / fly.dur);
       const e = ease(fly.u);
@@ -333,16 +346,18 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
       camera.position.lerpVectors(fly.from.p, fly.to.p, e);
       camera.position.y += Math.sin(Math.PI * e) * fly.arc;
       camera.lookAt(controls.target);
-      if (fly.u >= 1) fly = null;
+      if (fly.u >= 1) { if (fly.pivot) orbit = { p: fly.pivot, age: 0 }; fly = null; }
       return true;
     },
     get flying() { return !!fly; },
+    get orbiting() { return !!orbit; },
+    stopOrbit() { orbit = null; },
     get selected() { return selected && { key: selected.key, name: selected.name }; },
     // for checks: select by name or Wikidata id, pick at a screen point
-    select: (q) => { const g = groups.find((x) => x.key === q || x.name === q || x.wd === q); if (g) select(g); return !!g; },
+    select: (q, o = {}) => { const g = groups.find((x) => x.key === q || x.name === q || x.wd === q); if (g) select(g, !!o.orbit); return !!g; },
     pick: (x, y) => pick(x, y)?.name || null,
     // fly to any point (x east, y north, metres) from `dist` away, keeping the viewer's bearing (the assistant uses it)
-    flyTo(x, y, dist = 900) {
+    flyTo(x, y, dist = 900, o = {}) {
       if (blocked()) return false;
       const target = new THREE.Vector3(x, ground.at(x, y), -y);
       const off = new THREE.Vector3().subVectors(camera.position, controls.target); off.y = 0;
@@ -352,8 +367,8 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
       const pitch = THREE.MathUtils.degToRad(dist > 3000 ? 55 : 42);
       const pos = target.clone().addScaledVector(off, Math.cos(pitch) * dist); pos.y += Math.sin(pitch) * dist;
       const from = { p: camera.position.clone(), t: controls.target.clone() }, travel = from.t.distanceTo(target);
-      fly = { from, to: { p: pos, t: target }, u: 0, dur: THREE.MathUtils.clamp(0.9 + travel / 2500, 1.1, 2.6), arc: Math.min(1400, travel * 0.25) };
-      invalidate();
+      fly = { from, to: { p: pos, t: target }, u: 0, dur: THREE.MathUtils.clamp(0.9 + travel / 2500, 1.1, 2.6), arc: Math.min(1400, travel * 0.25), pivot: o.orbit ? target.clone() : null };
+      orbit = null; invalidate();
       return true;
     },
     deselect,

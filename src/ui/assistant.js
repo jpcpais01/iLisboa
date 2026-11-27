@@ -218,8 +218,8 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
   const SCALE = { street: 350, neighbourhood: 1100, city: 4200 };
   function act(a, lastText) {
     if (a.type === 'show') {
-      const ok = a.qid && marks.select(a.qid);
-      if (!ok && isFinite(a.lat)) { const p = ll(a.lat, a.lon); marks.flyTo(p.x, -p.z, SCALE[a.scale] || 1100); }
+      const ok = a.qid && marks.select(a.qid, { orbit: true });
+      if (!ok && isFinite(a.lat)) { const p = ll(a.lat, a.lon); marks.flyTo(p.x, -p.z, SCALE[a.scale] || 1100, { orbit: true }); }
       peekAt(lastText() || a.label || '');
     } else if (a.type === 'layer') setLayer(a.layer, a.on);
     else if (a.type === 'follow') {
