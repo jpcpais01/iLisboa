@@ -38,7 +38,7 @@ renderer.shadowMap.autoUpdate = false;   // re-rendered only when needed (see fi
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 30000);
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 4, 150000);   // (near follows the zoom, see the loop: depth stays precise from the street to the whole region)
 
 // Sky, sun, ambient light and haze all come from one physical atmosphere (src/sky.js), re-solved when the clock moves.
 const Q = new URLSearchParams(location.search);
@@ -78,7 +78,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = false;
 controls.minDistance = 60;
-controls.maxDistance = 7000;
+controls.maxDistance = 32000;   // far enough to see the whole region, river mouth to Montijo
 controls.maxPolarAngle = 1.32;
 controls.zoomToCursor = true;
 // fingers get their own maps-style navigation (pan / pinch / twist / tilt, fling); MapControls keeps the mouse
@@ -868,6 +868,7 @@ renderer.setAnimationLoop((now) => {
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
   if (!chase.busy) controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxY, -minY);
+  { const nr = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * 0.003, 4, 120); if (Math.abs(nr - camera.near) > camera.near * 0.15) { camera.near = nr; camera.updateProjectionMatrix(); } }
   const skyS = (now / 1000) % 2e5;   // (wrapped every ~2 days so the drift stays precise in float32)
   fitShadow(now); sky.tick(skyS);
   sunFar.color.setRGB(sky.dome.material.uniforms.uCover.value, skyS * 0.004, skyS * 0.0011);   // the deck's drift, as in the dome
