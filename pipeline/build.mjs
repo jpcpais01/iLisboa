@@ -538,7 +538,9 @@ if (process.env.CALIB_LOOKS) {   // photo reads beside Google Earth's colours fo
 // into storey bands; each band becomes a slab over the part of the plan that reaches it, stacked on the band below, so
 // the massing is the measured one and no two walls share a plane. OVERRIDES set terraces: { step, minArea }.
 const terraceSlabs = (p) => {
-  const T = OVERRIDES[p.id].terraces, step = T.step || 3.6, G = 2, SC = 100, minArea = T.minArea || 30;
+  // read from the 50 cm survey where the detail data is fetched (crisp setbacks), else the 2 m one
+  const fineHere = DETAIL && DETAIL.fineCovers && DETAIL.fineCovers(...p.c), SRC = fineHere ? DETAIL.fine : LIDAR;
+  const T = OVERRIDES[p.id].terraces, step = T.step || 3.6, G = fineHere ? 1 : 2, SC = 100, minArea = T.minArea || 30;
   if (!LIDAR) return [p];
   // the grid runs along the building's own axes, so terrace edges come out square to the façades, not stair-stepped
   const { ux, uy } = obb(p.outer), W = (u, v) => [u * ux - v * uy, u * uy + v * ux];
@@ -546,9 +548,9 @@ const terraceSlabs = (p) => {
   const nx = Math.ceil((x1 - x0) / G), ny = Math.ceil((y1 - y0) / G), raw = new Float32Array(nx * ny).fill(NaN);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const [x, y] = W(x0 + (i + 0.5) * G, y0 + (j + 0.5) * G);
-    if (pointInRing(x, y, p.outer) && !p.holes.some((h) => pointInRing(x, y, h))) raw[j * nx + i] = LIDAR(x, y);
+    if (pointInRing(x, y, p.outer) && !p.holes.some((h) => pointInRing(x, y, h))) raw[j * nx + i] = SRC(x, y);
   }
-  const hz = new Float32Array(nx * ny), MR = T.median ?? 2;   // 5×5 median: roof plant, rooftop trees and edge blur do not make terraces
+  const hz = new Float32Array(nx * ny), MR = Math.round((T.median ?? 2) * 2 / G);   // 5×5 median: roof plant, rooftop trees and edge blur do not make terraces
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const v = []; for (let b = -MR; b <= MR; b++) for (let a = -MR; a <= MR; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < nx && jj < ny && isFinite(raw[jj * nx + ii])) v.push(raw[jj * nx + ii]); }
     v.sort((a, b) => a - b); hz[j * nx + i] = isFinite(raw[j * nx + i]) && v.length ? v[v.length >> 1] : 0;

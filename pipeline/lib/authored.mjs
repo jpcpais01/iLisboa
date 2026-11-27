@@ -95,7 +95,7 @@ export const OVERRIDES = {
   ...Object.fromEntries([['w821643074', 23], ['w821643075', 20], ['w821643076', 20], ['w821643077', 20]].map(([id, h]) => [id, { h, minH: 0, shape: 'flat', variant: 1, floorH: 0, wall: '#d9dbd8', flatCol: [196, 198, 196], parapet: 0.6, stone: false }])),
   // Caixa Geral de Depósitos HQ (Campus XXI, Arsénio Cordeiro, 1993): nine storeys above ground climbing in terraces to the
   // central ridge — the 'castle' of Campo Pequeno. Massing is cut from the 2024 LiDAR in storey bands (see terraceSlabs).
-  r5742899_0: { terraces: { step: 4.4, minArea: 40 }, variant: 3, stone: false, wall: '#c8c0b3', flatCol: [168, 164, 156], bayW: 1.9 },
+  r5742899_0: { terraces: { step: 3.4, minArea: 40, smooth: 2.5 }, variant: 3, stone: false, wall: '#c8c0b3', flatCol: [168, 164, 156], bayW: 1.9 },
   r6053715_0: { h: 21, wall: '#e3ded1', roofCol: '#a5604b', variant: 4, stone: false, floorH: 5.2, groundH: 6.2, bayW: 4.6, balconyFloors: [] },   // Palácio da Ajuda: neoclassical limestone (tagged 'house')
   r12988834_0: { h: 16, wall: '#dc9d8f', roofCol: '#a8624c', variant: 4, stone: false, floorH: 4.6, groundH: 5, bayW: 4.2 },   // Palácio das Necessidades: the pink palace
   w39735033: { h: 10.5, minH: 0, shape: 'flat', wall: '#d9d6cf', variant: 3, parapet: 1.1 },   // Gare do Oriente: the raised platform deck
