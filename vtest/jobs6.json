@@ -1,0 +1,44 @@
+[
+ {
+  "name": "h_b_wan22_s030",
+  "endpoint": "fal-ai/wan/v2.2-a14b/video-to-video",
+  "max_min": 30,
+  "body": {
+   "video_url": "@b720.mp4",
+   "prompt": "Real aerial drone footage of Lisbon, Portugal, filmed on a clear October afternoon: Pra\u00e7a do Com\u00e9rcio, the Baixa grid and the Alfama rooftops beside the Tagus. Photorealistic: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, cal\u00e7ada pavement, real trees, real cars, the river with natural reflections and small waves, soft atmospheric haze, natural sunlight and shadows. Smooth camera motion. Every building, street, square and the shoreline stay exactly where they are.",
+   "strength": 0.3,
+   "num_frames": 121,
+   "frames_per_second": 24,
+   "resolution": "720p",
+   "aspect_ratio": "16:9",
+   "num_inference_steps": 27,
+   "interpolator_model": "none",
+   "num_interpolated_frames": 0,
+   "adjust_fps_for_interpolation": false,
+   "video_quality": "maximum",
+   "seed": 1,
+   "negative_prompt": "3D render, CGI, video game, cartoon, plastic, flat colours, blurry, distorted buildings, warped geometry"
+  }
+ },
+ {
+  "name": "h_b_wan22_s045",
+  "endpoint": "fal-ai/wan/v2.2-a14b/video-to-video",
+  "max_min": 30,
+  "body": {
+   "video_url": "@b720.mp4",
+   "prompt": "Real aerial drone footage of Lisbon, Portugal, filmed on a clear October afternoon: Pra\u00e7a do Com\u00e9rcio, the Baixa grid and the Alfama rooftops beside the Tagus. Photorealistic: weathered terracotta roof tiles, limestone and painted plaster fa\u00e7ades with real windows and shutters, cal\u00e7ada pavement, real trees, real cars, the river with natural reflections and small waves, soft atmospheric haze, natural sunlight and shadows. Smooth camera motion. Every building, street, square and the shoreline stay exactly where they are.",
+   "strength": 0.45,
+   "num_frames": 121,
+   "frames_per_second": 24,
+   "resolution": "720p",
+   "aspect_ratio": "16:9",
+   "num_inference_steps": 27,
+   "interpolator_model": "none",
+   "num_interpolated_frames": 0,
+   "adjust_fps_for_interpolation": false,
+   "video_quality": "maximum",
+   "seed": 1,
+   "negative_prompt": "3D render, CGI, video game, cartoon, plastic, flat colours, blurry, distorted buildings, warped geometry"
+  }
+ }
+]
