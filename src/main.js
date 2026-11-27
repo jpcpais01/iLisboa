@@ -403,6 +403,9 @@ function stream(force) {
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
   if (!OLDLOD) DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
   const FC = fullCap(), MC = midCap();
+  // an area's trees, parked cars and lamps come with its first tile; past the tiles' reach (far views draw only the far level)
+  // they are woken by distance instead, so a forest seen from afar still stands
+  if (!OLDLOD) for (const a of AREAS) if (!a.ready && a.far && rectDist([a.bounds.minX, a.bounds.minY, a.bounds.maxX, a.bounds.maxY], x, y) <= M + 900) wake(a).catch((e) => console.error(e));
   const want = [];
   for (const t of tiles) {
     const d = rectDist(t.b, x, y), dc = camDist(t.b);
