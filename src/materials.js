@@ -375,30 +375,41 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
     vec2 r = p - A.xy; float al = dot(r, A.zw), ac = dot(r, vec2(-A.w, A.z));
     float v = B.x, L = B.y, bm = B.z, a = -al - L * .5;      // a: metres behind the stern
     if (al > L * .6 + 8. || a > B.w || abs(ac) > max(a, 0.) * .4 + bm * 2. + 6.) continue;
-    float fr = clamp(v / 6., 0., 1.);                          // how hard it is driving (a moored boat makes no wake)
+    // sizes follow the boat (L) and its speed: a slow or anchored boat leaves almost nothing
+    float fr = smoothstep(1.2, 5.5, v) * clamp(.35 + L / 60., .35, 1.);
+    if (fr < .01) continue;
     float ab = max(a, 0.);
-    float w = bm * .55 + ab * .035;
-    float c = exp(-ac * ac / (w * w)) * exp(-ab / (v * 55. + 40.)) * smoothstep(-L * .45, 0., a) * fr;
-    c *= 1. - smoothstep(B.w * .7, B.w, a);                    // fades out where the straight run began
-    core = max(core, c);
+    float lamT = 6.283 * v * v / 9.81;                         // transverse (cusp) wavelength: crests repeat every λ along the track
+    // turbulent trail: white just behind the stern for a few hull lengths, then a smooth glassy streak that fades
+    float w = bm * .5 + ab * .045;
+    float side = exp(-ac * ac / (w * w)) * smoothstep(-L * .45, 0., a) * fr;
+    float runF = 1. - smoothstep(B.w * .6, B.w, a);              // ends where it turned (no straight ruler behind a bend)
+    float c = side * exp(-ab / (L * 3. + v * 12.)) * runF;
+    core = max(core, c * .8);
     float fn = wn(vec2(al, ac) * .45 + vec2(t * .7, 0.)) * .6 + wn(vec2(al, ac) * 1.3) * .4;
-    foamW = max(foamW, c * exp(-ab / (v * 6. + 12.)) * smoothstep(.25, .6, fn + c * .3));
+    foamW = max(foamW, side * runF * exp(-ab / (L * .9 + v * 4.)) * (.35 + .65 * smoothstep(.2, .8, fn)));
     // bow wave: a white roll either side of the stem
     float bow = smoothstep(L * .3, L * .5, al) * exp(-pow((abs(ac) - bm * .55 - (L * .5 - al) * .35) / (1.2 + bm * .15), 2.)) * fr;
     foamW = max(foamW, bow * smoothstep(.35, .6, fn));
-    // Kelvin arms (the visible V, just inside 19.5°) and transverse waves inside the wedge
-    float d = abs(ac) - ab * .34, aw = 2. + ab * .05;
-    float arm = exp(-d * d / (aw * aw)) * exp(-ab / (v * 45. + 90.)) * smoothstep(0., bm, a) * fr;
-    float k0 = 9.81 / max(1., v * v);
-    vec2 n = normalize(vec2(-.34, sign(ac)));                   // arm normal (in along/across)
-    float ph = (ab * n.x * -1. + abs(ac) * n.y) * k0 * 2.2 - t * sqrt(9.81 * k0 * 2.2);
-    vec2 gl = n * vec2(-1., sign(ac)) * cos(ph) * arm * .16;
-    float inW = smoothstep(.36, .2, abs(ac) / max(ab, 1.)) * exp(-ab / (v * 30. + 60.)) * smoothstep(0., L, a) * fr;
-    gl += vec2(-1., 0.) * cos(ab * k0 - t * sqrt(9.81 * k0)) * inW * .07;
-    gW += A.zw * gl.x + vec2(-A.w, A.z) * gl.y;
-    foamW = max(foamW, arm * smoothstep(.62, .85, fn) * exp(-ab / (v * 8. + 15.)));
+    // Kelvin arms: not a line but a row of short feathered crests (cusps) en échelon along the 19.5° edge, one per λ,
+    // each slanting back toward the track; they soften and spread with distance and die out after a few hundred metres at most
+    float reach = L * 2.2 + v * 9.;
+    if (ab < reach * 2.6) {
+      float d = abs(ac) - ab * .34, aw = 1.5 + bm * .2 + ab * .04;
+      float cusp = pow(.5 + .5 * cos(6.283 * (ab + abs(ac) * .55) / max(lamT, 3.)), 4.);   // dashes along the arm
+      float brk = .55 + .45 * wn(vec2(ab, ac) / (lamT * .7 + 4.) + 3.7);
+      float arm = exp(-d * d / (aw * aw)) * exp(-ab / reach) * smoothstep(0., bm * 2., a) * fr * runF;
+      float ph = (ab * .34 + abs(ac)) * 2.2 * 9.81 / max(1., v * v);
+      vec2 n = normalize(vec2(-.34, sign(ac)));
+      vec2 gl = n * vec2(-1., sign(ac)) * sin(ph) * arm * (.07 + .2 * cusp) * brk;
+      // transverse waves inside the wedge: only near the stern, gentle
+      float inW = smoothstep(.36, .2, abs(ac) / max(ab, 1.)) * exp(-ab / (L * 1.2 + 20.)) * smoothstep(0., L, a) * fr * runF;
+      gl += vec2(-1., 0.) * cos(ab * 6.283 / max(lamT, 3.) - t * 2.) * inW * .035;
+      gW += A.zw * gl.x + vec2(-A.w, A.z) * gl.y;
+      foamW = max(foamW, arm * cusp * brk * exp(-ab / (L * 1.2 + 15.)) * .7 * smoothstep(.3, .75, fn));
+    }
   }
-  var *= 1. - .6 * core;                                       // the turbulent trail is smooth water: dark in the glitter
+  var *= 1. - .45 * core;                                       // the turbulent trail is smooth water: dark in the glitter
 
   // ─── resolved waves: 9 trains spread about the wind, short-crested ───
   float amp = sqrt(var / .0286);
@@ -435,10 +446,10 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   // ─── colour: clear channel water vs turbid estuary vs shallow bottom ───
   float plume = wn(p / 900. + vec2(t * .0012, -t * .0007)) * .65 + wn(p / 260. - vec2(t * .002, 0.)) * .35;
   float turb = clamp(mix(.15, .85, exp(-depth / 7.)) + (plume - .5) * .55, 0., 1.);
-  vec3 channel = vec3(.008, .1, .15), estuary = vec3(.028, .15, .14), flats = vec3(.09, .16, .12);
+  vec3 channel = vec3(.005, .085, .17), estuary = vec3(.018, .15, .165), flats = vec3(.08, .17, .14);
   vec3 body = mix(channel, estuary, turb);
   body = mix(body, flats, exp(-depth / 1.3) * .7);
-  body = mix(body, vec3(.08, .22, .2), core * .55);          // bubbles in the trail scatter light back up
+  body = mix(body, vec3(.07, .19, .18), core * .35);          // bubbles in the trail scatter light back up
   diffuseColor.rgb = body;
 
   // light through the crests: green-teal, strongest looking towards the sun at low angles
@@ -460,7 +471,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   float cap = wn(q / vec2(9., 5.) - vec2(t * 1.6, 0.)) * .7 + wn(p / 2.3 + t * .3) * .3;
   float caps = smoothstep(1. - cover * 4., 1. - cover * 4. + .06, cap) * smoothstep(0., .5, h + .2);
   foam = max(foam, caps * .85);
-  foam = max(foam, foamW);
+  foam = max(foam, foamW * (.45 + .55 * fine));   // far off, sub-pixel foam must not average into a solid white line
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.78, .8, .78), foam);
   roughnessFactor = mix(roughnessFactor, .8, foam);
 
@@ -474,7 +485,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   }
 }`);
   };
-  m.customProgramCacheKey = () => 'ilisboa-water-v5';
+  m.customProgramCacheKey = () => 'ilisboa-water-v6';
   return m;
 }
 

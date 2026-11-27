@@ -31,3 +31,7 @@ curl -sfL -m 60 -A "$UA" https://go.tmlmobilidade.pt/hub/api/v1/realtime/vehicle
 ls -la probe/tml-positions.* >> probe/gtfs.txt
 : > /dev/null; [ $ok = 0 ] && echo "no Transtejo GTFS found in the catalogue" >> probe/gtfs.txt
 true
+# 3. can a datacentre reach the AIS websocket at all? (handshake only, no key)
+{ date -u; curl -s -o /dev/null -m 20 -w 'aisstream https %{http_code} connect %{time_connect}s tls %{time_appconnect}s total %{time_total}s\n' https://stream.aisstream.io/v0/stream;
+  curl -s -o /dev/null -m 20 -w 'aisstream ws-upgrade %{http_code} %{time_total}s\n' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' https://stream.aisstream.io/v0/stream;
+  getent hosts stream.aisstream.io; } > probe/aisstream.txt 2>&1 || true

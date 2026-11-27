@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { registerAction } from '../layers/registry.js';
 import './photo.css';
+import { captureDepth, enhance, fidelity } from './aiphoto.js';
 
 const SIZES = [{ id: '1080p', s: 1080 }, { id: '2K', s: 1440 }, { id: '4K', s: 2160 }];   // short side, as in "1080p"
 const ICON = '<path d="M3 8.5h3l2-2.5h8l2 2.5h3V19H3z"/><circle cx="12" cy="13" r="3.4"/><path d="M18 11h.01"/>';
@@ -30,8 +31,10 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     </div>
     <div class="ph-work" hidden><i class="ph-spin"></i><span class="ph-msg"></span><button type="button" class="ph-cancel">Cancelar</button></div>
     <div class="ph-done" hidden>
-      <img alt="" />
+      <div class="ph-pic"><img alt="" /><span class="ph-badge" hidden title="Quanto da geometria real (arestas tiradas do mapa de profundidade exato da cena) se mantém na imagem da IA"></span></div>
+      <div class="ph-seg" role="tablist" hidden><button type="button" data-v="0" role="tab">Original</button><button type="button" data-v="1" role="tab">IA</button></div>
       <div class="ph-info"><b></b><small></small></div>
+      <button type="button" class="ph-ai"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.9L19 9.7l-5.2 1.8L12 16.5l-1.8-5L5 9.7l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg><span>Tornar real com IA</span></button>
       <div class="ph-acts"><button type="button" class="ph-save">Guardar</button><button type="button" class="ph-share" hidden>Partilhar</button><button type="button" class="ph-back">Fechar</button></div>
     </div>`;
   document.body.appendChild(ui);
@@ -71,8 +74,13 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   for (const b of ui.querySelectorAll('.ph-go')) b.onclick = () => { showViews(false); shoot(+b.dataset.s, b.dataset.id); };
 
   function cancel() { if (busy) busy.cancelled = true; }
-  let result = null;
-  function closeDone() { done.hidden = true; bar.hidden = false; if (result) { URL.revokeObjectURL(result.url); result = null; } wake(); }
+  let result = null, aiJob = null, shotDepth = null;
+  function closeDone() {
+    aiJob?.abort(); aiJob = null;
+    done.hidden = true; bar.hidden = false;
+    if (result) { URL.revokeObjectURL(result.url); if (result.ai) URL.revokeObjectURL(result.ai.url); result = null; }
+    wake();
+  }
 
   async function shoot(s, id) {
     if (busy) return;
@@ -106,7 +114,8 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
       if (!blob) throw new Error('encode failed');
       const d = new Date(), p = (v) => String(v).padStart(2, '0');
       const name = `lisboa-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${id.toLowerCase()}.jpg`;
-      result = { blob, name, url: URL.createObjectURL(blob), W, H };
+      result = { blob, name, url: URL.createObjectURL(blob), W, H, depth: shotDepth };
+      shotDepth = null;
       window.__photo.last = { name, W, H, bytes: blob.size };
       showDone(result);
     } catch (e) {
@@ -124,19 +133,58 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   function save(r) {
     const a = document.createElement('a'); a.href = r.url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove();
   }
-  function showDone(r) {
-    done.querySelector('img').src = r.url;
-    done.querySelector('.ph-info b').textContent = `${r.W} × ${r.H}`;
-    done.querySelector('.ph-info small').textContent = `${(r.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG`;
-    const file = new File([r.blob], r.name, { type: 'image/jpeg' });
+  function show(r, v) {   // v: the picture on show (the original or the AI version); save and share follow it
+    done.querySelector('img').src = v.url;
+    done.querySelector('.ph-info b').textContent = `${v.W} × ${v.H}`;
+    done.querySelector('.ph-info small').textContent = `${(v.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG${v === r.ai ? ' · IA' : ''}`;
+    const badge = $('.ph-badge');
+    badge.hidden = v !== r.ai || r.ai.score == null;
+    if (!badge.hidden) { badge.textContent = `${r.ai.score}% fiel à geometria`; badge.dataset.q = r.ai.score >= 80 ? 'hi' : r.ai.score >= 70 ? 'mid' : 'lo'; }
+    for (const b of ui.querySelectorAll('.ph-seg button')) b.setAttribute('aria-selected', String((+b.dataset.v === 1) === (v === r.ai)));
+    const file = new File([v.blob], v.name, { type: 'image/jpeg' });
     const share = $('.ph-share'), canShare = mobile && !!navigator.canShare?.({ files: [file] });
     share.hidden = !canShare;
     share.onclick = () => navigator.share({ files: [file] }).catch(() => {});   // (a tap of its own: share needs one)
-    $('.ph-save').onclick = () => save(r);
+    $('.ph-save').onclick = () => save(v);
+  }
+  function showDone(r) {
+    show(r, r);
+    $('.ph-seg').hidden = true;
+    const ai = $('.ph-ai'); ai.hidden = !r.depth; ai.disabled = false; ai.classList.remove('busy', 'err'); ai.querySelector('span').textContent = 'Tornar real com IA';
+    ai.onclick = () => (aiJob ? aiJob.abort() : makeReal(r));
+    for (const b of ui.querySelectorAll('.ph-seg button')) b.onclick = () => r.ai && show(r, +b.dataset.v ? r.ai : r);
     $('.ph-back').onclick = closeDone;
     done.hidden = false;
     if (!mobile) save(r);   // desktop: straight to Downloads; phones choose (Partilhar → Guardar imagem puts it in Photos)
   }
+
+  // ─── the AI version: sent to /api/aiphoto, then scored against this frame's exact depth (no retries: the number tells) ───
+  const AI_ERR = { not_configured: 'A IA ainda não está configurada.', rate_limited: 'Limite de fotografias IA atingido. Tente mais tarde.', refused: 'A IA recusou esta imagem.', timeout: 'A IA demorou demasiado. Tente outra vez.' };
+  async function makeReal(r) {
+    const ai = $('.ph-ai'), label = ai.querySelector('span'), ac = new AbortController(), t0 = performance.now();
+    aiJob = ac; ai.classList.add('busy'); ai.classList.remove('err');
+    const tick = setInterval(() => { label.textContent = `A revelar com IA · ${Math.round((performance.now() - t0) / 1000)} s · tocar para cancelar`; }, 250);
+    label.textContent = 'A revelar com IA…';
+    try {
+      const blob = await enhance(r.blob, r.depth, ac.signal);
+      if (ac.signal.aborted || result !== r) return;
+      const bmp = await createImageBitmap(blob);
+      r.ai = { blob, url: URL.createObjectURL(blob), name: r.name.replace(/\.jpg$/, '-ia.jpg'), W: bmp.width, H: bmp.height, score: null };
+      bmp.close?.();
+      label.textContent = 'A medir a fidelidade…';
+      try { r.ai.score = await fidelity(r.depth, r.blob, blob); } catch (e) { console.warn('score', e); }
+      window.__photo.lastAI = { W: r.ai.W, H: r.ai.H, bytes: blob.size, score: r.ai.score, ms: Math.round(performance.now() - t0) };
+      ai.hidden = true; $('.ph-seg').hidden = false;
+      show(r, r.ai);
+    } catch (e) {
+      if (ac.signal.aborted) { label.textContent = 'Tornar real com IA'; return; }
+      console.error('aiphoto', e);
+      ai.classList.add('err'); label.textContent = AI_ERR[e.code] || 'Não foi possível. Tocar para tentar outra vez.';
+    } finally {
+      clearInterval(tick); ai.classList.remove('busy'); if (aiJob === ac) aiJob = null;
+    }
+  }
+
 
   // ─── saved views: the exact camera (position, aim, lens) and its light (hour, month, weather), kept on this device ───
   const KEY = 'ilisboa.views', MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -251,6 +299,10 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
         try { tiles(W, H, T, ctx); break; }
         catch (e) { if (e.message !== 'small' || tries > 3) throw e; T = Math.floor(T / 2); }   // the browser gave a smaller buffer: halve
       }
+      // exact depth of the same frame (small): what the AI version is told to follow and scored against
+      shotDepth = null;
+      try { camera.clearViewOffset(); camera.aspect = W / H; camera.updateProjectionMatrix(); shotDepth = captureDepth(renderer, hooks.scene, camera, W, H); }
+      catch (e) { console.warn('depth', e); }
     } finally {
       unscale(); camera.clearViewOffset(); camera.aspect = aspect; camera.updateProjectionMatrix();
       renderer.setPixelRatio(ratio); renderer.setSize(size.x, size.y, false);
@@ -276,6 +328,6 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     window.__photo.tiles = n; window.__photo.tileSize = T;
   }
 
-  window.__photo = { enter, exit, shoot: (id = '1080p') => shoot(SIZES.find((z) => z.id === id).s, id), get busy() { return !!busy; }, get on() { return on; }, last: null, result: () => result, views: () => views, save: () => $('.pv-add').onclick(), go: (i) => go(views[i]), link: (i) => linkOf(views[i]), panel: showViews };
+  window.__photo = { enter, exit, shoot: (id = '1080p') => shoot(SIZES.find((z) => z.id === id).s, id), get busy() { return !!busy; }, get on() { return on; }, last: null, result: () => result, makeReal: () => result && makeReal(result), lastAI: null, views: () => views, save: () => $('.pv-add').onclick(), go: (i) => go(views[i]), link: (i) => linkOf(views[i]), panel: showViews };
   return { enter, exit, get on() { return on; } };
 }

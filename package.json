@@ -12,7 +12,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.14.0",
     "three": "^0.170.0",
-    "three-mesh-bvh": "^0.9.1"
+    "three-mesh-bvh": "^0.9.1",
+    "ws": "^8.23.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",
