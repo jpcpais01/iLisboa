@@ -580,7 +580,8 @@ const terraceSlabs = (p) => {
   const top = Math.max(...hz), K = Math.round(top / step), out = [];
   let ground = 0, gn = 0; for (const [x, y] of p.outer) { ground += groundAt(x, y); gn++; } ground /= gn;
   let prev = plan;
-  for (let k = 1; k <= K; k++) {
+  const RIM = T.rim, kE = RIM ? Math.round(RIM.eave / step) : Infinity;   // a roofed landmark: storey slabs up to the eave, then its roof
+  for (let k = 1; k <= Math.min(K, kE); k++) {
     const L = k * step, cells = [];
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (hz[j * nx + i] >= L - step / 2) {
       let i2 = i; while (i2 + 1 < nx && hz[j * nx + i2 + 1] >= L - step / 2) i2++;   // one run of cells per row keeps the union cheap
@@ -607,6 +608,30 @@ const terraceSlabs = (p) => {
     }
     if (!keep.length) break;
     prev = keep;
+  }
+  if (RIM && K > kE) {
+    // above the eave: one roof over each block the eave slab carries — a steep skirt rimD wide rising to the measured deck
+    // (CGD: the great hipped skirt round its two light wells), and the corner towers standing out of it
+    const base = kE * step, top = out.filter((q) => q.ovr.minH === (kE - 1) * step);
+    const deckZ = (() => { const v = []; for (const z of hz) if (z >= base + 6 && z < (RIM.towers ?? Infinity)) v.push(z); v.sort((a, b) => a - b); return v.length ? v[Math.floor(v.length * 0.75)] : base + 6; })();
+    for (const q of top) {
+      if (q.area < 1500) continue;
+      q.ovr.parapet = 0;
+      out.push({ ...q, id: `${q.id}_roof`, ovr: { ...q.ovr, h: deckZ, minH: base, shape: 'rim', rimD: RIM.rimD ?? 12, roofH: deckZ - base, roofCol: RIM.roofCol ?? q.ovr.roofCol, flatCol: RIM.deckCol ?? q.ovr.flatCol, parapet: 0, floorH: 0 } });
+    }
+    if (RIM.towers) {   // towers: what rises above the deck, as plain blocks from the eave up
+      const cells = [];
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (hz[j * nx + i] >= RIM.towers) { const ax = x0 + i * G, ay = y0 + j * G; cells.push(C([W(ax, ay), W(ax + G, ay), W(ax + G, ay + G), W(ax, ay + G)])); }
+      let reg = run(ClipperLib.ClipType.ctUnion, cells); reg = off(off(reg, -1.5), 1.5);
+      reg = ClipperLib.Clipper.CleanPolygons(ClipperLib.Clipper.SimplifyPolygons(reg, ClipperLib.PolyFillType.pftNonZero), 0.8 * SC);
+      for (const r of reg) {
+        const outer = r.map((q) => [q.X / SC, q.Y / SC]); if (ringArea(outer) < 0) outer.reverse(); const area = ringArea(outer); if (area < 25) continue;
+        const c0 = [outer.reduce((a, q) => a + q[0], 0) / outer.length, outer.reduce((a, q) => a + q[1], 0) / outer.length];
+        const zs = []; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const [x, y] = W(x0 + (i + 0.5) * G, y0 + (j + 0.5) * G); if (Math.abs(x - c0[0]) < 20 && Math.abs(y - c0[1]) < 20 && pointInRing(x, y, outer)) zs.push(hz[j * nx + i]); }
+        zs.sort((a, b) => a - b); const zt = zs.length ? zs[Math.floor(zs.length * 0.7)] : RIM.towers;
+        out.push({ id: `${p.id}_tower${out.length}`, tags: p.tags, outer, holes: [], area, c: c0, ground, ovr: { ...OVERRIDES[p.id], terraces: undefined, h: zt, minH: base, floorH: step, groundH: step, shape: 'flat', parapet: 0.8 } });
+      }
+    }
   }
   return out.length ? out : [p];
 };
