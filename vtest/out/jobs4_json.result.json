@@ -1,0 +1,20 @@
+[
+ {
+  "name": "a1_up_topaz",
+  "endpoint": "fal-ai/topaz/upscale/video",
+  "ok": true,
+  "ms": 51753,
+  "inference_s": 49.46000003814697,
+  "request": "01a21f62-5f85-7181-b12b-b2e6eca47e52",
+  "file": "a1_up_topaz.mp4"
+ },
+ {
+  "name": "a1_up_bytedance",
+  "endpoint": "fal-ai/bytedance-upscaler/upscale/video",
+  "ok": true,
+  "ms": 130860,
+  "inference_s": 128.4079999923706,
+  "request": "01a21f62-5ea1-71c0-aeba-7d6e20f22ec8",
+  "file": "a1_up_bytedance.mp4"
+ }
+]
