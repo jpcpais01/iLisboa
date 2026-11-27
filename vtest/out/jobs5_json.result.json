@@ -1,0 +1,29 @@
+[
+ {
+  "name": "k060_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21464,
+  "inference_s": 20.200000047683716,
+  "request": "01a21f64-09ec-74c0-9dd0-aeba91f1bbbb",
+  "file": "k060_nb2s.jpg"
+ },
+ {
+  "name": "k090_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 24438,
+  "inference_s": 23.322999954223633,
+  "request": "01a21f64-08e3-7de3-ab2a-db8569b0bd6c",
+  "file": "k090_nb2s.jpg"
+ },
+ {
+  "name": "k120_nb2s",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 24553,
+  "inference_s": 22.03600001335144,
+  "request": "01a21f64-08ac-7e01-81d7-4a6710c28742",
+  "file": "k120_nb2s.jpg"
+ }
+]
