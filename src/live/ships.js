@@ -157,7 +157,6 @@ export function createShips(ctx) {
         if (d.error === 'nokey') ais = { state: 'nokey', n: 0, t: Date.now() };
         else if (!r.ok) throw new Error(d.error || r.status);
         else ingest(d);
-        if (was !== (ais.state === 'live')) ais.changed = true;   // the illustrative big ships make way for (or stand in for) real ones
       } catch (e) { ais = { ...ais, state: ais.n ? 'stale' : 'error', err: String(e.message || e) }; }
       ctx.status();
     }
@@ -174,21 +173,35 @@ export function createShips(ctx) {
     if (type === 37) return L > 18 ? 'motor' : L > 10 ? 'motor' : 'launch';
     if (type >= 40 && type < 50) return 'ferry';
     if (type >= 50 && type < 60) return 'launch';
-    return L > 120 ? 'cargo' : L > 40 ? 'cargo' : L > 20 ? 'tug' : 'launch';
+    return L > 40 ? 'cargo' : L > 20 ? 'tug' : 'launch';
   }
+  // AIS sends names/types only every ~6 min, so a ship first appears as type 0: guess from speed and the ferry lanes
+  function nearFerryLane(x, y) {
+    for (const pts of ferry?.shapes || []) for (let i = 0; i < pts.length; i += 2) if (Math.hypot(pts[i][0] - x, pts[i][1] - y) < 300) return true;
+    return false;
+  }
+  function guessKind(type, L, name, sog, x, y) {
+    if (type) return kindOf(type, L || 30, name);
+    if (L) return kindOf(0, L, name);
+    return sog > 3 && nearFerryLane(x, y) ? 'ferry' : 'cargo';
+  }
+  const v0kind = (id, type, len, name, sog, x, y) => {
+    const v = vessels.get(id);   // keep an earlier guess until real static data arrives, so a hull doesn't flip back and forth
+    return !type && !len && v?.guess ? v.kind : guessKind(type, len, name, sog, x, y);
+  };
   function ingest(d) {
     const now = performance.now() / 1000;
     let n = 0;
     for (const [mmsi, name, type, x, y, sog, cog, hdg, nav, L, B, dest, age, call] of d.s || []) {
-      const id = `a:${mmsi}`, len = L > 2 ? L : 0, kind = kindOf(type, len || 30, name || '');
+      const id = `a:${mmsi}`, len = L > 2 ? L : 0, kind0 = v0kind(id, type, len, name || '', sog, x, y), kind = kind0;
       const cr = ((cog ?? hdg ?? 0) * Math.PI) / 180, hr = hdg != null && hdg < 360 ? (hdg * Math.PI) / 180 : cr;
       const moving = sog > 0.4 && nav !== 1 && nav !== 5;
       const nx = x + (moving ? Math.sin(cr) * sog * age : 0), ny = y + (moving ? Math.cos(cr) * sog * age : 0);
       let v = vessels.get(id);
-      const dims = { L: len || BOAT_KINDS[kind].L, B: B > 1 ? B : (len || BOAT_KINDS[kind].L) * 0.16 };
+      const dims = { L: len || (kind === 'cargo' ? 70 : BOAT_KINDS[kind].L), B: B > 1 ? B : (len || BOAT_KINDS[kind].L) * 0.16 };
       if (!v || v.kind !== kind) { if (v) vessels.delete(id); v = vessel(id, { kind, x: nx, y: ny, hd: hr, src: 'ao vivo', col: kind === 'sail' || kind === 'motor' ? 0xffffff : 0xb8c4d6, ...dims }); }
       else { const j = Math.hypot(nx - v.x, ny - v.y); if (j > 1500) { v.x = nx; v.y = ny; v.ex = v.ey = 0; } else { v.ex = nx - v.x; v.ey = ny - v.y; } }
-      Object.assign(v, dims, { name: (name || '').trim(), mmsi, type, cog: cr, thd: hr, sog: moving ? sog : 0, nav, dest: (dest || '').replace(/@+/g, '').trim(), call, seen: now, ais: true });
+      Object.assign(v, dims, { name: (name || '').trim(), mmsi, type, cog: cr, thd: hr, sog: moving ? sog : 0, nav, dest: (dest || '').replace(/@+/g, '').trim(), call, seen: now, ais: true, guess: !type && !len });
       n++;
     }
     for (const [id, v] of vessels) if (v.ais && now - v.seen > 20 * 60) vessels.delete(id);
@@ -199,8 +212,7 @@ export function createShips(ctx) {
   function ambient() {
     const day = lisbon(), r = rng(day.date * 7 + 3);
     for (const id of [...vessels.keys()]) if (id.startsWith('i:')) vessels.delete(id);
-    const big = ais.state !== 'live';
-    if (big) for (const p of data.ports) {
+    for (const p of data.ports) {
       const occ = { container: 0.85, cruise: day.date % 10000 > 400 && day.date % 10000 < 1130 ? 0.8 : 0.4, tanker: 0.55, bulk: 0.5, cargo: 0.45, service: 0.9 }[p.kind] ?? 0.4;
       const quays = p.quays.map((q) => ({ q, len: Math.hypot(q[2] - q[0], q[3] - q[1]) })).sort((a, b) => b.len - a.len);
       let used = 0;
@@ -328,10 +340,15 @@ export function createShips(ctx) {
     for (let i = 0; i < W; i++) { const v = wakes[i][1]; A[i].set(v.x, v.y, Math.sin(v.hd), Math.cos(v.hd)); B[i].set(v.sog, v.L, v.B, v.run); }
     waterUniforms.uWakes.value = W;
   }
-  // a scheduled ferry is dropped while a live AIS passenger ship is within 500 m of where the timetable puts it
+  // a scheduled ferry is dropped while a live AIS passenger ship is within 500 m of where the timetable puts it, and an
+  // illustrative ship at a quay is dropped while a real AIS ship lies at or near that berth (AIS coverage here is sparse,
+  // so the rest of the quays keep their stand-ins)
   function hideScheduledUnderLive() {
-    const live = [...vessels.values()].filter((v) => v.ais && v.kind === 'ferry');
-    for (const v of vessels.values()) if (v.src === 'horário') v.hidden = live.some((a) => Math.hypot(a.x - v.x, a.y - v.y) < 500);
+    const live = [...vessels.values()].filter((v) => v.ais);
+    for (const v of vessels.values()) {
+      if (v.src === 'horário') v.hidden = live.some((a) => a.kind === 'ferry' && Math.hypot(a.x - v.x, a.y - v.y) < 500);
+      else if (v.id.startsWith('i:') && v.L > 40) v.hidden = live.some((a) => Math.hypot(a.x - v.x, a.y - v.y) < Math.max(200, v.L / 2 + 100));
+    }
   }
 
   function info(v) {
@@ -344,7 +361,7 @@ export function createShips(ctx) {
     if (v.ais) {
       lines.push(sp);
       if (v.dest) lines.push(`destino: ${v.dest}`);
-      lines.push(`${Math.round(v.L)} × ${Math.round(v.B)} m`);
+      lines.push(v.guess ? 'tipo e dimensões ainda por receber (o AIS envia-os a cada ~6 min)' : `${Math.round(v.L)} × ${Math.round(v.B)} m`);
       return { icon: ICON, title: v.name || `MMSI ${v.mmsi}`, sub: [NAME[v.kind], v.call].filter(Boolean).join(' · '), lines, src: 'ao vivo · AIS (aisstream.io)', speedKnown: true };
     }
     lines.push(v.place ? `${sp} · ${v.place}` : sp, `${Math.round(v.L)} m`);
