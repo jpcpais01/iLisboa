@@ -1,0 +1,207 @@
+[
+ {
+  "view": "praca",
+  "approach": "flux_depth_065",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "praca",
+  "approach": "flux_depth_045",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "ponte",
+  "approach": "flux_depth_045",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "ponte",
+  "approach": "flux_depth_065",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "alfama",
+  "approach": "flux_depth_065",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "wide",
+  "approach": "flux_depth_065",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "alfama",
+  "approach": "flux_depth_045",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "wide",
+  "approach": "flux_depth_045",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "street",
+  "approach": "flux_depth_045",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "street",
+  "approach": "flux_depth_065",
+  "endpoint": "fal-ai/flux-control-lora-depth/image-to-image",
+  "ok": false,
+  "error": "submit 404: {\"detail\":\"Application \\\"flux-control-lora-depth\\\" not found\"}"
+ },
+ {
+  "view": "ponte",
+  "approach": "nano2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ms": 15834,
+  "inference_s": 13.601999998092651,
+  "usd_est": 0.12,
+  "ok": true
+ },
+ {
+  "view": "wide",
+  "approach": "nano2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ms": 18083,
+  "inference_s": 14.880000114440918,
+  "usd_est": 0.12,
+  "ok": true
+ },
+ {
+  "view": "praca",
+  "approach": "nano2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ms": 20139,
+  "inference_s": 17.88599991798401,
+  "usd_est": 0.12,
+  "ok": true
+ },
+ {
+  "view": "alfama",
+  "approach": "nano2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ms": 22218,
+  "inference_s": 19.572999954223633,
+  "usd_est": 0.12,
+  "ok": true
+ },
+ {
+  "view": "wide",
+  "approach": "nanopro",
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "ms": 22616,
+  "inference_s": 20.02900004386902,
+  "usd_est": 0.15,
+  "ok": true
+ },
+ {
+  "view": "street",
+  "approach": "nano2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ms": 24028,
+  "inference_s": 20.381999969482422,
+  "usd_est": 0.12,
+  "ok": true
+ },
+ {
+  "view": "ponte",
+  "approach": "nanopro",
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "ms": 24667,
+  "inference_s": 22.405999898910522,
+  "usd_est": 0.15,
+  "ok": true
+ },
+ {
+  "view": "alfama",
+  "approach": "nanopro",
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "ms": 25208,
+  "inference_s": 21.782999992370605,
+  "usd_est": 0.15,
+  "ok": true
+ },
+ {
+  "view": "street",
+  "approach": "nanopro",
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "ms": 27248,
+  "inference_s": 23.63100004196167,
+  "usd_est": 0.15,
+  "ok": true
+ },
+ {
+  "view": "praca",
+  "approach": "nanopro",
+  "endpoint": "fal-ai/nano-banana-pro/edit",
+  "ms": 27958,
+  "inference_s": 26.223999977111816,
+  "usd_est": 0.15,
+  "ok": true
+ },
+ {
+  "view": "praca",
+  "approach": "seedream",
+  "endpoint": "bytedance/seedream/v5/pro/edit",
+  "ms": 93575,
+  "inference_s": 91.18400001525879,
+  "usd_est": 0.135,
+  "ok": true
+ },
+ {
+  "view": "alfama",
+  "approach": "seedream",
+  "endpoint": "bytedance/seedream/v5/pro/edit",
+  "ms": 94812,
+  "inference_s": 91.88299989700317,
+  "usd_est": 0.135,
+  "ok": true
+ },
+ {
+  "view": "wide",
+  "approach": "seedream",
+  "endpoint": "bytedance/seedream/v5/pro/edit",
+  "ms": 95417,
+  "inference_s": 92.37900018692017,
+  "usd_est": 0.135,
+  "ok": true
+ },
+ {
+  "view": "ponte",
+  "approach": "seedream",
+  "endpoint": "bytedance/seedream/v5/pro/edit",
+  "ms": 97690,
+  "inference_s": 95.02499985694885,
+  "usd_est": 0.135,
+  "ok": true
+ },
+ {
+  "view": "street",
+  "approach": "seedream",
+  "endpoint": "bytedance/seedream/v5/pro/edit",
+  "ms": 105253,
+  "inference_s": 101.97699999809265,
+  "usd_est": 0.135,
+  "ok": true
+ }
+]
