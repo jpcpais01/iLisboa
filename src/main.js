@@ -350,8 +350,8 @@ const midR = (dist) => THREE.MathUtils.clamp(dist * 1.3 + 700, 1450, 5600) * (is
 // the still pixel ratio, so d / px.f is the ground one pixel covers at distance d. The 0.5 m ground of a full tile beats the far
 // ground (~2 m a texel, 4 m on phones) only while a pixel covers less than that; a full building (pitched roofs, window grids,
 // exact outlines) beats its far block only while a pixel covers less than ~2.5 m (?lodpx= to tune). Bigger screens keep more.
-const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5;
-const fullCap = () => px.f * (isMobile ? 3.2 : 1.6), midCap = () => px.f * LOD_PX;
+const px = { f: 1000 }, LOD_PX = +Q.get('lodpx') || 2.5, OLDLOD = Q.get('lodv') !== '2';   // (A/B: ?lodv=2 is the screen-space LOD, until it becomes the default)
+const fullCap = () => OLDLOD ? Infinity : px.f * (isMobile ? 3.2 : 1.6), midCap = () => OLDLOD ? Infinity : px.f * LOD_PX;
 const camDist = (b) => Math.hypot(rectDist(b, camera.position.x, -camera.position.z), Math.max(0, camera.position.y - 40));   // (−40: ground is rarely lower; errs towards detail)
 const _fwd = new THREE.Vector3();
 window.__stream = () => stream(true);   // for checks: stream without waiting for frames
@@ -366,7 +366,7 @@ function stream(force) {
   const R = nearR(dist) * (0.75 + 0.25 * lodK), M = midR(dist) * (0.5 + 0.5 * lodK);
   DR = THREE.MathUtils.clamp(700 + camera.position.y * 0.9, 900, 2700) * lodK;   // relief and balconies reach further as the view rises
   camera.getWorldDirection(_fwd); const fl = Math.hypot(_fwd.x, _fwd.z) || 1, fx = _fwd.x / fl, fy = -_fwd.z / fl, cx = camera.position.x, cy = -camera.position.z;
-  DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
+  if (!OLDLOD) DR = Math.min(DR, px.f * 1.2 * lodK);   // (relief: cornices and balconies are sub-pixel past this)
   const FC = fullCap(), MC = midCap();
   const want = [];
   for (const t of tiles) {
@@ -701,7 +701,7 @@ function fitShadow(now) {
   const key = `${R.toFixed(2)}|${nf.ka}|${nf.kb}|${dirKey}`;
   // a moved frame redraws at once; new tiles streaming in redraw it at most every 0.4 s, not on every arrival (a wide view takes
   // in dozens, and each redraw of a city-wide map costs several frames' worth of GPU time)
-  if (key !== shadowKey || (shadowDirty && now - nearT > 400)) { shadowKey = key; shadowDirty = false; nearT = now; nf.apply(); return; }   // one cascade per frame at most
+  if (key !== shadowKey || (shadowDirty && (OLDLOD || now - nearT > 400))) { shadowKey = key; shadowDirty = false; nearT = now; nf.apply(); return; }   // one cascade per frame at most
   // far: from just behind the camera out towards the horizon
   const RF = Math.min(lim, Math.max(isMobile ? 2600 : 3600, R * 2.5));
   const tf = _sf.copy(camera.position).setY(controls.target.y).addScaledVector(_fw, RF * 0.75 * grazing);
@@ -789,7 +789,7 @@ renderer.setAnimationLoop((now) => {
   if (want !== curRatio && (moving || stillN > 8)) { curRatio = want; renderer.setPixelRatio(curRatio); renderer.setSize(innerWidth, innerHeight, false); resized = true; }
   // a still view renders at a quarter rate, or up to half (30 fps) while the ambient cars drive: as often as a car (~14 m/s)
   // moves half a pixel, so a city-wide view (cars crawl a pixel or two a second) no longer redraws the whole city 30 times a second
-  const carStep = live.cars.count ? THREE.MathUtils.clamp(Math.floor(60 / (28 * px.f / Math.max(1, camera.position.distanceTo(controls.target)))), 2, 4) : 4;
+  const carStep = OLDLOD ? (live.cars.count ? 2 : 4) : live.cars.count ? THREE.MathUtils.clamp(Math.floor(60 / (28 * px.f / Math.max(1, camera.position.distanceTo(controls.target)))), 2, 4) : 4;
   if (!active && !resized && curRatio === pixelRatio && idleN % carStep) { if (++nf % 12 === 0) stream(false); last = now; return; }
   // keep the target over the diorama (a followed plane may fly beyond it)
   if (!chase.busy) controls.target.x = THREE.MathUtils.clamp(controls.target.x, minX, maxX);
@@ -801,7 +801,7 @@ renderer.setAnimationLoop((now) => {
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
-  for (const t of treeChunks) { const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
+  for (const t of treeChunks) { const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
