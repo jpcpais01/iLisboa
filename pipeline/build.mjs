@@ -556,7 +556,7 @@ const terraceSlabs = (p) => {
   const C = (r) => r.map(([x, y]) => ({ X: Math.round(x * SC), Y: Math.round(y * SC) }));
   const run = (op, subj, clip) => { const c = new ClipperLib.Clipper(); c.AddPaths(subj, ClipperLib.PolyType.ptSubject, true); if (clip) c.AddPaths(clip, ClipperLib.PolyType.ptClip, true); const o = new ClipperLib.Paths(); c.Execute(op, o, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero); return o; };
   const off = (paths, d) => { const co = new ClipperLib.ClipperOffset(2, 25); co.AddPaths(paths, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon); const o = new ClipperLib.Paths(); co.Execute(o, d * SC); return o; };
-  const plan = run(ClipperLib.ClipType.ctUnion, [C(p.outer), ...p.holes.map((h) => C(h).reverse())]);
+  const plan = run(ClipperLib.ClipType.ctDifference, [C(p.outer)], p.holes.map((h) => C(h)));
   const top = Math.max(...hz), K = Math.round(top / step), out = [];
   let ground = 0, gn = 0; for (const [x, y] of p.outer) { ground += groundAt(x, y); gn++; } ground /= gn;
   let prev = plan;
@@ -641,7 +641,7 @@ const surveyMass_ = (p) => {
   const cellPath = (i, i2, j) => { const u0 = -ob.hl + (i - 1) * G, u1 = -ob.hl + i2 * G, v0 = -ob.hw + (j - 1) * G, v1 = v0 + G; return C([UV(u0, v0), UV(u1, v0), UV(u1, v1), UV(u0, v1)]); };
   const region = (test) => { const out = []; for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) if (test(j * nu + i)) { let i2 = i; while (i2 + 1 < nu && test(j * nu + i2 + 1)) i2++; out.push(cellPath(i, i2, j)); i = i2; } return out.length ? run(ClipperLib.ClipType.ctUnion, out) : []; };
   const areaOf = (paths) => paths.reduce((a, q) => a + ClipperLib.Clipper.Area(q), 0) / (SC * SC);
-  let plan = run(ClipperLib.ClipType.ctUnion, [C(p.outer), ...p.holes.map((h) => C(h).reverse())]);
+  let plan = run(ClipperLib.ClipType.ctDifference, [C(p.outer)], p.holes.map((h) => C(h)));
   const planA = areaOf(plan);
   // open sky inside the plan: cut it away when it is a real gap (3 m across, 30 m² or more), not a light well or a blur
   let cut = false;
