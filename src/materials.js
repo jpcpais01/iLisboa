@@ -435,7 +435,7 @@ float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
   // ─── colour: clear channel water vs turbid estuary vs shallow bottom ───
   float plume = wn(p / 900. + vec2(t * .0012, -t * .0007)) * .65 + wn(p / 260. - vec2(t * .002, 0.)) * .35;
   float turb = clamp(mix(.15, .85, exp(-depth / 7.)) + (plume - .5) * .55, 0., 1.);
-  vec3 channel = vec3(.008, .1, .15), estuary = vec3(.028, .15, .14), flats = vec3(.09, .16, .12);
+  vec3 channel = vec3(.005, .085, .17), estuary = vec3(.018, .15, .165), flats = vec3(.08, .17, .14);
   vec3 body = mix(channel, estuary, turb);
   body = mix(body, flats, exp(-depth / 1.3) * .7);
   body = mix(body, vec3(.08, .22, .2), core * .55);          // bubbles in the trail scatter light back up

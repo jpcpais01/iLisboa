@@ -2,14 +2,15 @@
 // Each call listens to the Lisbon box for a few seconds and answers with everything this instance has heard in the last
 // 20 minutes: moving ships report every 2–10 s, so a few seconds catches all of them, while ships at anchor or alongside
 // report every 3–6 min and names/types/destinations every 6 min, so a warm instance keeps what it heard before
-// (in memory) and the client keeps merging too. CDN-cached for 25 s, so many viewers share one websocket.
+// (in memory) and the client keeps merging too. CDN-cached for 60 s (served stale while it refreshes), so many viewers share one websocket.
 // Needs AISSTREAM_KEY in the Vercel environment; without it answers { error: 'nokey' } (the boats layer then shows the
 // timetable ferries and illustrative traffic).
 import { fwd, r1 } from './_lib/geo.js';
 import WS from 'ws';   // (Node's built-in WebSocket never completed the handshake with aisstream from Vercel)
 
 const BOX = [[38.55, -9.55], [38.90, -8.85]];   // the bar to Alcochete, Cascais to Seixal
-const LISTEN = 6000, CONNECT = 7000, KEEP = 20 * 60 * 1000;
+const LISTEN = 6000, CONNECT = 20000,   // aisstream answers the websocket upgrade slowly (15–18 s measured from a datacentre, 2026-11-27)
+      KEEP = 20 * 60 * 1000;
 const mem = (globalThis.__ais ??= { pos: new Map(), stat: new Map(), t: 0, err: '', diag: {} });
 
 function listen(key) {
@@ -61,7 +62,7 @@ export default async function handler(req, res) {
   const key = process.env.AISSTREAM_KEY;
   if (!key) { res.setHeader('Cache-Control', 'public, s-maxage=300'); return res.status(200).send(JSON.stringify({ error: 'nokey' })); }
   mem.err = '';
-  if (Date.now() - mem.t > 15000) { await listen(key); mem.t = Date.now(); }
+  if (Date.now() - mem.t > 40000) { await listen(key); mem.t = Date.now(); }
   const now = Date.now(), out = [];
   for (const [mmsi, p] of mem.pos) {
     if (now - p.t > KEEP) { mem.pos.delete(mmsi); continue; }
@@ -74,6 +75,6 @@ export default async function handler(req, res) {
   }
   for (const [mmsi, s] of mem.stat) if (now - s.t > 6 * KEEP) mem.stat.delete(mmsi);
   if (!out.length && mem.err) { res.setHeader('Cache-Control', 'public, s-maxage=20'); return res.status(502).send(JSON.stringify({ error: mem.err })); }
-  res.setHeader('Cache-Control', 'public, s-maxage=25, stale-while-revalidate=60');
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
   res.status(200).send(JSON.stringify({ t: Math.round(now / 1000), s: out, err: mem.err || undefined, diag: req.query?.diag ? mem.diag : undefined }));
 }
