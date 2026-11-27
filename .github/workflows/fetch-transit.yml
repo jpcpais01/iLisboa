@@ -1,0 +1,38 @@
+name: fetch-transit
+# Bus stops + timetables for the station cards (Carris and Carris Metropolitana GTFS) → public/transit.
+# Runs weekly (service calendars roll forward), on demand, or when the transit scripts change.
+on:
+  workflow_dispatch:
+  schedule: [{ cron: '17 4 * * 1' }]
+  push:
+    paths: [pipeline/transit/**, .github/workflows/fetch-transit.yml]
+concurrency: fetch-transit
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "pipeline/transit\napi\npublic/transit\n.github", sparse-checkout-cone-mode: true }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Download GTFS
+        run: |
+          set -e
+          curl -sfL --retry 3 -A 'iLisboa diorama' -o /tmp/carris.zip https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS
+          curl -sfL --retry 3 -A 'iLisboa diorama' -o /tmp/cm.zip https://api.carrismetropolitana.pt/gtfs || curl -sfL --retry 3 -o /tmp/cm.zip https://api.carrismetropolitana.pt/v2/gtfs
+          ls -la /tmp/*.zip
+          unzip -o -q /tmp/carris.zip -d /tmp/carris && unzip -o -q /tmp/cm.zip -d /tmp/cm
+          for d in /tmp/carris /tmp/cm; do f=$(find $d -name stops.txt | head -1); [ "$(dirname $f)" != "$d" ] && mv $(dirname $f)/* $d/ || true; ls -la $d; done
+      - name: Probe realtime formats
+        run: node pipeline/transit/probe.mjs
+      - name: Build stops + timetables
+        run: node --max-old-space-size=6000 pipeline/transit/build.mjs c:/tmp/carris m:/tmp/cm
+      - name: Commit
+        run: |
+          du -sh public/transit; ls public/transit/r | wc -l
+          git config user.name "ilisboa-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/transit pipeline/transit/probe
+          git diff --cached --quiet || (git commit -m "data: refresh transit stops + timetables [skip ci]" && git pull --rebase -q && git push)
