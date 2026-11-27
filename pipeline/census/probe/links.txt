@@ -297,3 +297,44 @@ NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI2011_1106.zip HTTP 
 NO https://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI11_1106.zip HTTP Error 404: Not Found
 NO https://mapas.ine.pt/download/filesGPG/2011/BGRI2011_1106.zip HTTP Error 404: Not Found
 NO http://mapas.ine.pt/download/filesGPG/2011/concelhos/BGRI2011_1106.zip HTTP Error 404: Not Found
+## https://dados.gov.pt/api/1/datasets/?q=BGRI&page_size=100 200 31491
+https://dados.gov.pt/s/resources/bgri-com-censos-2011-alto-tamega/20200304-130350/altotamega-bgri-2011.gpkg
+https://dados.gov.pt/s/resources/bgri-com-censos-2011-alto-tamega/20200310-123703/altotamega-bgri-2011.geojson
+https://dados.gov.pt/s/resources/distribuicao-dos-habitantes-pelas-localidades-do-alto-tamega-e-barroso/20230317-145739/pontos-por-habitante-nas-localidades2011.gpkg
+T BGRI com censos 2011 Alto T\u00e2mega
+T Cidades Estat\u00edsticas 2014
+T Distribui\u00e7\u00e3o dos habitantes pelas localidades  do Alto T\u00e2mega e Barroso
+T Lugares 2001
+T Lugares 2011
+T altotamega-bgri-2011.geojson
+T altotamega-bgri-2011.gpkg
+T pontos-por-habitante-nas-localidades2011.gpkg
+## https://dados.gov.pt/api/1/datasets/?q=subseccao%20censos%202021&page_size=50 200 94
+## https://dados.cm-lisboa.pt/api/3/action/package_search?q=bgri&rows=50 ERR HTTP Error 403: Forbidden
+## https://dados.cm-lisboa.pt/api/3/action/package_search?q=censos&rows=50 ERR HTTP Error 403: Forbidden
+## https://dadosabertos.cascais.pt/api/3/action/package_search?q=subseccao&rows=20 200 24768
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/240206cf-da08-4e5f-9612-6c106442498c/download/geocascais-subseccaoestatistica_20261127_172137.csv
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/2adc8335-abc9-43ec-944c-0cfe4d2df43f/download/geocascais-subseccaoestatistica_20261127_172139.gpkg
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/3929fe7c-cfcb-411b-b419-640f8cef1ac2/download/geocascais-subseccaoestatistica_20261127_172038.gpkg
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/3e6fc388-0e08-482b-8e76-ab76c7dad7ca/download/geocascais-subseccaoestatistica_20261127_172136.json
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/3e9d139a-f833-4731-8ff6-347cabe53567/download/geocascais-subseccaoestatistica_20261127_171941.csv
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/3eb11ea5-854e-4982-960b-feb8e7a74b8b/download/geocascais-subseccaoestatistica_20261127_171939.json
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/41d75a68-f6e6-403c-a64f-2a76ff8c7c73/download/geocascais-subseccaoestatistica_20261127_171939.geojson
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/65be93d7-bc7e-4b6c-a99e-422f54f2f790/download/geocascais-subseccaoestatistica_20261127_172038.json
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/73717293-8cab-47c3-be75-598583ac8ecf/download/geocascais-subseccaoestatistica_20261127_171940.zip
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/7801d54c-fd1e-48d3-b492-c56e9641612c/download/geocascais-subseccaoestatistica_20261127_171940.geojson
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/7e364e21-d1cb-488b-855c-42106448b243/download/geocascais-subseccaoestatistica_20261127_171941.json
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/8047cdd4-192c-4446-b59b-833f5b9ebfb1/download/geocascais-subseccaoestatistica_20261127_172039.csv
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/852113c9-297e-4671-b955-b258e98f907e/download/geocascais-subseccaoestatistica_20261127_172136.geojson
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/95050b50-777f-423b-9bc0-b4a3fac58fde/download/geocascais-subseccaoestatistica_20261127_172040.zip
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/a1b1164e-6304-4a81-8268-16939f5b93a7/download/geocascais-subseccaoestatistica_20261127_171941.gpkg
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/a7c0c53e-dd78-4297-bfa1-3a6296dc9885/download/geocascais-subseccaoestatistica_20261127_171939.csv
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/adbd1cf5-0733-432b-84fc-eb21c31aee9d/download/geocascais-subseccaoestatistica_20261127_172136.gpkg
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/c04bc227-6607-49f3-8cc1-2136c02efcb2/download/geocascais-subseccaoestatistica_20261127_172138.zip
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/cd362ee7-8c8c-4a89-8b5d-60f1e0bea2da/download/geocascais-subseccaoestatistica_20261127_172038.geojson
+https://dadosabertos.cascais.pt/dataset/cba499d5-8ac6-40af-8c3f-bbad6fd64e36/resource/d76c52f4-0f02-44df-9a83-a78493e52867/download/geocascais-subseccaoestatistica_20261127_172036.zip
+T C\u00e2mara Municipal de Cascais
+T Participa\u00e7\u00e3o C\u00edvica e Transpar\u00eancia
+T Sub-Sec\u00e7\u00e3o Estat\u00edstica
+## https://mapas.ine.pt/download/index2021.phtml ERR HTTP Error 404: Not Found
+## https://inspire.ine.pt/SU/atom/downloadservice_en.html 200 2688
