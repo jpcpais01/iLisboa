@@ -200,7 +200,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     down = null;
     if (!tap || blocked() || tapClaimed()) { if (p && p !== selected) unlight(p); return; }
     const g = p || pick(e.clientX, e.clientY);
-    if (g) { claimTap('landmark'); select(g); }
+    if (g) { claimTap('landmark'); select(g, true); }
     else if (selected) { claimTap('landmark'); deselect(); }
   });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && selected) deselect(); });
@@ -213,7 +213,7 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     else { c.set((g.bb[0] + g.bb[2]) / 2, ground.at((g.bb[0] + g.bb[2]) / 2, (g.bb[1] + g.bb[3]) / 2) + 10, -(g.bb[1] + g.bb[3]) / 2); size.set(g.bb[2] - g.bb[0], 20, g.bb[3] - g.bb[1]); }
     const r = Math.max(14, 0.5 * Math.hypot(size.x, size.y, size.z));
     const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
-    let dist = (r / Math.sin(Math.min(vf, hf))) * (mobile ? 1.3 : 1.2);
+    let dist = (r / Math.sin(Math.min(vf, hf))) * (mobile ? 2.4 : 2.3);   // the building with its street around it
     dist = THREE.MathUtils.clamp(dist, Math.max(controls.minDistance, 90), controls.maxDistance * 0.9);
     // keep the bearing the viewer already has; look down at ~35° (lower for tall, slender things)
     const off = new THREE.Vector3().subVectors(camera.position, controls.target); off.y = 0;
@@ -224,15 +224,21 @@ export function initLandmarks({ scene, camera, controls, canvas, ground, chase, 
     const target = c.clone(); target.y = (box ? box.min.y : c.y) + size.y * (tall > 1.2 ? 0.5 : 0.35);
     const pos = target.clone().addScaledVector(off, Math.cos(pitch) * dist); pos.y += Math.sin(pitch) * dist;
     const pivot = target.clone();
-    // the card covers part of the screen: aim off-centre so the building sits in the free space
-    // (phone: the sheet takes the bottom, so the building goes up; desktop: the card is on the left, so it goes right)
+    // the card and the side panels cover part of the screen: put the building in the middle of what is left
+    // (phone: the sheet takes the bottom, so the building goes up; desktop: between the card on the left and an open
+    // layer dock / chat on the right, and between the top bar and the time slider)
     const fwd = new THREE.Vector3().subVectors(target, pos).normalize(), perPx = (2 * Math.tan(vf) * dist) / Math.max(1, canvas.clientHeight);
     if (mobile || canvas.clientWidth < 600) {
       const up = new THREE.Vector3(0, 1, 0).sub(fwd.clone().multiplyScalar(fwd.y)).normalize();
       const shift = up.multiplyScalar(-canvas.clientHeight * 0.21 * perPx); target.add(shift); pos.add(shift);
     } else {
+      const cr = canvas.getBoundingClientRect(), W = cr.width, H = cr.height;
+      let L = Math.min(W * 0.3, 376), R = W;
+      for (const el of document.querySelectorAll('.dock.open .dock-panel, .alf.open .alf-panel')) { const b = el.getBoundingClientRect(); if (b.width && b.left > W / 2) R = Math.min(R, b.left - cr.left - 12); }
+      const dx = (L + R) / 2 - W / 2, dy = (96 + (H - 80)) / 2 - H / 2;
       const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
-      const shift = right.multiplyScalar(-Math.min(200, canvas.clientWidth * 0.15) * perPx); target.add(shift); pos.add(shift);
+      const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+      const shift = right.multiplyScalar(-dx * perPx).addScaledVector(up, dy * perPx); target.add(shift); pos.add(shift);
     }
     pos.y = Math.max(pos.y, ground.at(pos.x, -pos.z) + 25);
     const from = { p: camera.position.clone(), t: controls.target.clone() };
