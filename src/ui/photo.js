@@ -90,15 +90,17 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     const was = controls.enabled; controls.enabled = false;   // the frame holds still while the detail comes in
     try {
       // 1. stream for the photo's resolution and wait for the tiles around the view (full ground, buildings, façade relief)
-      hooks.begin(W, H);
-      const t0 = performance.now(), LIMIT = mobile ? 40000 : 30000;
-      let calm = 0;
+      hooks.begin(W, H); hooks.retry?.();
+      // counts only what is in the frame; gives up when nothing has moved for a while (STALL) or at the cap, and says what was missing
+      const t0 = performance.now(), STALL = mobile ? 20000 : 15000, CAP = mobile ? 90000 : 60000;
+      let calm = 0, lastKey = '', since = t0, missing = null;
       while (!job.cancelled) {
-        const n = hooks.pending();
+        const p = hooks.pending(), n = p.n ?? p, key = (p.list || []).join('|'), now = performance.now();
+        if (key !== lastKey) { lastKey = key; since = now; }   // progress = the set of things waited on changed
         msg.textContent = n ? `a carregar detalhe · ${n}` : 'a assentar a luz…';
         calm = n ? 0 : calm + 1;
         if (calm >= 6) break;   // nothing wanted or in flight for ~0.6 s: shadows have redrawn over the new tiles
-        if (performance.now() - t0 > LIMIT) break;   // a slow network: take what is there rather than hang
+        if (n && (now - since > STALL || now - t0 > CAP)) { missing = p.list || []; console.warn('photo: shooting without', missing); break; }
         hooks.invalidate();
         await new Promise((r) => setTimeout(r, 100));
       }
@@ -114,9 +116,9 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
       if (!blob) throw new Error('encode failed');
       const d = new Date(), p = (v) => String(v).padStart(2, '0');
       const name = `lisboa-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${id.toLowerCase()}.jpg`;
-      result = { blob, name, url: URL.createObjectURL(blob), W, H, depth: shotDepth };
+      result = { blob, name, url: URL.createObjectURL(blob), W, H, depth: shotDepth, missing };
       shotDepth = null;
-      window.__photo.last = { name, W, H, bytes: blob.size };
+      window.__photo.last = { name, W, H, bytes: blob.size, missing };
       showDone(result);
     } catch (e) {
       console.error(e);
@@ -136,7 +138,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   function show(r, v) {   // v: the picture on show (the original or the AI version); save and share follow it
     done.querySelector('img').src = v.url;
     done.querySelector('.ph-info b').textContent = `${v.W} × ${v.H}`;
-    done.querySelector('.ph-info small').textContent = `${(v.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG${v === r.ai ? ' · neural' : ''}`;
+    done.querySelector('.ph-info small').textContent = `${(v.blob.size / 1048576).toFixed(1).replace('.', ',')} MB · JPEG${v === r.ai ? ' · neural' : ''}${r.missing?.length ? ` · sem ${r.missing.length} ${r.missing.length > 1 ? 'pormenores' : 'pormenor'} (rede lenta)` : ''}`;
     const badge = $('.ph-badge');
     badge.hidden = v !== r.ai || r.ai.score == null;
     if (!badge.hidden) { badge.textContent = `${r.ai.score}% fiel à geometria`; badge.dataset.q = r.ai.score >= 80 ? 'hi' : r.ai.score >= 70 ? 'mid' : 'lo'; }

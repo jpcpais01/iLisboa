@@ -367,17 +367,23 @@ function detail(t, d) {
   if (t.state !== 2 || !(t.t.detail || t.t.balconies || lm)) return;
   if (!ready || inflight > 1) { if (d > DR + 400 && t.dstate) dropDetail(t); return; }   // near-only detail waits until the city is on screen and its tiles are in
   if (d > DR + 400) { if (t.dstate) dropDetail(t); return; }
-  if (d > DR || t.dstate) return;
-  t.dstate = 1; const gen = t.gen;
+  if (d > DR || t.dstate || (t.dfail || 0) >= 3) return;   // (three failed fetches: given up on, until a photo asks again)
+  t.dstate = 1; const gen = t.gen, req = (t.dreq = (t.dreq || 0) + 1);
   Promise.all([t.t.detail ? loader.loadAsync(url(t.a, t.t.detail)) : null,
     t.t.balconies && !t.bal ? fetch(url(t.a, t.t.balconies)).then(ok).then((r) => r.arrayBuffer()) : null,
     lm ? loader.loadAsync(lm).catch(() => null) : null]).then(([g, bal, lg]) => {
-    if (t.dstate !== 1 || t.gen !== gen || t.state !== 2) { for (const x of [g, lg]) x?.scene.traverse((m) => m.isMesh && m.geometry.dispose()); return; }
+    if (t.dreq !== req || t.dstate !== 1 || t.gen !== gen || t.state !== 2) {
+      for (const x of [g, lg]) x?.scene.traverse((m) => m.isMesh && m.geometry.dispose());
+      // the tile was swapped under it (mid → full reloads it): ask again for the new copy. Leaving dstate at 1 here used to strand
+      // the tile without its relief for good, and photo mode waited on it forever
+      if (t.dreq === req && t.dstate === 1) t.dstate = 0;
+      return;
+    }
     if (lg) { lg.scene.traverse((m) => { if (m.isMesh) { m.material = matDetail; m.receiveShadow = true; m.castShadow = !isMobile; } }); if (g) g.scene.add(lg.scene); else g = lg; }
     if (g) { g.scene.traverse((m) => { if (m.isMesh && m.material !== matDetail) { m.material = matDetail; m.receiveShadow = true; } }); t.detail = g.scene; scene.add(g.scene); }
     if (bal && !t.bal) { t.bal = balconies(bal); scene.add(t.bal); balconyChunks.push(t.bal); }
     t.dstate = 2;
-  }).catch(() => { t.dstate = 0; });
+  }).catch((e) => { if (t.dreq === req && t.dstate === 1) { t.dstate = 0; t.dfail = (t.dfail || 0) + 1; console.warn('relief', t.a.area, t.t.i, t.t.j, e?.message || e); } });
 }
 // keep the tiles near the view loaded, nearest first; let go of those well outside it
 // tiles with their own 0.5 m ground (4 MB of video memory each). Phones keep fewer: past ~1 km a phone pixel covers 2 m or more of
@@ -427,8 +433,23 @@ function stream(force) {
     if (inflight >= (force ? 8 : 4)) break;
     inflight++; load(t, mode).finally(() => { inflight--; tick(); });
   }
+  lastWant = want;
   return want.length;
 }
+let lastWant = [];
+// what a photo still waits for: tiles wanted or loading and relief in flight, counted only where the camera can see them
+const _fr = new THREE.Frustum(), _bx = new THREE.Box3(), _m4 = new THREE.Matrix4();
+function photoPending() {
+  stream(true);
+  camera.updateMatrixWorld(); _fr.setFromProjectionMatrix(_m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const seen = (t) => { _bx.min.set(t.b[0], -60, -t.b[3]); _bx.max.set(t.b[2], 1000, -t.b[1]); return _fr.intersectsBox(_bx); };
+  const wait = new Set();
+  for (const [, t] of lastWant) if (seen(t)) wait.add(t);
+  for (const t of tiles) if ((t.loading || t.dstate === 1) && seen(t)) wait.add(t);
+  return { n: wait.size, list: [...wait].map((t) => `${t.a.area}:${t.t.i}_${t.t.j} ${t.loading ? 'tile ' + t.loading : t.dstate === 1 ? 'relief' : 'queued'}`) };
+}
+window.__photoPending = photoPending;
+if (SHOW_STATS) window.__tiles = tiles;   // (checks)
 // tiles near the view that are not on screen yet (the loading screen waits for these)
 const pending = () => { const x = controls.target.x, y = -controls.target.z, R = Math.min(nearR(camera.position.distanceTo(controls.target)), 2000);
   const FC = fullCap(); return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R && camDist(t.b) <= FC).length; };
@@ -842,7 +863,8 @@ initPhoto({ renderer, camera, canvas, controls, mobile: isMobile, hooks: {
   free: () => { if (drive.active) drive.exit(); chase.release(false); chase.halt(); introT = 1; },   // a saved view takes the camera back
   begin: (W, H) => { shotF = H / (2 * tanHalf()); shotLod = lodK; if (!LOD_PIN) lodK = 1; },   // full detail distances, whatever the fps
   end: () => { shotF = 0; if (!LOD_PIN) lodK = shotLod; },
-  pending: () => stream(true) + inflight + tiles.filter((t) => t.dstate === 1).length,   // tiles wanted, loading, or fetching relief
+  pending: photoPending,
+  retry: () => { for (const t of tiles) { t.failed = 0; t.dfail = 0; } },   // a photo gives failed tiles and relief one more go
   shoot: (draw) => { shotDraw = draw; invalidate(); },   // the next frame draws the photo instead of the screen
   scale: (H) => {   // sizes set in screen pixels follow the photo's height; returns the undo
     const l = lampUniforms.uScale.value, d = beaconUniforms.uDpr.value;
