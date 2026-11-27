@@ -9,7 +9,7 @@ import { fwd, r1 } from './_lib/geo.js';
 import WS from 'ws';   // (Node's built-in WebSocket never completed the handshake with aisstream from Vercel)
 
 const BOX = [[38.55, -9.55], [38.90, -8.85]];   // the bar to Alcochete, Cascais to Seixal
-const LISTEN = 6000, CONNECT = 20000,   // aisstream answers the websocket upgrade slowly (15–18 s measured from a datacentre, 2026-11-27)
+const LISTEN = 14000, CONNECT = 22000,   // aisstream answers the websocket upgrade slowly (15–18 s measured from a datacentre, 2026-11-27)
       KEEP = 20 * 60 * 1000;
 const mem = (globalThis.__ais ??= { pos: new Map(), stat: new Map(), t: 0, err: '', diag: {} });
 

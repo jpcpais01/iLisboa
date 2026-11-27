@@ -81,7 +81,7 @@
       "maxDuration": 60
     },
     "api/ships.js": {
-      "maxDuration": 40
+      "maxDuration": 45
     }
   }
 }
