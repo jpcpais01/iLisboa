@@ -1,0 +1,122 @@
+[
+ {
+  "name": "A_streetC_nb2_s1",
+  "ok": false,
+  "error": "no image: {\"detail\":[{\"loc\":[\"body\"],\"msg\":\"The model did not generate the expected output for this prompt. This may occur for several reasons, including unsafe content, a prompt that is incompatible with the selected media type (e.g., prompting an image model to generate audio), references to missing attachments, or other cases where the input cannot be processed as the requested output type. Please review"
+ },
+ {
+  "name": "A_streetC_nb2_s2",
+  "ok": false,
+  "error": "no image: {\"detail\":[{\"loc\":[\"body\"],\"msg\":\"The model did not generate the expected output for this prompt. This may occur for several reasons, including unsafe content, a prompt that is incompatible with the selected media type (e.g., prompting an image model to generate audio), references to missing attachments, or other cases where the input cannot be processed as the requested output type. Please review"
+ },
+ {
+  "name": "A_pracaP_nb2_s1",
+  "ok": true,
+  "ms": 16124
+ },
+ {
+  "name": "A_streetD_nb2_s1",
+  "ok": true,
+  "ms": 16472
+ },
+ {
+  "name": "A_alfamaP_nb2_s1",
+  "ok": true,
+  "ms": 17523
+ },
+ {
+  "name": "A_alfamaC_nb2edges_s1",
+  "ok": true,
+  "ms": 17642
+ },
+ {
+  "name": "A_streetP_nb2_s1",
+  "ok": true,
+  "ms": 17714
+ },
+ {
+  "name": "A_alfamaC_nb2_s1",
+  "ok": true,
+  "ms": 17841
+ },
+ {
+  "name": "A_pracaE_nb2_s1",
+  "ok": true,
+  "ms": 17819
+ },
+ {
+  "name": "A_streetP_nb2_s2",
+  "ok": true,
+  "ms": 17844
+ },
+ {
+  "name": "A_streetC_nb2edges_s2",
+  "ok": true,
+  "ms": 17857
+ },
+ {
+  "name": "A_alfamaC_nb2edges_s2",
+  "ok": true,
+  "ms": 17883
+ },
+ {
+  "name": "A_streetC_nb2edges_s1",
+  "ok": true,
+  "ms": 17904
+ },
+ {
+  "name": "A_streetE_nb2_s1",
+  "ok": true,
+  "ms": 18007
+ },
+ {
+  "name": "A_pracaD_nb2_s1",
+  "ok": true,
+  "ms": 20737
+ },
+ {
+  "name": "A_alfamaP_nb2_s2",
+  "ok": true,
+  "ms": 20837
+ },
+ {
+  "name": "A_alfamaC_nb2_s2",
+  "ok": true,
+  "ms": 20842
+ },
+ {
+  "name": "A_pracaP_nb2_s2",
+  "ok": true,
+  "ms": 21959
+ },
+ {
+  "name": "A_pracaC_nb2_s1",
+  "ok": true,
+  "ms": 22108
+ },
+ {
+  "name": "A_pracaC_nb2_s2",
+  "ok": true,
+  "ms": 23718
+ },
+ {
+  "name": "A_pracaC_nb2edges_s1",
+  "ok": true,
+  "ms": 23751
+ },
+ {
+  "name": "A_pracaC_nb2edges_s2",
+  "ok": true,
+  "ms": 39153
+ },
+ {
+  "name": "A_pracaC_flux_instantx",
+  "ok": true,
+  "ms": 86129
+ },
+ {
+  "name": "A_pracaC_flux_shakker",
+  "ok": true,
+  "ms": 97634
+ }
+]
