@@ -19,7 +19,14 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     <div class="ph-hint">Modo fotografia · enquadre a vista</div>
     <div class="ph-bar" role="toolbar" aria-label="Fotografia">
       ${SIZES.map((z) => `<button type="button" class="ph-go" data-s="${z.s}" data-id="${z.id}"><b>${z.id}</b><small></small></button>`).join('')}
+      <button type="button" class="ph-vw" aria-label="Vistas guardadas" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1z"/></svg><i class="ph-n" hidden></i></button>
       <button type="button" class="ph-x" aria-label="Sair do modo fotografia"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="ph-views" hidden>
+      <header><b>Vistas guardadas</b><button type="button" class="pv-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Guardar esta vista</button></header>
+      <ol class="pv-list"></ol>
+      <p class="pv-empty">Enquadre a cidade, escolha a hora e o tempo, e guarde: volta a esta vista exata quando quiser.</p>
+      <p class="pv-toast" hidden></p>
     </div>
     <div class="ph-work" hidden><i class="ph-spin"></i><span class="ph-msg"></span><button type="button" class="ph-cancel">Cancelar</button></div>
     <div class="ph-done" hidden>
@@ -29,7 +36,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     </div>`;
   document.body.appendChild(ui);
   const $ = (s) => ui.querySelector(s);
-  const bar = $('.ph-bar'), work = $('.ph-work'), msg = $('.ph-msg'), done = $('.ph-done');
+  const bar = $('.ph-bar'), work = $('.ph-work'), msg = $('.ph-msg'), done = $('.ph-done'), panel = $('.ph-views');
 
   const dims = (s) => {   // the screen's shape, s pixels on the short side (even numbers: some encoders and players want them)
     const a = canvas.clientWidth / Math.max(1, canvas.clientHeight), even = (v) => Math.max(2, Math.round(v / 2) * 2);
@@ -38,7 +45,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   const paintSizes = () => { for (const b of ui.querySelectorAll('.ph-go')) { const [w, h] = dims(+b.dataset.s); b.querySelector('small').textContent = `${w}×${h}`; } };
 
   // the bar steps aside after a few still seconds, so the screen shows the clean picture; any touch or move brings it back
-  const wake = () => { if (!on) return; bar.classList.remove('away'); clearTimeout(fadeT); fadeT = setTimeout(() => { if (!busy && !bar.matches(':hover')) bar.classList.add('away'); }, 3200); };
+  const wake = () => { if (!on) return; bar.classList.remove('away'); clearTimeout(fadeT); fadeT = setTimeout(() => { if (!busy && panel.hidden && !bar.matches(':hover')) bar.classList.add('away'); }, 3200); };
   for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown']) addEventListener(ev, wake, { passive: true });
 
   function enter() {
@@ -48,7 +55,7 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     btn.setActive(true); wake(); hooks.invalidate();
   }
   function exit() {
-    if (!on) return; cancel(); closeDone(); on = false;
+    if (!on) return; cancel(); closeDone(); showViews(false); on = false;
     document.body.classList.remove('photo'); ui.hidden = true; btn.setActive(false); hooks.invalidate();
   }
   const btn = registerAction({ id: 'photo', label: 'Fotografia', icon: ICON, run: () => (on ? exit() : enter()) });
@@ -57,11 +64,11 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
   addEventListener('keydown', (e) => {
     if (e.target.closest?.('input, textarea, [contenteditable]')) return;
     if (e.code === 'KeyP' && !e.metaKey && !e.ctrlKey && !e.altKey) { on ? exit() : enter(); return; }
-    if (on && e.code === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); if (!done.hidden) closeDone(); else if (busy) cancel(); else exit(); }
+    if (on && e.code === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); if (renaming) return; if (!done.hidden) closeDone(); else if (!panel.hidden) showViews(false); else if (busy) cancel(); else exit(); }
   }, true);   // (capture: Esc closes photo mode before drive mode sees it)
   $('.ph-x').onclick = exit;
   $('.ph-cancel').onclick = () => cancel();
-  for (const b of ui.querySelectorAll('.ph-go')) b.onclick = () => shoot(+b.dataset.s, b.dataset.id);
+  for (const b of ui.querySelectorAll('.ph-go')) b.onclick = () => { showViews(false); shoot(+b.dataset.s, b.dataset.id); };
 
   function cancel() { if (busy) busy.cancelled = true; }
   let result = null;
@@ -131,6 +138,104 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     if (!mobile) save(r);   // desktop: straight to Downloads; phones choose (Partilhar → Guardar imagem puts it in Photos)
   }
 
+  // ─── saved views: the exact camera (position, aim, lens) and its light (hour, month, weather), kept on this device ───
+  const KEY = 'ilisboa.views', MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const load = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(v) ? v : []; } catch { return []; } };
+  let views = load(), renaming = null, undo = null, toastT = 0, tween = 0;
+  const store = () => { try { localStorage.setItem(KEY, JSON.stringify(views)); return true; } catch { return false; } };
+  const list = $('.pv-list'), count = $('.ph-n'), vwBtn = $('.ph-vw');
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const hhmm = (h) => { const m = Math.round(h * 60) % 1440; return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+  const toast = (t) => { const el = $('.pv-toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2200); };
+  function showViews(v = panel.hidden) {
+    panel.hidden = !v; vwBtn.setAttribute('aria-expanded', String(v));
+    if (v) paintViews(); else if (renaming) renaming.blur();
+    wake();
+  }
+  vwBtn.onclick = () => showViews();
+  function paintViews() {
+    count.hidden = !views.length; count.textContent = views.length;
+    $('.pv-empty').hidden = views.length > 0;
+    list.innerHTML = views.map((v) => `<li data-id="${v.id}">
+      <button type="button" class="pv-go" aria-label="Ir para ${esc(v.name)}">${v.img ? `<img src="${v.img}" alt="">` : ''}</button>
+      <div class="pv-tx"><input class="pv-name" value="${esc(v.name)}" maxlength="40" readonly aria-label="Nome da vista"><small>${hhmm(v.hour)} · ${v.mes ? MONTHS[v.mes - 1] : 'hoje'}${v.tempo ? ' · ' + esc(hooks.hud.picks?.[v.tempo] || v.tempo) : ''}</small></div>
+      <div class="pv-acts">
+        <button type="button" class="pv-ren" aria-label="Mudar o nome"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
+        <button type="button" class="pv-link" aria-label="Copiar link"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg></button>
+        <button type="button" class="pv-del" aria-label="Apagar"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/></svg></button>
+      </div></li>`).join('') + (undo ? `<li class="pv-undo"><span>«${esc(undo.v.name)}» apagada</span><button type="button">Desfazer</button></li>` : '');
+  }
+  const byId = (id) => views.find((v) => v.id === id);
+  list.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.closest('.pv-undo')) { views.splice(Math.min(undo.i, views.length), 0, undo.v); undo = null; store(); paintViews(); return; }
+    const li = b.closest('li'), v = byId(li?.dataset.id); if (!v) return;
+    if (b.classList.contains('pv-go')) go(v);
+    else if (b.classList.contains('pv-ren')) { const inp = li.querySelector('.pv-name'); inp.readOnly = false; renaming = inp; inp.focus(); inp.select(); }
+    else if (b.classList.contains('pv-link')) shareView(v);
+    else if (b.classList.contains('pv-del')) { const i = views.indexOf(v); views.splice(i, 1); undo = { v, i }; store(); paintViews(); setTimeout(() => { if (undo?.v === v) { undo = null; if (!panel.hidden) paintViews(); } }, 6000); }
+  });
+  const finishRename = (inp, keep = true) => {
+    const v = byId(inp.closest('li')?.dataset.id); renaming = null; inp.readOnly = true;
+    if (v && keep && inp.value.trim()) { v.name = inp.value.trim(); store(); } else if (v) inp.value = v.name;
+  };
+  list.addEventListener('focusout', (e) => { if (e.target === renaming) finishRename(e.target); });
+  list.addEventListener('keydown', (e) => {
+    if (e.target !== renaming) return;
+    if (e.key === 'Enter') { e.preventDefault(); finishRename(e.target); e.target.blur(); }
+    else if (e.key === 'Escape') { finishRename(e.target, false); e.target.blur(); }
+  });
+
+  function snapshot() {
+    const hud = hooks.hud, now = new Date();
+    return { p: camera.position.toArray(), t: controls.target.toArray(), fov: camera.fov,
+      hour: hud.hour(), mes: hud.month() || now.getMonth() + 1, tempo: hud.tempo() };   // (a live clock is pinned at this minute: the same light every time)
+  }
+  $('.pv-add').onclick = async () => {
+    if (busy) return;
+    const v = { id: Math.random().toString(36).slice(2, 10), name: `Vista ${views.reduce((n, x) => Math.max(n, +(/^Vista (\d+)$/.exec(x.name)?.[1] || 0)), 0) + 1}`, at: Date.now(), ...snapshot(), img: '' };
+    try {   // the thumbnail is the photo pipeline at 320 px: the view itself, without the UI
+      const a = canvas.clientWidth / Math.max(1, canvas.clientHeight), W = a >= 1 ? 320 : Math.round(320 * a), H = a >= 1 ? Math.round(320 / a) : 320;
+      const c = await new Promise((res, rej) => hooks.shoot(() => { try { res(render(W, H)); } catch (e) { rej(e); } }));
+      v.img = c.toDataURL('image/jpeg', 0.78); c.width = c.height = 0;
+    } catch (e) { console.error(e); }
+    views.unshift(v);
+    if (!store()) { v.img = ''; if (!store()) { views.shift(); toast('Sem espaço para mais vistas neste aparelho'); return paintViews(); } }
+    paintViews(); toast('Vista guardada');
+  };
+
+  // back to a view: a short flight to the exact camera, the light set at once
+  function go(v) {
+    hooks.free(); hooks.hud.setScene({ hour: v.hour, mes: v.mes, tempo: v.tempo });
+    const p0 = camera.position.clone(), t0 = controls.target.clone(), f0 = camera.fov;
+    const p1 = new THREE.Vector3().fromArray(v.p), t1 = new THREE.Vector3().fromArray(v.t), f1 = v.fov || f0;
+    const dur = 700 + Math.min(1300, p0.distanceTo(p1) / 4), start = performance.now(), me = ++tween;
+    const stop = () => { if (me === tween) tween++; };   // a touch of the user's takes over
+    canvas.addEventListener('pointerdown', stop, { once: true }); canvas.addEventListener('wheel', stop, { once: true, passive: true });
+    const step = () => {
+      if (me !== tween) return;
+      const k = Math.min(1, (performance.now() - start) / dur), e = k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2;
+      camera.position.lerpVectors(p0, p1, e); controls.target.lerpVectors(t0, t1, e);
+      camera.fov = f0 + (f1 - f0) * e; camera.updateProjectionMatrix(); camera.lookAt(controls.target);
+      hooks.invalidate();
+      if (k < 1) requestAnimationFrame(step);
+      else { canvas.removeEventListener('pointerdown', stop); canvas.removeEventListener('wheel', stop); controls.update?.(); history.replaceState(null, '', '#' + [...v.p, ...v.t].map((n) => Math.round(n)).join(',')); }
+    };
+    requestAnimationFrame(step);
+    if (mobile) showViews(false);   // (a phone needs the whole screen to see it)
+  }
+  // a link that opens this exact view: #x,y,z,tx,ty,tz,fov plus the light in the query (?t, ?mes, ?tempo)
+  const linkOf = (v) => {
+    const q = new URLSearchParams({ t: (+v.hour).toFixed(3), mes: v.mes }); if (v.tempo) q.set('tempo', v.tempo);
+    return `${location.origin}${location.pathname}?${q}#${[...v.p, ...v.t].map((n) => (+n).toFixed(1)).join(',')},${(+v.fov).toFixed(2)}`;
+  };
+  async function shareView(v) {
+    const url = linkOf(v);
+    if (mobile && navigator.share) { try { await navigator.share({ title: `${v.name} · Lisboa`, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(url); toast('Link copiado'); } catch { toast(url); }
+  }
+  paintViews();
+
   // ─── the render itself: W×H, tiled when bigger than the GPU allows, onto one 2D canvas ───
   function render(W, H) {
     const gl = renderer.getContext();
@@ -171,6 +276,6 @@ export function initPhoto({ renderer, camera, canvas, controls, mobile, hooks })
     window.__photo.tiles = n; window.__photo.tileSize = T;
   }
 
-  window.__photo = { enter, exit, shoot: (id = '1080p') => shoot(SIZES.find((z) => z.id === id).s, id), get busy() { return !!busy; }, get on() { return on; }, last: null, result: () => result };
+  window.__photo = { enter, exit, shoot: (id = '1080p') => shoot(SIZES.find((z) => z.id === id).s, id), get busy() { return !!busy; }, get on() { return on; }, last: null, result: () => result, views: () => views, save: () => $('.pv-add').onclick(), go: (i) => go(views[i]), link: (i) => linkOf(views[i]), panel: showViews };
   return { enter, exit, get on() { return on; } };
 }

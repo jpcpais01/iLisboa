@@ -810,8 +810,9 @@ if (camOnGround) {
   controls.target.copy(tgt);
   camera.position.copy(tgt).add(new THREE.Vector3(-Math.sin(hr) * Math.sin(tr) * d, Math.cos(tr) * d, Math.cos(hr) * Math.sin(tr) * d));
   introT = 1;
-} else if (fromHash.length === 6 && fromHash.every(isFinite)) {
+} else if ((fromHash.length === 6 || fromHash.length === 7) && fromHash.every(isFinite)) {   // #x,y,z,tx,ty,tz[,fov] (saved views share a 7th: their lens)
   camera.position.fromArray(fromHash, 0); controls.target.fromArray(fromHash, 3); introT = 1;
+  if (fromHash[6] >= 10 && fromHash[6] <= 90) { camera.fov = fromHash[6]; camera.updateProjectionMatrix(); }
 } else {
   camera.position.copy(startPos); controls.target.copy(focus);
 }
@@ -835,7 +836,8 @@ window.__alf = initAssistant({ camera, controls, marks, live, hud, ll, mobile: i
 let shotF = 0, shotDraw = null, shotLod = 0;
 const tanHalf = () => Math.tan((camera.fov * Math.PI) / 360);
 initPhoto({ renderer, camera, canvas, controls, mobile: isMobile, hooks: {
-  scene, invalidate,
+  scene, invalidate, hud,
+  free: () => { if (drive.active) drive.exit(); chase.release(false); chase.halt(); introT = 1; },   // a saved view takes the camera back
   begin: (W, H) => { shotF = H / (2 * tanHalf()); shotLod = lodK; if (!LOD_PIN) lodK = 1; },   // full detail distances, whatever the fps
   end: () => { shotF = 0; if (!LOD_PIN) lodK = shotLod; },
   pending: () => stream(true) + inflight + tiles.filter((t) => t.dstate === 1).length,   // tiles wanted, loading, or fetching relief
