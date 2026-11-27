@@ -430,7 +430,7 @@ const pending = () => { const x = controls.target.x, y = -controls.target.z, R =
   const FC = fullCap(); return tiles.filter((t) => !(t.state === 2 && t.mode === 'full') && (t.failed || 0) < 3 && rectDist(t.b, x, y) <= R && camDist(t.b) <= FC).length; };
 
 // trees: instanced, in chunks with three levels of detail (sculpted near 230 m, lobed to 760 m, a single lobe beyond)
-const treeChunks = [], treeHi = [];
+const treeChunks = [], treeHi = [], treeAreas = [];
 let KINDS = null;
 function addTrees(buf) {
   const d = new Float32Array(buf), n = d.length / 4;
@@ -447,13 +447,22 @@ function addTrees(buf) {
     for (const mesh of meshes) { mesh.setMatrixAt(j, m); mesh.setColorAt(j, col.setHex(K.greens[Math.floor(Math.abs(r) * K.greens.length) % K.greens.length])); }
   });
   const fin = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; mesh.computeBoundingSphere(); scene.add(mesh); return mesh; };
+  const chunks = [];
   for (const { kind, ids } of cellsOf(600)) {
     const K = KINDS[kind], near = new THREE.InstancedMesh(K.near, K.mat, ids.length), lo = new THREE.InstancedMesh(K.far, K.mat, ids.length);
     place([near, lo], K, ids); fin(near); fin(lo);
     // a few pixels across, a tree is its crown: six vertices instead of 78, on the same instance buffers
     const min = new THREE.InstancedMesh(K.min, K.mat, ids.length); min.instanceMatrix = lo.instanceMatrix; min.instanceColor = lo.instanceColor; fin(min);
-    treeChunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
+    chunks.push({ near, lo, min, c: near.boundingSphere.center.clone(), r: near.boundingSphere.radius });
   }
+  // a whole area seen from afar: its crowns in one draw per kind, not one per 600 m chunk (~1000 draws for the city)
+  if (!OLDLOD && chunks.length) {
+    const agg = cellsOf(1e7).map(({ kind, ids }) => { const K = KINDS[kind], a = new THREE.InstancedMesh(K.min, K.mat, ids.length); place([a], K, ids); fin(a).castShadow = false; a.visible = false; return a; });
+    const b = new THREE.Box3(); for (const a of agg) b.union(new THREE.Box3().setFromCenterAndSize(a.boundingSphere.center, new THREE.Vector3().setScalar(a.boundingSphere.radius * 2)));
+    const sph = b.getBoundingSphere(new THREE.Sphere());
+    const A = { agg, chunks, c: sph.center, r: sph.radius, far: false }; for (const t of chunks) t.area = A; treeAreas.push(A);
+  }
+  treeChunks.push(...chunks);
   for (const { kind, ids } of cellsOf(160)) {
     const K = KINDS[kind], hi = new THREE.InstancedMesh(K.hi, K.matHi, ids.length);
     place([hi], K, ids); fin(hi).visible = false; hi.castShadow = false;
@@ -872,7 +881,9 @@ renderer.setAnimationLoop((now) => {
   for (const c of carChunks) { const dd = camera.position.distanceTo(c.c) - c.r; c.mesh.visible = dd < 850 * lodK; c.hi.visible = dd < 180 * lodK; }
   treeU.uCamP.value.copy(camera.position); treeU.uHiR.value = 230 * lodK;
   for (const t of treeHi) t.hi.visible = camera.position.distanceTo(t.c) - t.r < 230 * lodK;
-  for (const t of treeChunks) { const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
+  const tinyD = Math.max(1100, 1.8 * px.f) * lodK;
+  for (const A of treeAreas) { const far = camera.position.distanceTo(A.c) - A.r > tinyD; if (far !== A.far) { A.far = far; for (const a of A.agg) a.visible = far; if (far) for (const t of A.chunks) t.near.visible = t.lo.visible = t.min.visible = false; } }
+  for (const t of treeChunks) { if (t.area?.far) continue; const dd = camera.position.distanceTo(t.c) - t.r, nearby = dd < 760 * lodK, tiny = !OLDLOD && !nearby && dd > Math.max(1100, 1.8 * px.f) * lodK; t.near.visible = nearby; t.lo.visible = !nearby && !tiny; t.min.visible = tiny; }
   waterUniformTime.value = now / 1000;
   for (const l of lampPoints) l.visible = cityUniforms.uNight.value > 0.01;
   for (const l of lampPosts) l.mesh.visible = camera.position.distanceTo(l.c) - l.r < 260 * lodK;
