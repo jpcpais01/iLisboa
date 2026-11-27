@@ -47,6 +47,17 @@ async function fal(id, body) {
   return { img, ms: Date.now() - t0, queue_ms: st.metrics?.inference_time ? undefined : undefined, inference_s: st.metrics?.inference_time, out };
 }
 
+if (process.env.JOBS && KEY) {
+  const J = JSON.parse(readFileSync(D + process.env.JOBS));
+  const fill = (x) => typeof x === 'string' && x.startsWith('@') ? uri(x.slice(1)) : Array.isArray(x) ? x.map(fill) : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, fill(v)])) : x;
+  const res = [];
+  await Promise.all(J.map(async (j) => {
+    try { const r = await fal(j.endpoint, fill(j.body)); writeFileSync(D + `out/${j.name}.jpg`, r.img); res.push({ name: j.name, ok: true, ms: r.ms }); console.log('ok', j.name, r.ms); }
+    catch (e) { res.push({ name: j.name, ok: false, error: String(e.message).slice(0, 1500) }); console.log('FAIL', j.name, e.message); }
+  }));
+  writeFileSync(D + `out/${process.env.JOBS.replace(/\W/g, '_')}.result.json`, JSON.stringify(res, null, 1));
+  process.exit(0);
+}
 const runs = existsSync(D + 'out/runs.json') ? JSON.parse(readFileSync(D + 'out/runs.json')) : [];
 if (KEY) {
   const jobs = [];
