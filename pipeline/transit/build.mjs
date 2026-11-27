@@ -7,7 +7,7 @@
 // → public/transit/cal.json           which service ids run on which day (a bitmap per service, from cal.start)
 // → pipeline/transit/probe/*.txt      first lines of every GTFS file, so formats can be checked from the sandbox
 // Positions use the diorama's tangent plane (api/_lib/geo.js), metres, x east / y north.
-import { createReadStream, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { createReadStream, writeFileSync, mkdirSync, existsSync, rmSync, openSync, readSync, closeSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { fwd, inBox } from '../../api/_lib/geo.js';
 
@@ -90,7 +90,8 @@ for (const arg of process.argv.slice(2)) {
   for (const f of ['agency', 'routes', 'trips', 'stops', 'stop_times', 'shapes', 'calendar', 'calendar_dates', 'feed_info']) {
     const p = `${dir}/${f}.txt`;
     if (!existsSync(p)) { probe += `## ${f}: missing\n\n`; continue; }
-    const fd = readFileSync(p, { encoding: 'utf8', flag: 'r' }).slice(0, 1200).split('\n').slice(0, 6).join('\n');
+    const h = openSync(p, 'r'), b = Buffer.alloc(1500), n = readSync(h, b, 0, 1500, 0); closeSync(h);
+    const fd = b.toString('utf8', 0, n).split('\n').slice(0, 6).join('\n') + `\n(${(statSync(p).size / 1e6).toFixed(1)} MB)`;
     probe += `## ${f}\n${fd}\n\n`;
   }
   writeFileSync(`${PROBE}/${op}-gtfs.txt`, probe);
@@ -120,39 +121,35 @@ for (const arg of process.argv.slice(2)) {
   const svcIdx = new Map(), svcList = [];
   const svcOf = (s) => { let i = svcIdx.get(s); if (i == null) { i = svcList.length; svcIdx.set(s, i); svcList.push(s); } return i; };
 
-  // stop_times, trip by trip (feeds are sorted by trip; an unsorted feed is merged at the end)
-  const patterns = new Map();   // key → {route, shape, dir, head, stops[], profiles Map, trips[]}
-  const pending = new Map();    // trip → rows (only if the feed isn't sorted)
-  let cur = null, rows = [], kept = 0, dropped = 0;
-  const finish = (tid, rs) => {
-    const t = trips.get(tid); if (!t || rs.length < 2) return;
-    rs.sort((a, b) => a[0] - b[0]);
-    if (!rs.some((x) => stops.get(x[1])?.box)) { dropped++; return; }
+  // stop_times grouped by trip (Carris isn't sorted by trip): flat [seq, stop#, time] per trip
+  const stopNum = new Map(), stopIds = [];
+  const sn = (id) => { let i = stopNum.get(id); if (i == null) { i = stopIds.length; stopNum.set(id, i); stopIds.push(id); } return i; };
+  const rowsBy = new Map();
+  await table(dir, 'stop_times', (r) => {
+    const tid = r('trip_id'); let a = rowsBy.get(tid); if (!a) rowsBy.set(tid, (a = []));
+    a.push(+r('stop_sequence'), sn(r('stop_id')), hms(r('arrival_time')) || hms(r('departure_time')));
+  });
+  const patterns = new Map();   // route|stops → {route, shapes count, dir, head, stops[], profiles Map, trips[]}
+  let kept = 0, dropped = 0;
+  for (const [tid, a] of rowsBy) {
+    const t = trips.get(tid); if (!t || a.length < 6) continue;
+    const rs = []; for (let i = 0; i < a.length; i += 3) rs.push([a[i], stopIds[a[i + 1]], a[i + 2]]);
+    rs.sort((x, y) => x[0] - y[0]);
+    if (!rs.some((x) => stops.get(x[1])?.box)) { dropped++; continue; }
     const ids = rs.map((x) => x[1]);
-    const key = `${t.route}|${t.shape}|${ids.join(',')}`;
+    const key = `${t.route}|${ids.join(',')}`;
     let p = patterns.get(key);
-    if (!p) patterns.set(key, (p = { route: t.route, shape: t.shape, dir: t.dir, head: t.head, stops: ids, profiles: new Map(), trips: [] }));
+    if (!p) patterns.set(key, (p = { route: t.route, shapes: new Map(), dir: t.dir, head: t.head, stops: ids, profiles: new Map(), trips: [] }));
+    if (t.shape) p.shapes.set(t.shape, (p.shapes.get(t.shape) || 0) + 1);
     const t0 = rs[0][2];
     const prof = rs.map((x) => (isFinite(x[2]) ? x[2] - t0 : -1));
-    // missing times (untimed stops) interpolated by order
-    for (let i = 1; i < prof.length; i++) if (prof[i] < 0) { let j = i; while (j < prof.length && prof[j] < 0) j++; const a = prof[i - 1], b = j < prof.length ? prof[j] : a; for (let k = i; k < j; k++) prof[k] = Math.round(a + ((b - a) * (k - i + 1)) / (j - i + 1)); i = j; }
+    for (let i = 1; i < prof.length; i++) if (prof[i] < 0) { let j = i; while (j < prof.length && prof[j] < 0) j++; const pa = prof[i - 1], pb = j < prof.length ? prof[j] : pa; for (let k = i; k < j; k++) prof[k] = Math.round(pa + ((pb - pa) * (k - i + 1)) / (j - i + 1)); i = j; }
     const pk = prof.join(',');
     let pi = p.profiles.get(pk); if (pi == null) p.profiles.set(pk, (pi = p.profiles.size));
     p.trips.push([tid, svcOf(t.svc), t0, pi]); kept++;
-  };
-  const seenTrips = new Set();
-  await table(dir, 'stop_times', (r) => {
-    const tid = r('trip_id');
-    if (tid !== cur) {
-      if (cur != null) { if (seenTrips.has(cur)) pending.set(cur, (pending.get(cur) || []).concat(rows)); else { seenTrips.add(cur); finish(cur, rows); } }
-      cur = tid; rows = [];
-    }
-    const t = hms(r('arrival_time')) || hms(r('departure_time'));
-    rows.push([+r('stop_sequence'), r('stop_id'), t]);
-  });
-  if (cur != null) finish(cur, rows);
-  for (const [tid, rs] of pending) finish(tid, rs);   // (rare) unsorted remainder — best effort
-
+  }
+  rowsBy.clear();
+  for (const p of patterns.values()) p.shape = [...p.shapes.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || '';
   // shapes (only those used)
   const need = new Set([...patterns.values()].map((p) => p.shape).filter(Boolean));
   const shapes = new Map();
@@ -190,7 +187,7 @@ for (const arg of process.argv.slice(2)) {
   }
   cal.svc[op] = svcList.map((s) => { const b = svcDays.get(s) || new Uint8Array(DAYS); let h = ''; for (let i = 0; i < DAYS; i++) h += b[i]; return h; });
   for (const [id, s] of stops) if (s.box && s.routes.size) allStops.push([`${op}:${id}`, s.name, s.x, s.y, [...s.routes]]);
-  stats[op] = { stops: [...stops.values()].filter((s) => s.box && s.routes.size).length, routes: byRoute.size, patterns: nPat, trips: nTrip, droppedTrips: dropped, routeBytes: bytes, pendingUnsorted: pending.size };
+  stats[op] = { stops: [...stops.values()].filter((s) => s.box && s.routes.size).length, routes: byRoute.size, patterns: nPat, trips: nTrip, droppedTrips: dropped, routeBytes: bytes };
   console.log(stats[op]);
 }
 writeFileSync(`${OUT}/stops.json`, JSON.stringify({ built: new Date().toISOString().slice(0, 10), ops: OPS, routes: routesOut, stops: allStops }));
