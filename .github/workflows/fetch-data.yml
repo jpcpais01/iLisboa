@@ -22,6 +22,8 @@ jobs:
           curl -sfL -o /tmp/pt.osm.pbf https://download.geofabrik.de/europe/portugal-latest.osm.pbf
           while read -r name s w n e; do
             [ -z "$name" ] || [ "${name:0:1}" = "#" ] && continue
+            # a push (new areas) extracts only areas without data; a manual run refreshes them all
+            [ "${{ github.event_name }}" = "push" ] && [ -f data/raw/$name.osm.json.gz ] && continue
             # 0.004° (~350 m) margin: neighbouring areas see the same buildings and roads near their shared edge,
             # so the ground fill and the painted streets match across the seam (the build keeps only what it owns)
             m=0.004; b=$(python3 -c "print(f'{$w-$m},{$s-$m},{$e+$m},{$n+$m}')")
@@ -33,4 +35,7 @@ jobs:
           git config user.name "ilisboa-data-bot"
           git config user.email "actions@users.noreply.github.com"
           git add data/raw
-          git diff --cached --quiet || (git commit -m "data: refresh OSM extracts [skip ci]" && git pull --rebase -q && git push)
+          git diff --cached --quiet && exit 0
+          git commit -m "data: refresh OSM extracts [skip ci]"
+          # main is busy: retry; on a clash over the same extract keep this run's (newer) file
+          for i in 1 2 3 4 5 6; do git pull --rebase -X theirs -q && git push && exit 0; git rebase --abort 2>/dev/null; sleep $((i * 10)); done; exit 1
