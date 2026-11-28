@@ -1,0 +1,38 @@
+[
+ {
+  "name": "r060_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21442,
+  "inference_s": 18.792999982833862,
+  "request": "01a21fcc-db6d-7751-8011-f0d39c428920",
+  "file": "r060_nb2.jpg"
+ },
+ {
+  "name": "r090_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21351,
+  "inference_s": 19.223999977111816,
+  "request": "01a21fcc-dbeb-7e42-8f09-aa336f8ff67b",
+  "file": "r090_nb2.jpg"
+ },
+ {
+  "name": "r120_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21346,
+  "inference_s": 19.657000064849854,
+  "request": "01a21fcc-de6f-73c0-ba66-3613e4599c08",
+  "file": "r120_nb2.jpg"
+ },
+ {
+  "name": "r030_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 24509,
+  "inference_s": 21.353000164031982,
+  "request": "01a21fcc-da75-7a51-9b24-3005915285ce",
+  "file": "r030_nb2.jpg"
+ }
+]
