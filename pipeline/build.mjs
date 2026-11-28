@@ -311,6 +311,27 @@ const isWaterAt = (x, y) => {
 // "deep" water: all of a 7 m neighbourhood is water (terrain vertices drop only there)
 const isDeepWater = (x, y) => { for (const [dx, dy] of [[0, 0], [7, 0], [-7, 0], [0, 7], [0, -7], [5, 5], [-5, 5], [5, -5], [-5, -5]]) if (!isWaterAt(x + dx, y + dy)) return false; return true; };
 const LAND_MIN = 1.6;
+// the straight-skeleton wasm never returns on a ring that crosses itself or doubles back on itself (a mapped spike, e.g.
+// w761597062 in Coina): such rings skip the skeleton roof (the build hung for hours there)
+const simpleRing = (r) => {
+  const n = r.length; if (n < 3) return false;
+  const P = (i) => r[((i % n) + n) % n];
+  const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  for (let i = 0; i < n; i++) {   // doubling back: two consecutive edges almost opposite
+    const a = P(i - 1), b = P(i), c = P(i + 1), ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
+    const lu = Math.hypot(ux, uy), lv = Math.hypot(vx, vy); if (lu < 1e-6 || lv < 1e-6) return false;
+    if ((ux * vx + uy * vy) / (lu * lv) < -0.995) return false;
+  }
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {   // non-adjacent edges that touch or cross
+    if (i === 0 && j === n - 1) continue;
+    const a = P(i), b = P(i + 1), c = P(j), d = P(j + 1);
+    const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+    if (((d1 > 0) !== (d2 > 0) || d1 === 0 || d2 === 0) && ((d3 > 0) !== (d4 > 0) || d3 === 0 || d4 === 0)
+      && Math.min(a[0], b[0]) <= Math.max(c[0], d[0]) && Math.min(c[0], d[0]) <= Math.max(a[0], b[0])
+      && Math.min(a[1], b[1]) <= Math.max(c[1], d[1]) && Math.min(c[1], d[1]) <= Math.max(a[1], b[1])) return false;
+  }
+  return true;
+};
 // open sea: every node of the tile's 8 m grid is deep water → the flat seabed needs only its 4 corners (ocean areas were
 // 0.34 M triangles of flat -5 m; the edge nodes all sit at -5, so neighbouring shore tiles still meet it without a crack)
 const openSea = (x0, y0, x1, y1) => {
@@ -1174,7 +1195,7 @@ function addBuilding_(p) {
       const est = s.roofH ?? (s.shape === 'mansard' || s.shape === 'gambrel' ? 4.6 : Math.min(5.5, Math.max(2.2, ob.hw * sl)));
       wallTop = top - Math.min(est, Math.max(0, s.h - s.minH - 2.5));
     } else if (p.outer.length <= 200) {
-      try { sk = SkeletonBuilder.buildFromPolygon([[...p.outer, p.outer[0]], ...p.holes.map((h) => [...h, h[0]])]); } catch { sk = null; }
+      try { sk = simpleRing(p.outer) && p.holes.every(simpleRing) ? SkeletonBuilder.buildFromPolygon([[...p.outer, p.outer[0]], ...p.holes.map((h) => [...h, h[0]])]) : null; } catch { sk = null; }
       if (sk && sk.polygons.length) {
         mode = 'skeleton';
         const zmax = Math.max(...sk.vertices.map((v) => v[2]));
