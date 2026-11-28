@@ -1,7 +1,7 @@
 name: build-tiles
 # Rebuild city tiles on GitHub's runners instead of one sandbox: the areas listed in pipeline/build_queue.txt ("all" = every
 # area in pipeline/areas.txt) are split over up to 22 parallel jobs (2 builds per 4-core runner), then one job lays every
-# result on top of the latest main, regenerates public/tiles/index.json and the landmark stonework overlay (landmarks3d),
+# result on top of the latest main, regenerates public/tiles/index.json (pushing in batches under 1.5 GB) and the landmark stonework overlay (landmarks3d),
 # and pushes. Triggered by a change to pipeline/build_queue.txt on main (or by hand). Same code, same data, same output
 # as a local `node pipeline/build.mjs <area>` (detail sources come from the detail-city release, as get_detail.mjs does).
 on:
@@ -65,6 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: Free runner disk (a citywide rebuild is several GB of tiles)
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL; df -h / | tail -1
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
       - uses: actions/setup-node@v4
@@ -72,20 +74,28 @@ jobs:
       - run: npm ci --no-audit --no-fund > /dev/null 2>&1 || npm ci --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with: { path: /tmp/art, pattern: tiles-*, merge-multiple: true }
-      - name: Lay the new tiles on the latest main and push
+      - name: Lay the new tiles on the latest main and push, in batches under 1.5 GB (João's rule - pushes stay under 2 GB)
         run: |
           set -e
           git config user.name "ilisboa-build-bot"; git config user.email "actions@users.noreply.github.com"
           mkdir -p /tmp/logs; mv /tmp/art/*.log /tmp/logs/ 2>/dev/null || true
-          built=$(ls /tmp/art); echo "built: $built"; grep -l "FAILED\|Error" /tmp/logs/*.log || true
-          for i in 1 2 3 4 5 6; do
-            git fetch -q --depth 1 origin main && git reset -q --hard FETCH_HEAD
-            for a in $built; do rm -rf public/tiles/$a; cp -r /tmp/art/$a public/tiles/$a; done
-            node -e "const fs=require('fs');const A=fs.readFileSync('pipeline/areas.txt','utf8').split('\n').filter(l=>l.trim()&&!l.startsWith('#')).map(l=>l.trim().split(/\s+/)[0]);fs.writeFileSync('public/tiles/index.json',JSON.stringify({areas:A.map(n=>'public/tiles/'+n+'/manifest.json').filter(f=>fs.existsSync(f)).map(f=>JSON.parse(fs.readFileSync(f,'utf8')))}))"
-            node pipeline/landmarks3d.mjs > /tmp/logs/landmarks3d.log 2>&1 || (tail -20 /tmp/logs/landmarks3d.log; exit 1)
-            git add -A public/tiles public/lm
-            git commit -q -m "Tiles rebuilt on the build farm: $(echo $built | wc -w) areas" -m "$(echo $built | tr '\n' ' ')" || { echo "nothing to commit"; exit 0; }
-            git push -q origin HEAD:main && exit 0
-            echo "push lost a race, retrying"; sleep $((i * 20))
+          grep -l "FAILED\|Error" /tmp/logs/*.log || true
+          all=$(ls /tmp/art | wc -l); echo "built: $all areas"; b=0
+          while [ -n "$(ls /tmp/art)" ]; do
+            batch=""; sz=0
+            for a in $(ls /tmp/art); do s=$(du -sm /tmp/art/$a | cut -f1); if [ -n "$batch" ] && [ $((sz + s)) -gt 1500 ]; then break; fi; batch="$batch $a"; sz=$((sz + s)); done
+            b=$((b + 1)); last=$([ -z "$(ls /tmp/art | grep -vxF -f <(echo $batch | tr ' ' '\n'))" ] && echo 1 || echo 0)
+            echo "batch $b: $(echo $batch | wc -w) areas, $sz MB, last=$last"
+            for i in 1 2 3 4 5 6; do
+              git fetch -q --depth 1 origin main && git reset -q --hard FETCH_HEAD
+              for a in $batch; do rm -rf public/tiles/$a; cp -r /tmp/art/$a public/tiles/$a; done
+              node -e "const fs=require('fs');const A=fs.readFileSync('pipeline/areas.txt','utf8').split('\n').filter(l=>l.trim()&&!l.startsWith('#')).map(l=>l.trim().split(/\s+/)[0]);fs.writeFileSync('public/tiles/index.json',JSON.stringify({areas:A.map(n=>'public/tiles/'+n+'/manifest.json').filter(f=>fs.existsSync(f)).map(f=>JSON.parse(fs.readFileSync(f,'utf8')))}))"
+              if [ $last = 1 ]; then node pipeline/landmarks3d.mjs > /tmp/logs/landmarks3d.log 2>&1 || (tail -20 /tmp/logs/landmarks3d.log; exit 1); fi
+              git add -A public/tiles public/lm
+              if git diff --cached --quiet; then echo "nothing to commit"; break; fi
+              git commit -q -m "Tiles rebuilt on the build farm: batch $b, $(echo $batch | wc -w) of $all areas" -m "$batch"
+              git push -q origin HEAD:main && break
+              [ $i = 6 ] && exit 1; echo "push lost a race, retrying"; sleep $((i * 20))
+            done
+            for a in $batch; do rm -rf /tmp/art/$a; done
           done
-          exit 1
