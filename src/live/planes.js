@@ -1,6 +1,6 @@
 // Live aircraft (adsb.lol via /api/planes, every 8 s). Between reports each plane flies on by dead reckoning
 // (track, ground speed, climb rate) and a correction blends in over 3 s, so motion is continuous, never jumpy.
-// Planes are always on: the 3D aircraft always fly. The dock toggle ("Marcar aviões") only shows the helper markers,
+// Planes are always on: the 3D aircraft always fly. The dock toggle ("Aviões") only shows the helper markers,
 // a blue dot that keeps each plane findable from far away and a fading trail of where it has been.
 import * as THREE from 'three';
 import { planeGeometry } from './models.js';

@@ -5,7 +5,7 @@ name: fetch-lidar
 on:
   workflow_dispatch:
   push:
-    paths: [pipeline/fetch_lidar.py, .github/workflows/fetch-lidar.yml]
+    paths: [pipeline/fetch_lidar.py, pipeline/areas.txt, .github/workflows/fetch-lidar.yml]   # new areas fetch only what they lack
 concurrency: fetch-lidar
 permissions:
   contents: write
