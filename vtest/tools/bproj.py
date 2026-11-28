@@ -67,7 +67,14 @@ for k, f in keys:
     al, M = align(cv2.imread(f), ren)
     cv2.imwrite(os.path.join(out, f'key{k:03d}_aligned.jpg'), al, [cv2.IMWRITE_JPEG_QUALITY, 92])
     Wk, Pk = lib.cam(k, m)
-    K.append(dict(k=k, A=al.astype(np.float32), R=ren.astype(np.float32), z=lib.depth(k), Wm=Wk, P=Pk,
+    # where the model painted sky or sea over real ground (the far map edge: it invents a horizon), that keyframe is not used
+    zk0 = lib.depth(k); a32 = al.astype(np.float32); r32 = ren.astype(np.float32)
+    skyish = (a32[..., 0] > a32[..., 2] + 8) & (a32.mean(-1) > r32.mean(-1) + 25)
+    bad = skyish & (zk0 > 0); bad[int(0.35 * H):] = False
+    bad = cv2.dilate(cv2.morphologyEx(bad.astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8)), np.ones((7, 7), np.uint8)) > 0
+    # everything above the lowest invented-horizon pixel in each column goes too
+    print('key', k, 'invented-horizon px %.3f' % bad.mean())
+    K.append(dict(bad=bad, k=k, A=al.astype(np.float32), R=ren.astype(np.float32), z=lib.depth(k), Wm=Wk, P=Pk,
                   D=np.log((al.astype(np.float32) + EPS) / (ren.astype(np.float32) + EPS))))
     print('key', k, 'affine', np.round(M, 4).tolist())
 times = [x['k'] for x in K]
@@ -99,6 +106,7 @@ for f in frames:
         inside = (u >= 0) & (u < W) & (v >= 4) & (v < 1076)
         zk = cv2.remap(K_['z'], mx, my, cv2.INTER_NEAREST, borderValue=-1)
         vis = inside & np.where(sky, zk < 0, (zk > 0) & (np.abs(zk - dz) < 0.01 * dz + 0.3))
+        vis &= cv2.remap(K_['bad'].astype(np.uint8), mx, my, cv2.INTER_NEAREST, borderValue=0) == 0
         src = K_['D'] if mode == 'delta' else K_['A']
         val = cv2.remap(src, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
         # sharper source = closer to the surface than we are; mild preference
@@ -111,10 +119,12 @@ for f in frames:
     val = np.where(use2[..., None], acc2 / np.maximum(wsum2, 1e-6)[..., None], acc / np.maximum(wsum, 1e-6)[..., None])
     have = ((wsum > 1e-4) | use2).astype(np.float32)
     if mode == 'delta':
-        Dm = pullpush(val, have)
+        main = (wsum > 1e-4).astype(np.float32)
+        smooth = pullpush(cv2.GaussianBlur(val * main[..., None], (0, 0), 25) / np.maximum(cv2.GaussianBlur(main, (0, 0), 25), 1e-3)[..., None], (cv2.GaussianBlur(main, (0, 0), 25) > 0.05).astype(np.float32))
+        Dm = np.where(main[..., None] > 0, val, np.clip(smooth, -0.7, 0.7))
         o = (Rf + EPS) * np.exp(Dm) - EPS
     else:
-        Dfill = pullpush(np.log((val + EPS) / (Rf + EPS)) * have[..., None], have)   # holes: the neighbours' change over the render
+        Dfill = np.clip(pullpush(np.clip(np.log((val + EPS) / (Rf + EPS)), -0.6, 0.6) * have[..., None], have), -0.6, 0.6)   # holes: the neighbours' change over the render
         o = np.where(have[..., None] > 0, val, (Rf + EPS) * np.exp(Dfill) - EPS)
     o = np.clip(o, 0, 255).astype(np.uint8)
     cv2.imwrite(os.path.join(out, f'o{f:04d}.png'), o)
