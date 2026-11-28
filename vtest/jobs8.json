@@ -1,0 +1,182 @@
+[
+ {
+  "name": "i012_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k012_render.jpg",
+    "@k012_depth.png",
+    "@k012_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i024_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k024_render.jpg",
+    "@k024_depth.png",
+    "@k024_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i036_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k036_render.jpg",
+    "@k036_depth.png",
+    "@k036_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i048_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k048_render.jpg",
+    "@k048_depth.png",
+    "@k048_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i060_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k060_render.jpg",
+    "@k060_depth.png",
+    "@k060_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i072_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k072_render.jpg",
+    "@k072_depth.png",
+    "@k072_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i084_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k084_render.jpg",
+    "@k084_depth.png",
+    "@k084_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i096_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k096_render.jpg",
+    "@k096_depth.png",
+    "@k096_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i108_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k108_render.jpg",
+    "@k108_depth.png",
+    "@k108_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ },
+ {
+  "name": "i120_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "body": {
+   "prompt": "Turn this 3D render of Lisbon, Portugal into a hyperrealistic real aerial photograph, exactly like the fourth image (a real photo from the same helicopter flight a few seconds earlier): same photographic look, colour, light, haze and sharpness and the same level of real-world detail. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for a real old Lisbon building: redraw each one as the real building it stands for, keeping its exact footprint, height and roof outline, with real terracotta roof tiles, chimneys, roof terraces, real windows with shutters and balconies, weathered plaster in real colours, real trees, cars and streets. Streets, squares, the shoreline and every landmark stay exactly where they are. The second image is the exact depth map and the third the exact outlines of every building, roof and street: follow them.",
+   "image_urls": [
+    "@k120_render.jpg",
+    "@k120_depth.png",
+    "@k120_edges.png",
+    "@style_k000.jpg"
+   ],
+   "aspect_ratio": "16:9",
+   "resolution": "2K",
+   "output_format": "jpeg",
+   "num_images": 1,
+   "seed": 7
+  }
+ }
+]
