@@ -16,7 +16,7 @@ import { registerLayer } from '../layers/registry.js';
 const LAYERS = [
   { key: 'traffic', label: 'Trânsito', icon: '<rect x="7.5" y="2.5" width="9" height="19" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/>' },
   { key: 'transit', label: 'Transportes', icon: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l1.5-4M16 21l-1.5-4"/><circle cx="8.5" cy="14" r=".6"/><circle cx="15.5" cy="14" r=".6"/>' },
-  { key: 'planes', label: 'Marcar aviões', icon: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l7 4v2l-7-2v5l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-5l-7 2v-2l7-4V3.5z"/>' },
+  { key: 'planes', label: 'Aviões', icon: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l7 4v2l-7-2v5l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-5l-7 2v-2l7-4V3.5z"/>' },
 ];
 
 export function initLive({ scene, camera, renderer, canvas, ll, bounds, chase, night = { value: 0 }, mobile = false, lod = () => 1 }) {
