@@ -7,6 +7,12 @@
 // pull it towards reality: each station's error against that field spreads around it (inverse-distance, fading out over
 // ~3 km). Stations are measured; everything between them is interpolated.
 const LAPSE = 0.0065;   // K per metre (ICAO standard atmosphere)
+// Humidity, honestly: relative humidity swings with temperature (the same air reads drier on a warm square than on a cool
+// hill), so the field carried across the city is the DEW POINT — what the air actually holds — interpolated from the model
+// lattice and corrected to the IPMA stations' measured humidity like the temperature; RH is then rebuilt at every point
+// from that dew point and the local temperature field (Magnus formula).
+const es = (t) => 6.112 * Math.exp((17.62 * t) / (243.12 + t));   // saturation vapour pressure, hPa
+const dewOf = (t, rh) => { const g = Math.log(Math.max(1, rh) / 100) + (17.62 * t) / (243.12 + t); return (243.12 * g) / (17.62 - g); };
 
 export function createWeather() {
   let data = null, ground = null;
@@ -40,7 +46,7 @@ export function createWeather() {
     const i = Math.floor(fi), j = Math.floor(fj), tx = fi - i, ty = fj - j, k = j * nx + i;
     return (arr[k] * (1 - tx) + arr[k + 1] * tx) * (1 - ty) + (arr[k + nx] * (1 - tx) + arr[k + nx + 1] * tx) * ty;
   }
-  let seaT = null, resid = [], u = null, v = null, ver = -1;
+  let seaT = null, resid = [], u = null, v = null, ver = -1, dew = null, residD = [];
   function prepare() {
     if (!data?.grid || ver === data.t) return !!data?.grid;
     ver = data.t;
@@ -49,11 +55,13 @@ export function createWeather() {
     // wind blows FROM wd: the flow vector points the other way (x east, y north), in m/s
     u = g.ws.map((s, k) => (-s / 3.6) * Math.sin((g.wd[k] * Math.PI) / 180));
     v = g.ws.map((s, k) => (-s / 3.6) * Math.cos((g.wd[k] * Math.PI) / 180));
-    resid = [];
+    resid = []; residD = [];
+    dew = g.rh ? g.T.map((t, k) => dewOf(t, g.rh[k])) : null;
     for (const s of data.stations || []) {
       if (s.T == null) continue;
       const z = ground ? ground.at(s.x, s.y) : 0;
       resid.push({ ...s, r: s.T - (lattice(seaT, s.x, s.y) - LAPSE * z) });
+      if (dew && s.hum != null) residD.push({ x: s.x, y: s.y, r: dewOf(s.T, s.hum) - lattice(dew, s.x, s.y) });
     }
     return true;
   }
@@ -64,7 +72,17 @@ export function createWeather() {
     return t + sr / sw;
   }
 
+  function dewAt(x, y) {
+    let sw = 1 / (R0 * R0), sr = 0;
+    for (const s of residD) { const d2 = (s.x - x) ** 2 + (s.y - y) ** 2 + 150 * 150, w = 1 / d2; sw += w; sr += w * s.r; }
+    return lattice(dew, x, y) + sr / sw;
+  }
+  // relative humidity (%) at a point: measured-corrected dew point over the local temperature
+  function humidity(x, y, z) { return Math.min(100, (100 * es(dewAt(x, y))) / es(temp(x, y, z))); }
+
   return {
+    get hasHumidity() { return !!dew; },
+    humidity,
     get data() { return data; },
     on(f) { subs.add(f); if (data) f(data); return () => subs.delete(f); },
     setGround(g) { ground = g; ver = -1; },

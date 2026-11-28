@@ -6,13 +6,14 @@ import { overlayUniforms } from '../materials.js';
 import { registerLayer } from './registry.js';
 import { createWeather } from './weather.js';
 import { createLabels } from './labels.js';
-import { createTemperature } from './temperature.js';
+import { createTemperature, createHumidity } from './temperature.js';
 import { createWind } from './wind.js';
 import { createRain } from './rain.js';
 import { createRegions } from './freguesias.js';
 
 const ICON = {
   temp: '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 11v6"/>',
+  hum: '<path d="M12 3.5c3.2 4 5.5 7.1 5.5 10a5.5 5.5 0 0 1-11 0c0-2.9 2.3-6 5.5-10z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/>',
   wind: '<path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h16a3 3 0 1 1-3 3"/><path d="M3 16h7"/>',
   rain: '<path d="M7 15a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 7.5a4 4 0 0 1-.5 7.5"/><path d="M9 17l-1 3M13 17l-1 3M17 17l-1 3"/>',
   frg: '<path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z"/><path d="M9 4v14M15 6v14"/>',
@@ -23,8 +24,9 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
   const box = [-14500, -8800, 11000, 11600];   // the 36 areas and a margin, local metres
   const weather = createWeather(); weather.setGround(ground);
   const card = createCard();
-  const labels = { t: createLabels(camera, canvas, 'wx'), f: createLabels(camera, canvas, 'frg'), d: createLabels(camera, canvas, 'dens') };
+  const labels = { t: createLabels(camera, canvas, 'wx'), h: createLabels(camera, canvas, 'wx'), f: createLabels(camera, canvas, 'frg'), d: createLabels(camera, canvas, 'dens') };
   const temp = createTemperature({ weather, ground, bounds, labels: labels.t, box });
+  const hum = createHumidity({ weather, ground, bounds, labels: labels.h, box });
   const wind = createWind({ weather, ground, camera, controls, canvas, mobile }); wind.attach(scene);
   const rain = createRain({ ground, camera, controls, canvas, box, mobile }); rain.attach(scene);
   const regions = createRegions({ ground, camera, controls, canvas, labelsF: labels.f, labelsD: labels.d, box, mobile, card }); regions.attach(scene);
@@ -32,6 +34,7 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
   const h = {};
   const reg = (id, label, group, icon, l, extra = {}) => { h[id] = registerLayer({ id, label, group, icon, set: (v) => { l.set(v); invalidate(); }, status: l.status, legend: l.legend, ...extra }); };
   reg('temperatura', 'Temperatura', 'weather', ICON.temp, temp, { exclusive: 'map' });
+  reg('humidade', 'Humidade', 'weather', ICON.hum, hum, { exclusive: 'map' });
   reg('vento', 'Vento', 'weather', ICON.wind, wind);
   reg('chuva', 'Chuva', 'weather', ICON.rain, rain, { exclusive: 'map' });
   reg('freguesias', 'Freguesias', 'city', ICON.frg, regions.freguesias);
@@ -69,6 +72,7 @@ export function initLayers({ scene, camera, controls, canvas, ground, bounds, mo
         }
       }
       if (temp.tick()) h.temperatura.refresh();
+      if (hum.tick()) h.humidade.refresh();
       wind.update(dt); rain.update(dt); regions.update();
       for (const l of Object.values(labels)) l.update();
       if (now - st > 3000) { st = now; h.chuva.refresh(); h.vento.refresh(); }

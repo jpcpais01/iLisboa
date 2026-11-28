@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       x: lons.slice(0, NX).map((lon) => Math.round(fwd(+lats[0], +lon)[0])),
       y: lats.filter((_, k) => k % NX === 0).map((lat) => Math.round(fwd(+lat, +lons[0])[1])),
       elev: pts.map((p) => Math.round(p.elevation ?? 0)),
-      T: f('temperature_2m'), ws: f('wind_speed_10m'), wd: f('wind_direction_10m'), gust: f('wind_gusts_10m'),
+      T: f('temperature_2m'), rh: f('relative_humidity_2m'), ws: f('wind_speed_10m'), wd: f('wind_direction_10m'), gust: f('wind_gusts_10m'),
       P: f('precipitation'), cc: f('cloud_cover'), code: f('weather_code'),
       time: pts[0]?.current?.time,
     };
