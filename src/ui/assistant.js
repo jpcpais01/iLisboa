@@ -98,7 +98,13 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
   const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
   let stick = true;
   log.addEventListener('scroll', () => { stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40; });
-  const scroll = (force) => { if (force || stick) log.scrollTop = log.scrollHeight; };
+  // chat-style: pinned to the newest message. Opening / sending jumps there instantly; streaming follows smoothly
+  // unless the reader has scrolled up to read something older
+  const scroll = (force) => {
+    if (!force && !stick) return;
+    log.scrollTo({ top: log.scrollHeight, behavior: force ? 'instant' : 'smooth' });
+    if (force) { stick = true; requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; }); }
+  };
 
   // ─── opening: the swallow flies from its nest to the panel's perch ───
   let open = false, flying = null;
@@ -155,7 +161,7 @@ export function initAssistant({ camera, controls, marks, live, hud, ll, mobile }
     if (show) { rail.classList.add('on'); clearTimeout(idle); idle = setTimeout(() => rail.classList.remove('on'), 1300); }
   }
   log.addEventListener('scroll', () => railSync(true), { passive: true });
-  new ResizeObserver(() => railSync()).observe(log);
+  new ResizeObserver(() => { if (stick) log.scrollTop = log.scrollHeight; railSync(); }).observe(log);
   new MutationObserver(() => railSync()).observe(log, { childList: true, subtree: true, characterData: true });
   thumb.addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation(); thumb.setPointerCapture(e.pointerId); rail.classList.add('drag'); log.style.scrollBehavior = 'auto';

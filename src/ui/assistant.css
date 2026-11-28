@@ -57,8 +57,8 @@
   background: color-mix(in srgb, var(--glaze) 86%, transparent);
   backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3);
   box-shadow: 0 18px 54px rgba(30, 30, 50, 0.24), 0 2px 8px rgba(30, 30, 50, 0.08);
-  opacity: 0; transform: translateY(16px) scale(0.96); transform-origin: 80% 100%;
-  transition: opacity 0.28s ease, transform 0.42s cubic-bezier(.2, .8, .2, 1);
+  opacity: 0; transform: translate(6px, 10px) scale(0.42); transform-origin: calc(100% - 32px) calc(100% - 20px);   /* pops out of the nest */
+  transition: opacity 0.22s ease, transform 0.46s cubic-bezier(.2, .9, .25, 1.12);
   -webkit-user-select: text; user-select: text;
 }
 body.night .alf-panel { background: rgba(26, 31, 46, 0.86); }
@@ -76,9 +76,9 @@ body.night .alf-head::before { opacity: 0.55; }
 .alf-perch { position: absolute; left: 50px; top: -16px; width: 1px; height: 1px; }   /* the swallow sits on the panel's top rim */
 .alf-bird.perched { width: 58px; height: 52px; }
 .alf-bird { transition: width 0.3s ease, height 0.3s ease; }
-/* wide screens: docked to the right edge, under the Camadas button (the layer dock folds while the chat is open) */
+/* wide screens: docked bottom right, where the swallow lives (the layer dock folds while the chat is open) */
 @media (min-width: 641px) {
-  .alf-panel { right: max(12px, env(safe-area-inset-right)); top: calc(max(14px, env(safe-area-inset-top)) + 54px); bottom: auto; height: min(540px, calc(100vh - 160px)); border-radius: 18px; width: min(var(--alf-w), calc(100vw - 24px)); transform-origin: 100% 0; }
+  .alf-panel { right: max(12px, env(safe-area-inset-right)); top: auto; bottom: max(16px, env(safe-area-inset-bottom)); height: min(540px, calc(100vh - 140px)); border-radius: 18px; width: min(var(--alf-w), calc(100vw - 24px)); }
 }
 /* … and above the time slider where the two would meet (slider is 440 px wide, centred) */
 @media (min-width: 641px) and (max-width: 1290px) { .alf-panel { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 62px); } }
@@ -111,7 +111,7 @@ body.night .alf-head::before { opacity: 0.55; }
 .alf-rail.drag i { cursor: grabbing; }
 .alf-rail.off { display: none; }
 @media (hover: none) { .alf-rail i { pointer-events: none; } .alf-rail { pointer-events: none; } }
-.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 6px 11px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; scroll-behavior: smooth; }
+.alf-log { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 6px 11px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; }
 .alf-m { max-width: 90%; font-size: 13px; line-height: 1.45; animation: alf-in 0.32s cubic-bezier(.2, .8, .2, 1); overflow-wrap: anywhere; }
 .alf-m p { margin: 0 0 6px; } .alf-m p:last-child { margin-bottom: 0; }
 .alf-m ul, .alf-m ol { margin: 3px 0 5px; padding-left: 17px; } .alf-m li { margin: 1px 0; }
@@ -168,7 +168,7 @@ body.night .alf-form textarea { background: rgba(255, 255, 255, 0.07); }
   .alf-bird { width: 50px; height: 45px; }
   .alf-panel {
     left: 8px; right: 8px; width: auto; bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--kb));
-    height: calc(min(76vh, 640px) - var(--kb) * 0.35); max-height: calc(100dvh - var(--kb) - 70px); border-radius: 24px; transform-origin: 50% 100%;
+    height: calc(min(76vh, 640px) - var(--kb) * 0.35); max-height: calc(100dvh - var(--kb) - 70px); border-radius: 24px; transform-origin: calc(100% - 40px) 100%;
   }
   .alf.peeking .alf-bird { pointer-events: none; }
   .alf-form textarea { font-size: 16px; }   /* below 16 px iOS zooms into the field */
