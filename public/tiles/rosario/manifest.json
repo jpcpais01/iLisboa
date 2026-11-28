@@ -752,12 +752,12 @@
   "lamps": 207,
   "cars": 522,
   "water": 0.7576,
-  "bytes": 2541185,
+  "bytes": 2533253,
   "detailTris": 1286,
   "triangles": 169625
  },
  "attribution": "© OpenStreetMap contributors (ODbL) · Copernicus DEM GLO-30 © ESA/DLR/Airbus",
- "built": "2026-11-28T02:06:51.040Z",
+ "built": "2026-11-28T03:31:06.125Z",
  "far": {
   "bytes": 191856,
   "tris": 17078
