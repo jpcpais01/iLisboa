@@ -61,6 +61,25 @@ def pullpush(v, w):
     return np.where(w[..., None] > 0, v, up)
 
 
+def light_lock(D, Y=None):
+    # LIGHT=1: the keyframe supplies materials, our renderer supplies the light. Brightness changes the model made at the scale of
+    # shadows and shading (a few px to ~60 px) are dropped, so every frame keeps the render's exact, stable sun and shadows; fine
+    # texture (tiles, windows, weathering), colour, and the broad grade are kept.
+    if not os.environ.get('LIGHT'): return D
+    Dl = D.mean(-1, keepdims=True); Dc = D - Dl
+    s1 = float(os.environ.get('LIGHT_HI', 3)); s2 = 60
+    hi = Dl[..., 0] - cv2.GaussianBlur(Dl[..., 0], (0, 0), s1)
+    lo = cv2.GaussianBlur(Dl[..., 0], (0, 0), s2)
+    mix = float(os.environ.get('LIGHT_MIX', 0))   # share of the model's own shading kept
+    mid = Dl[..., 0] - hi - lo
+    Dc = np.clip(cv2.GaussianBlur(Dc, (0, 0), 1.5), -0.25, 0.25)
+    out = Dc + (hi + lo + mix * mid)[..., None]
+    if Y is not None:   # the river keeps the model's own light (glitter, reflections): water is our flat plane at y = 0
+        wat = cv2.GaussianBlur((np.abs(Y) < 0.15).astype(np.float32), (0, 0), 3)[..., None]
+        out = wat * D + (1 - wat) * out
+    return out
+
+
 K = []
 GRADE0 = []
 for k, f in keys:
@@ -87,7 +106,7 @@ for k, f in keys:
         al = np.clip((a32 + EPS) * np.exp(corr) - EPS, 0, 255).astype(np.uint8)
         print('   grade', [np.round(f, 3).tolist() for f in fit])
     K.append(dict(bad=bad, k=k, A=al.astype(np.float32), R=ren.astype(np.float32), z=lib.depth(k), Wm=Wk, P=Pk,
-                  D=np.log((al.astype(np.float32) + EPS) / (ren.astype(np.float32) + EPS))))
+                  D=light_lock(np.log((al.astype(np.float32) + EPS) / (ren.astype(np.float32) + EPS)), lib.world_points(np.where(zk0 < 0, 1, zk0), Wk, Pk)[..., 1])))
     print('key', k, 'affine', np.round(M, 4).tolist())
 times = [x['k'] for x in K]
 
