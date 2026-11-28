@@ -18,6 +18,7 @@ import { loadOverpass, makeProjection, extractPolygons, extractLines, extractNod
 import { Raster, boxBlur } from './lib/raster.mjs';
 import { loadDetail } from './lib/detail.mjs';
 import { buildBridges } from './lib/bridges.mjs';
+import { makeAirfield } from './lib/airfield.mjs';
 import { makeCuts, cutCell, clipUnion } from './lib/cuts.mjs';
 import { makeGenome, designGroups, BALC, ERA } from './lib/genome.mjs';
 import { setGene, makeSink, markPartyWalls, buildRoofAndWalls, skeletonRoof, roofExtras, obb, KIND, box, wallQuad, triUp, tri as triRaw } from './lib/buildings.mjs';
@@ -1986,6 +1987,8 @@ const surfOf = new Map([[C.calcada, SURF.calcada], [C.plaza, SURF.calcada], [C.p
   [C.park, SURF.grass], [C.grass, SURF.grass], [C.wood, SURF.grass], [C.pitch, SURF.grass], [C.rough, SURF.grass]]);
 const gcls = new Uint8Array(gm.w * gm.h).fill(SURF.plain);
 const paint = (col) => { const k = surfOf.get(col) ?? (col[1] > col[0] + 6 && col[1] > col[2] + 6 ? SURF.grass : SURF.plain); return (i) => { gm.data[i * 3] = col[0]; gm.data[i * 3 + 1] = col[1]; gm.data[i * 3 + 2] = col[2]; gcls[i] = k; }; };
+// airports (lib/airfield.mjs): mown runway strips and rough ground inside the fence, aprons, taxiways, runways and their paint
+const AIRFIELD = makeAirfield({ els, proj, extractPolygons, extractLines, minX, minY, maxX, maxY, photo: DETAIL ? (x, y) => DETAIL.rgb(x, y) : null, log });
 let openAtG = null;   // set by the ground pass below: how far a point is from anything built (0 near buildings … 1 open land)
 // land OSM leaves undescribed is mostly back yards, courtyards and patios behind the façades: muted garden green,
 // earth and cement drifting into each other over ~20 m, with plot-sized (≈6 m) shifts in value — not one pale fill, not camouflage
@@ -2033,8 +2036,9 @@ let openAtG = null;   // set by the ground pass below: how far a point is from a
       const i = (r * gm.w + c) * 3, va = villaAt(x, y), o = openAt(x, y);
       const k = (0.96 + 0.06 * hh(Math.floor(xw / 6), Math.floor(yw / 6))) * (0.98 + 0.04 * hh(Math.floor(x / 1.3), Math.floor(y / 1.3)));
       const core = Math.hypot(x, y * 1.15) < 2600, d = bdAt(x, y);
-      let col, cl;
+      let col, cl, af;
       if (d < 3 + 2.2 * vn(x / 7 + 11, y / 7)) { col = APRON; cl = SURF.calcada; }
+      else if (AIRFIELD && (af = AIRFIELD.grass(x, y))) { col = af; cl = af[3]; }
       else if (o > 0.5) {   // open land
         const m = vn(x / 31 + 3, y / 31 + 9), sc = vn(xw / 7 + 41, yw / 7) > 0.68;
         col = sc ? SCRUB : m > 0.5 ? DRY : MEAD; cl = SURF.grass;
@@ -2187,25 +2191,7 @@ if (CUTS) for (const r of CUTS.runs) if (r.tunnel) { gm.strokeLine(r.pts, r.w + 
       gm.fillRings([inner], paint(hash(p.id) < 0.5 ? POOL : POOL2)); nPool++; }
     log(`pools painted: ${nPool}`); }
 }
-// the airport: dry grass inside the fence, concrete aprons, taxiways with yellow centre lines, runways with white markings
-{
-  const offset = (pts, d) => pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [p[0] - ((b[1] - a[1]) / L) * d, p[1] + ((b[0] - a[0]) / L) * d]; });
-  const dashed = (pts, w, dash, gap, col) => { let acc = 0; for (let i = 0; i + 1 < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[i + 1], L = Math.hypot(x2 - x1, y2 - y1);
-    for (let s = 0; s < L; ) { const ph = acc % (dash + gap), on = ph < dash, step = Math.min(L - s, on ? dash - ph : dash + gap - ph); if (on) gm.strokeLine([[x1 + ((x2 - x1) * s) / L, y1 + ((y2 - y1) * s) / L], [x1 + ((x2 - x1) * (s + step)) / L, y1 + ((y2 - y1) * (s + step)) / L]], w, paint(col)); s += step; acc += step; } } };
-  const aeroA = extractPolygons(els, proj, (t) => t.aeroway === 'aerodrome' || t.aeroway === 'apron');
-  for (const p of aeroA.filter((q) => q.tags.aeroway === 'aerodrome')) gm.fillRings([p.outer, ...p.holes], paint(srgb('#b8bd8f')));
-  for (const p of aeroA.filter((q) => q.tags.aeroway === 'apron')) gm.fillRings([p.outer, ...p.holes], paint(srgb('#b4b2ac')));
-  const aeroL = extractLines(els, proj, (t) => (t.aeroway === 'taxiway' || t.aeroway === 'runway') && t.area !== 'yes');
-  const WHITE = srgb('#ecebe6'), YEL = srgb('#d9b54a');
-  for (const r of aeroL.filter((q) => q.tags.aeroway === 'taxiway')) gm.strokeLine(r.pts, parseMeters(r.tags.width) ?? 23, paint(srgb('#7a7975')));
-  for (const r of aeroL.filter((q) => q.tags.aeroway === 'taxiway')) gm.strokeLine(r.pts, 0.5, paint(YEL));
-  for (const r of aeroL.filter((q) => q.tags.aeroway === 'runway')) {
-    const w = parseMeters(r.tags.width) ?? 45;
-    gm.strokeLine(r.pts, w + 6, paint(srgb('#a9a79f'))); gm.strokeLine(r.pts, w, paint(srgb('#5f5e5b')));
-    for (const d of [-1, 1]) gm.strokeLine(offset(r.pts, d * (w / 2 - 1.2)), 0.9, paint(WHITE));
-    dashed(r.pts, 0.9, 30, 20, WHITE);
-  }
-}
+if (AIRFIELD) AIRFIELD.draw(gm, gcls, SURF, polysArea);
 for (const r of rails) if (r.tags.railway === 'rail' && !isTunnel(r.tags)) gm.strokeLine(r.pts, 3.2, paint(C.ballast));   // gravel bed under main-line track
 for (const r of rails) if (r.tags.railway === 'tram' && !isTunnel(r.tags)) gm.strokeLine(r.pts, 2.3, paint(C.setts));   // granite setts between and beside the tram rails
 for (const r of rails) { // two rails per track

@@ -1,4 +1,15 @@
 # Areas the build-tiles workflow rebuilds when this file changes on main (one per line, or 'all').
-oeste
-norte
-amadora
+# 2026-11-28: every area with an airfield (lib/airfield.mjs): Humberto Delgado, Montijo BA6, Sintra BA1, Tires
+lumiar
+charneca
+loures
+samouco
+rosario
+mar-da-palha
+lavradio
+tejo-norte
+alcochete-sul
+algueirao
+melecas
+rana
+trajouce
