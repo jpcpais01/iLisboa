@@ -1,0 +1,8 @@
+[
+ {
+  "name": "v108_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": false,
+  "error": "result {\"detail\":[{\"loc\":[\"body\"],\"msg\":\"The model did not generate the expected output for this prompt. This may occur for several reasons, including unsafe content, a prompt that is incompatible with the selected media type (e.g., prompting an image model to generate audio), references to missing attachments, or other cases where the input cannot be processed as the requested output type. Please review your inputs and try again. If the issue persists, contact support.\",\"type\":\"no_media_generated\",\"url\":\"https://docs.fal.ai/errors#no_media_generated\",\"input\":{\"history\":[],\"context\":[],\"return_history\":false,\"thinking_level\":null,\"image_passthrough\":false,\"include_thoughts\":null,\"temperature\":null,\"top_p\":null,\"max_output_tokens\":null,\"prompt\":\"Turn the first image, a 3D render of Lisbon, Portugal, into a hyperrealistic real aerial photograph. The fourth image is a real photograph of the same view from a moment earlier in the same helicopter flight, re-projected into this camera (some parts may be soft, stretched or missing): the result must match it — the same roofs, colours, materials, trees, light, haze and photographic look wherever it shows them — and be equally sharp and real everywhere. Same camera, same framing, same field of view: a pixel-aligned photo, not a new composition. Do not zoom, crop, rotate or extend the view. The top of the picture is still city all the way to the top edge: no sky, no horizon and no sea there. Every box in the render is a simplified stand-in for"
+ }
+]
