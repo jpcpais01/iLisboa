@@ -11,7 +11,7 @@ export const stationName = (n) => n.replace(/^Lisboa \((.*)\)$/, '$1').replace(/
 
 // one scalar weather field painted over the city: colour stretched over the map's own spread, contour lines every `step`,
 // measured station values pinned. Temperature and humidity share it.
-function createScalar({ weather, ground, bounds, labels, box, field, ok = () => true, stops, step, minSpan, fmt, unit, stationValue, note }) {
+function createScalar({ weather, ground, bounds, labels, box, field, ok = () => true, stops, step, minSpan, max = Infinity, fmt, unit, stationValue, note }) {
   const ov = createOverlay(box, 400, 316);   // ~60 m cells: the fields are smooth, the terrain term gives them their grain
   const legend = document.createElement('div'); legend.className = 'wx-legend';
   let on = false, painted = -1, lo = 0, hi = 1, tMin = 0, tMax = 0, groundVer = -1, paintT = 0;
@@ -31,6 +31,7 @@ function createScalar({ weather, ground, bounds, labels, box, field, ok = () => 
     tMin = a; tMax = b;
     const mid = (a + b) / 2, span = Math.max(minSpan, b - a + step * 0.8);
     lo = mid - span / 2; hi = mid + span / 2;
+    if (hi > max) { lo -= hi - max; hi = max; }   // humidity tops out at 100 %: slide the window down instead
     const c = [0, 0, 0];
     for (let k = 0; k < W * H; k++) {
       const f = Math.min(1, Math.max(0, (T[k] - lo) / (hi - lo)));
@@ -80,7 +81,7 @@ export function createTemperature(o) {
 // dry sand → fresh green → sea blue
 export const HUM_STOPS = ['#b5763a', '#d9a75c', '#ecd58f', '#cfe6b0', '#8fd0c0', '#4aaecb', '#2f7fbf', '#27509a', '#1f2f6e'];
 export function createHumidity(o) {
-  return createScalar({ ...o, field: o.weather.humidity, ok: () => o.weather.hasHumidity, stops: HUM_STOPS, step: 2, minSpan: 12,
+  return createScalar({ ...o, field: o.weather.humidity, ok: () => o.weather.hasHumidity, stops: HUM_STOPS, step: 2, minSpan: 12, max: 100,
     fmt: (v) => String(Math.round(v)), unit: '%', stationValue: (q) => q.hum,
     note: (n) => `humidade relativa, linhas de 2 % · ${n} estações IPMA medidas; entre elas, o ponto de orvalho do modelo (Open-Meteo) sobre a temperatura local`,
   });
