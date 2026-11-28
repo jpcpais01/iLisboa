@@ -62,6 +62,7 @@ def pullpush(v, w):
 
 
 K = []
+GRADE0 = []
 for k, f in keys:
     ren = lib.frame(k)
     al, M = align(cv2.imread(f), ren)
@@ -74,6 +75,17 @@ for k, f in keys:
     bad = cv2.dilate(cv2.morphologyEx(bad.astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8)), np.ones((7, 7), np.uint8)) > 0
     # everything above the lowest invented-horizon pixel in each column goes too
     print('key', k, 'invented-horizon px %.3f' % bad.mean())
+    if os.environ.get('GRADE'):
+        # colour lock: each keyframe's global grade over our render (per channel, log-affine) is replaced by the first keyframe's,
+        # so a chain of keyframes can't drift warmer / hazier; local detail is untouched
+        ok = (~bad) & (zk0 > 0); ok[:4] = ok[1076:] = False
+        lr, la = np.log(r32[ok][::7] + EPS), np.log(a32[ok][::7] + EPS)
+        fit = [np.polyfit(lr[:, c], la[:, c], 1) for c in range(3)]
+        if not GRADE0: GRADE0.extend(fit)
+        lR = np.log(r32 + EPS)
+        corr = np.stack([(GRADE0[c][0] - fit[c][0]) * lR[..., c] + (GRADE0[c][1] - fit[c][1]) for c in range(3)], -1)
+        al = np.clip((a32 + EPS) * np.exp(corr) - EPS, 0, 255).astype(np.uint8)
+        print('   grade', [np.round(f, 3).tolist() for f in fit])
     K.append(dict(bad=bad, k=k, A=al.astype(np.float32), R=ren.astype(np.float32), z=lib.depth(k), Wm=Wk, P=Pk,
                   D=np.log((al.astype(np.float32) + EPS) / (ren.astype(np.float32) + EPS))))
     print('key', k, 'affine', np.round(M, 4).tolist())
@@ -99,6 +111,7 @@ for f in frames:
     acc = np.zeros((H, W, 3), np.float32)
     wsum = np.zeros((H, W), np.float32)
     acc2 = np.zeros((H, W, 3), np.float32)
+    dmax = np.zeros((H, W), np.float32)
     wsum2 = np.zeros((H, W), np.float32)
     for K_ in K:
         u, v, dz = lib.project(X, K_['Wm'], K_['P'])
@@ -111,6 +124,16 @@ for f in frames:
         val = cv2.remap(src, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
         # sharper source = closer to the surface than we are; mild preference
         q = np.clip(np.where(sky, 1, zf / np.maximum(dz, 1e-3)), 0.3, 3) ** 0.5
+        # sampling density: keyframe pixels per output pixel (Jacobian of the reprojection). Where a keyframe saw a surface at a
+        # grazing angle or from much farther away, its texture would be smeared across many pixels: that keyframe barely counts there
+        uy, ux = np.gradient(u); vy, vx = np.gradient(v)
+        dens = np.abs(ux * vy - uy * vx)
+        q = q * np.clip(dens, 0, 1) ** 2
+        if f == K_['k']: q = np.where(vis, 1.0, q)
+        dmax = np.maximum(dmax, np.where(vis, dens, 0))
+        # feather near the keyframe's picture edges: no hard seam where one keyframe's view ends
+        edge = np.clip(np.minimum.reduce([u, W - u, v - 4, 1076 - v]) / 80.0, 0.02, 1)
+        q = q * edge
         w = vis * tent(f, K_['k']) * q
         acc += val * w[..., None]; wsum += w
         w2 = vis * q / (1 + abs(f - K_['k']))   # any keyframe that saw it, nearest in time first (outside its tent)
@@ -126,6 +149,10 @@ for f in frames:
     else:
         Dfill = np.clip(pullpush(np.clip(np.log((val + EPS) / (Rf + EPS)), -0.6, 0.6) * have[..., None], have), -0.6, 0.6)   # holes: the neighbours' change over the render
         o = np.where(have[..., None] > 0, val, (Rf + EPS) * np.exp(Dfill) - EPS)
+        if os.environ.get('GREYHOLES'):   # chain reference: only what an earlier photo saw sharply; the rest mid-grey ("missing")
+            good = (have > 0) & (dmax > 0.45)
+            good = cv2.erode(good.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+            o = np.where(good[..., None], o, 128)
     o = np.clip(o, 0, 255).astype(np.uint8)
     cv2.imwrite(os.path.join(out, f'o{f:04d}.png'), o)
     stats.append(dict(f=f, hole=float(1 - have.mean()), fallback=float(use2.mean())))
