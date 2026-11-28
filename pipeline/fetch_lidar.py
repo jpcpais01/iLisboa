@@ -31,11 +31,6 @@ for line in open(ROOT / "pipeline/areas.txt"):
     if line.strip() and not line.startswith("#"):
         n, *b = line.split()
         areas.append((n, *map(float, b)))   # name, south, west, north, east
-# only the areas whose rasters are not in data/lidar yet (LIDAR_ALL=1 redoes every area): new columns don't re-download the city
-if not os.environ.get("LIDAR_ALL"):
-    areas = [a for a in areas if not ((ROOT / f"data/lidar/{a[0]}_ndsm.tif").exists() and (ROOT / f"data/lidar/{a[0]}_dtm.tif").exists())]
-    print("areas to fetch:", " ".join(a[0] for a in areas) or "none", flush=True)
-    if not areas: sys.exit(0)
 S = min(a[1] for a in areas) - M; W = min(a[2] for a in areas) - M
 N = max(a[3] for a in areas) + M; E = max(a[4] for a in areas) + M
 
@@ -69,8 +64,9 @@ def login(s):
     say("logged in")
 
 
-def search(s, coll, bbox):
-    body = {"bbox": bbox, "limit": 1000, "collections": [coll]}
+def search(s, coll, bbox=None):
+    # bbox defaults to the module's S/W/N/E (fetch_detail_city.py sets those to its one area)
+    body = {"bbox": bbox or [W, S, E, N], "limit": 1000, "collections": [coll]}
     feats, url, method = [], SEARCH, "POST"
     while url:
         r = s.post(url, json=body, timeout=60) if method == "POST" else s.get(url, timeout=60)
@@ -111,6 +107,13 @@ def download(s, href, dst, relogin=None):
 
 
 def main():
+    global areas
+    # only the areas whose rasters are not in data/lidar yet (LIDAR_ALL=1 redoes every area): new columns don't
+    # re-download the city. Done here, not at import: fetch_detail_city.py imports this module.
+    if not os.environ.get("LIDAR_ALL"):
+        areas = [a for a in areas if not ((ROOT / f"data/lidar/{a[0]}_ndsm.tif").exists() and (ROOT / f"data/lidar/{a[0]}_dtm.tif").exists())]
+        say("areas to fetch:", " ".join(a[0] for a in areas) or "none")
+        if not areas: return
     s = requests.Session(); s.headers["User-Agent"] = "ilisboa-lidar-fetch"
     have_login = bool(os.environ.get("DGT_USER") and os.environ.get("DGT_PASSWORD"))
     if have_login: login(s)

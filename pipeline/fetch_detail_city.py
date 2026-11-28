@@ -31,7 +31,7 @@ for line in open(ROOT / "pipeline/areas.txt"):
         s0, w0, n0, e0 = map(float, line.split()[1:5]); box = (s0 - PAD, w0 - PAD, n0 + PAD, e0 + PAD)
 if not box: sys.exit(f"no area {AREA} in areas.txt")
 PS, PW, PN, PE = box
-fl.S, fl.W, fl.N, fl.E = PS, PW, PN, PE   # fetch_lidar.search() reads its bbox from these
+fl.S, fl.W, fl.N, fl.E = PS, PW, PN, PE   # fetch_lidar.search() reads its default bbox from these
 say = fl.say
 coslat = np.cos(np.radians((PS + PN) / 2))
 
