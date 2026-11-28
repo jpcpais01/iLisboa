@@ -1,0 +1,92 @@
+[
+ {
+  "name": "i012_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 18229,
+  "inference_s": 17.99399995803833,
+  "request": "01a2200b-78c1-7db0-b40d-8cfdd79b6da4",
+  "file": "i012_nb2.jpg"
+ },
+ {
+  "name": "i084_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21263,
+  "inference_s": 19.94599986076355,
+  "request": "01a2200b-7743-7fd1-a60c-cb68ffd58e49",
+  "file": "i084_nb2.jpg"
+ },
+ {
+  "name": "i024_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21251,
+  "inference_s": 19.378000020980835,
+  "request": "01a2200b-76e6-7d73-9af9-dbc7164a3b80",
+  "file": "i024_nb2.jpg"
+ },
+ {
+  "name": "i072_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21246,
+  "inference_s": 19.611999988555908,
+  "request": "01a2200b-777a-7730-a67e-c7e20602adbe",
+  "file": "i072_nb2.jpg"
+ },
+ {
+  "name": "i060_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21259,
+  "inference_s": 18.6010000705719,
+  "request": "01a2200b-76ad-7303-a2cc-b3aa1cf11abe",
+  "file": "i060_nb2.jpg"
+ },
+ {
+  "name": "i096_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 21370,
+  "inference_s": 20.788000106811523,
+  "request": "01a2200b-763d-7162-a41f-6edc9c03047d",
+  "file": "i096_nb2.jpg"
+ },
+ {
+  "name": "i108_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 24279,
+  "inference_s": 22.216000080108643,
+  "request": "01a2200b-770f-7f50-a35a-801cbf457bc6",
+  "file": "i108_nb2.jpg"
+ },
+ {
+  "name": "i120_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 24346,
+  "inference_s": 23.305999994277954,
+  "request": "01a2200b-765c-7812-b2dc-33d0fd27babf",
+  "file": "i120_nb2.jpg"
+ },
+ {
+  "name": "i048_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 27450,
+  "inference_s": 25.00600004196167,
+  "request": "01a2200b-7637-7832-8890-ad6afa21c8d3",
+  "file": "i048_nb2.jpg"
+ },
+ {
+  "name": "i036_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 33662,
+  "inference_s": 32.05299997329712,
+  "request": "01a2200b-766e-7153-b067-e5f1d5848171",
+  "file": "i036_nb2.jpg"
+ }
+]
