@@ -1,0 +1,11 @@
+[
+ {
+  "name": "v072_nb2",
+  "endpoint": "fal-ai/nano-banana-2/edit",
+  "ok": true,
+  "ms": 18424,
+  "inference_s": 18.17799997329712,
+  "request": "01a21fe9-5729-7921-817b-a7a14516fe38",
+  "file": "v072_nb2.jpg"
+ }
+]
